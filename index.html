@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MedCheck - Stitch Project Screen Catalog</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-primary: #3d4f23;
+      --color-secondary: #c4d96b;
+      --color-tertiary: #4a5d2f;
+      --color-neutral: #faf7ed;
+      --color-surface: rgba(255, 255, 255, 0.85);
+      --color-card-bg: rgba(255, 255, 255, 0.65);
+      --color-border: rgba(61, 79, 35, 0.15);
+      --font-headline: 'Playfair Display', serif;
+      --font-body: 'DM Sans', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background-color: var(--color-neutral);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(196, 217, 107, 0.25) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(61, 79, 35, 0.15) 0px, transparent 50%),
+        radial-gradient(at 50% 50%, rgba(250, 247, 237, 0.8) 0px, transparent 100%);
+      color: #232b18;
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 40px 24px;
+    }
+
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--color-border);
+      border-radius: 24px;
+      padding: 40px;
+      margin-bottom: 40px;
+      box-shadow: 0 10px 30px rgba(61, 79, 35, 0.05);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: var(--color-secondary);
+      color: var(--color-primary);
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-family: var(--font-headline);
+      font-size: clamp(32px, 4vw, 48px);
+      font-weight: 700;
+      color: var(--color-primary);
+      margin-bottom: 12px;
+      line-height: 1.2;
+    }
+
+    p.subtitle {
+      font-size: 18px;
+      color: #4a5d2f;
+      max-width: 750px;
+    }
+
+    .meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--color-border);
+      font-size: 14px;
+      color: #5b6e41;
+    }
+
+    .meta-item strong {
+      color: var(--color-primary);
+    }
+
+    /* Design System Card */
+    .ds-banner {
+      background: linear-gradient(135deg, rgba(61, 79, 35, 0.95), rgba(74, 93, 47, 0.9));
+      color: #faf7ed;
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 40px;
+      box-shadow: 0 12px 36px rgba(61, 79, 35, 0.18);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    @media (max-width: 860px) {
+      .ds-banner { grid-template-columns: 1fr; }
+    }
+
+    .ds-banner h2 {
+      font-family: var(--font-headline);
+      font-size: 28px;
+      color: #c4d96b;
+      margin-bottom: 12px;
+    }
+
+    .color-swatches {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .swatch {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swatch-circle {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+
+    /* Section Title */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 24px;
+    }
+
+    .section-header h2 {
+      font-family: var(--font-headline);
+      font-size: 28px;
+      color: var(--color-primary);
+    }
+
+    /* Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 28px;
+      margin-bottom: 48px;
+    }
+
+    @media (max-width: 480px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--color-card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--color-border);
+      border-radius: 20px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      box-shadow: 0 4px 20px rgba(61, 79, 35, 0.04);
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 36px rgba(61, 79, 35, 0.12);
+      border-color: rgba(61, 79, 35, 0.35);
+    }
+
+    .card-preview {
+      position: relative;
+      background: #e7ebd9;
+      height: 240px;
+      overflow: hidden;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .card-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      transition: transform 0.4s ease;
+    }
+
+    .card:hover .card-preview img {
+      transform: scale(1.03);
+    }
+
+    .preview-badge {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(61, 79, 35, 0.85);
+      color: #faf7ed;
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      backdrop-filter: blur(8px);
+    }
+
+    .card-body {
+      padding: 24px;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-num {
+      font-size: 12px;
+      font-weight: 700;
+      color: #6b8045;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .card-title {
+      font-family: var(--font-headline);
+      font-size: 20px;
+      color: var(--color-primary);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .card-id {
+      font-family: monospace;
+      font-size: 11px;
+      color: #7a8c5d;
+      background: rgba(61, 79, 35, 0.06);
+      padding: 3px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+
+    .card-actions {
+      margin-top: auto;
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: var(--color-secondary);
+      color: var(--color-primary);
+      border: 1px solid rgba(61, 79, 35, 0.2);
+    }
+
+    .btn-primary:hover {
+      background: #b5cc5a;
+      box-shadow: 0 4px 12px rgba(196, 217, 107, 0.4);
+    }
+
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.8);
+      color: var(--color-primary);
+      border: 1px solid var(--color-border);
+    }
+
+    .btn-ghost:hover {
+      background: #ffffff;
+      border-color: rgba(61, 79, 35, 0.3);
+    }
+
+    footer {
+      text-align: center;
+      padding: 32px 0 16px;
+      color: #7a8c5d;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge">Google Stitch Project Export</div>
+      <h1>MedCheck Glassmorphic Interface</h1>
+      <p class="subtitle">An organic, editorial medical AI safety platform bridging pharmaceutical trust and modern glassmorphic clarity.</p>
+      <div class="meta-bar">
+        <div class="meta-item"><strong>Project ID:</strong> 10363281895555152476</div>
+        <div class="meta-item"><strong>Total Screens:</strong> 9 HTML Screens + Design System</div>
+        <div class="meta-item"><strong>Design Paradigm:</strong> Organic Precision & Glassmorphism</div>
+        <div class="meta-item"><strong>Status:</strong> All Assets & Code Downloaded Locally</div>
+      </div>
+    </header>
+
+    <!-- Design System Banner -->
+    <div class="ds-banner">
+      <div>
+        <h2>Botanical Intelligence</h2>
+        <p>A tactile, high-end editorial aesthetic rooted in warm organic tones, high-transparency frosted glass surfaces, and rigorous medical safety hierarchy.</p>
+        <div class="color-swatches">
+          <div class="swatch">
+            <div class="swatch-circle" style="background: #3d4f23;"></div>
+            <span>Primary (#3D4F23)</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch-circle" style="background: #c4d96b;"></div>
+            <span>Secondary (#C4D96B)</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch-circle" style="background: #4a5d2f;"></div>
+            <span>Tertiary (#4A5D2F)</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch-circle" style="background: #faf7ed; border-color: #999;"></div>
+            <span>Neutral (#FAF7ED)</span>
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <h3 style="color: #c4d96b; font-size: 16px; margin-bottom: 8px;">Typography & Layout</h3>
+          <p style="font-size: 14px; opacity: 0.9;">
+            <strong>Headlines:</strong> Playfair Display (Serif)<br>
+            <strong>Body & Labels:</strong> DM Sans (Sans-serif)<br>
+            <strong>Grid:</strong> 12-column grid, 8px base rhythm, 20px backdrop blur.
+          </p>
+        </div>
+        <div style="margin-top: 16px; display: flex; gap: 10px;">
+          <a href="01_design_system/style-guidelines.md" class="btn btn-primary">View Style Guidelines</a>
+          <a href="01_design_system/tokens.css" class="btn btn-ghost" style="color: #faf7ed; background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3);">View CSS Tokens</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <h2>Project Screens</h2>
+      <span style="color: #5b6e41; font-size: 14px;">9 Fully Interactive Screens</span>
+    </div>
+
+    <div class="grid">
+      <!-- Screen 2: Landing Page Desktop -->
+      <div class="card">
+        <div class="card-preview">
+          <img src="02_landing_page_desktop/screenshot.jpg" alt="MedCheck Landing Page Desktop">
+          <span class="preview-badge">Desktop (2560 × 4538)</span>
+        </div>
+        <div class="card-body">
+          <div class="card-num">Screen 02</div>
+          <div class="card-title">MedCheck - Landing Page (Desktop)</div>
+          <div class="card-id">3b4e21fce80347dd963621c0cfc5bb41</div>
+          <div class="card-actions">
+            <a href="02_landing_page_desktop/index.html" target="_blank" class="btn btn-primary">Open Screen</a>
+            <a href="02_landing_page_desktop/screenshot.jpg" target="_blank" class="btn btn-ghost">Image</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 3: Privacy Policy -->
+      <div class="card">
+        <div class="card-preview">
+          <img src="03_privacy_policy/screenshot.jpg" alt="MedCheck Privacy Policy">
+          <span class="preview-badge">Desktop (2560 × 3202)</span>
+        </div>
+        <div class="card-body">
+          <div class="card-num">Screen 03</div>
+          <div class="card-title">MedCheck - Privacy Policy (Revised Colors)</div>
+          <div class="card-id">1bcb055b8f514081a8b066f042603144</div>
+          <div class="card-actions">
+            <a href="03_privacy_policy/index.html" target="_blank" class="btn btn-primary">Open Screen</a>
+            <a href="03_privacy_policy/screenshot.jpg" target="_blank" class="btn btn-ghost">Image</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 4: Contact Support Desktop -->
+      <div class="card">
+        <div class="card-preview">
+          <img src="04_contact_support_desktop/screenshot.jpg" alt="MedCheck Contact Support">
+          <span class="preview-badge">Desktop (2560 × 2110)</span>
+        </div>
+        <div class="card-body">
+          <div class="card-num">Screen 04</div>
+          <div class="card-title">MedCheck - Contact Support (Desktop)</div>
+          <div class="card-id">6635dd27ee4b4b8ba0010c32e3b2f271</div>
+          <div class="card-actions">
+            <a href="04_contact_support_desktop/index.html" target="_blank" class="btn btn-primary">Open Screen</a>
+            <a href="04_contact_support_desktop/screenshot.jpg" target="_blank" class="btn btn-ghost">Image</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 5: Terms of Service Desktop -->
+      <div class="card">
+        <div class="card-preview">
+          <img src="05_terms_of_service_desktop/screenshot.jpg" alt="MedCheck Terms of Service">
+          <span class="preview-badge">Desktop (2560 × 2968)</span>
+        </div>
+        <div class="card-body">
+          <div class="card-num">Screen 05</div>
+          <div class="card-title">MedCheck - Terms of Service (Desktop)</div>
+          <div class="card-id">82df0b854b194cea8aa2658e64f65833</div>
+          <div class="card-actions">
+            <a href="05_terms_of_service_desktop/index.html" target="_blank" class="btn btn-primary">Open Screen</a>
+            <a href="05_terms_of_service_desktop/screenshot.jpg" target="_blank" class="btn btn-ghost">Image</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 6: App Interface Desktop -->
+      <div class="card">
+        <div class="card-preview">
+          <img src="06_app_interface_desktop/screenshot.jpg" alt="MedCheck App Interface Desktop">
+          <span class="preview-badge">Desktop (2560 × 2338)</span>
+        </div>
+        <div class="card-body">
+          <div class="card-num">Screen 06</div>
+          <div class="card-title">MedCheck - App Interface (Desktop)</div>
+          <div class="card-id">2c2481c2144f40a38f6603e00f1bdbdf</div>
+          <div class="card-actions">
+            <a href="06_app_interface_desktop/index.html" target="_blank" class="btn btn-primary">Open Screen</a>
+            <a href="06_app_interface_desktop/screenshot.jpg" target="_blank" class="btn btn-ghost">Image</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 7: Sign Up Desktop -->
+      <div class="card">
+        <div class="card-preview">
+          <img src="07_sign_up_desktop/screenshot.jpg" alt="MedCheck Sign Up">
+          <span class="preview-badge">Desktop (2560 × 1204)</span>
+        </div>
+        <div class="card-body">
+          <div class="card-num">Screen 07</div>
+          <div class="card-title">MedCheck - Sign Up (Desktop)</div>
+          <div class="card-id">7cfb26ba9c444ecdbddea1977b71c992</div>
+          <div class="card-actions">
+            <a href="07_sign_up_desktop/index.html" target="_blank" class="btn btn-primary">Open Screen</a>
+            <a href="07_sign_up_desktop/screenshot.jpg" target="_blank" class="btn btn-ghost">Image</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 8: Login Desktop -->
+      <div class="card">
+        <div class="card-preview">
+          <img src="08_login_desktop/screenshot.jpg" alt="MedCheck Login">
+          <span class="preview-badge">Desktop (2560 × 1218)</span>
+        </div>
+        <div class="card-body">
+          <div class="card-num">Screen 08</div>
+          <div class="card-title">MedCheck - Login (Desktop)</div>
+          <div class="card-id">c8bf738b6e9a4d8c92ce217041358684</div>
+          <div class="card-actions">
+            <a href="08_login_desktop/index.html" target="_blank" class="btn btn-primary">Open Screen</a>
+            <a href="08_login_desktop/screenshot.jpg" target="_blank" class="btn btn-ghost">Image</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 9: Landing Page Mobile -->
+      <div class="card">
+        <div class="card-preview">
+          <img src="09_landing_page_mobile/screenshot.jpg" alt="MedCheck Landing Page Mobile">
+          <span class="preview-badge">Mobile (780 × 5156)</span>
+        </div>
+        <div class="card-body">
+          <div class="card-num">Screen 09</div>
+          <div class="card-title">MedCheck - Landing Page (Mobile)</div>
+          <div class="card-id">4c1be0b3016b4130a9643cfd1a31d418</div>
+          <div class="card-actions">
+            <a href="09_landing_page_mobile/index.html" target="_blank" class="btn btn-primary">Open Screen</a>
+            <a href="09_landing_page_mobile/screenshot.jpg" target="_blank" class="btn btn-ghost">Image</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 10: App Interface Mobile -->
+      <div class="card">
+        <div class="card-preview">
+          <img src="10_app_interface_mobile/screenshot.jpg" alt="MedCheck App Interface Mobile">
+          <span class="preview-badge">Mobile (780 × 1524)</span>
+        </div>
+        <div class="card-body">
+          <div class="card-num">Screen 10</div>
+          <div class="card-title">MedCheck - App Interface (Mobile)</div>
+          <div class="card-id">31139356b5f34c8c961a04ef867d8886</div>
+          <div class="card-actions">
+            <a href="10_app_interface_mobile/index.html" target="_blank" class="btn btn-primary">Open Screen</a>
+            <a href="10_app_interface_mobile/screenshot.jpg" target="_blank" class="btn btn-ghost">Image</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>MedCheck Stitch Export &bull; Generated from Google Stitch Project <code>10363281895555152476</code></p>
+    </footer>
+  </div>
+</body>
+</html>

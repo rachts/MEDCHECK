@@ -1,0 +1,175 @@
+{
+  "project": {
+    "id": "10363281895555152476",
+    "title": "MedCheck Glassmorphic Interface",
+    "deviceType": "DESKTOP",
+    "createTime": "2026-08-16T12:45:20.279734Z",
+    "updateTime": "2026-08-16T18:15:11.628012Z"
+  },
+  "screens": [
+    {
+      "index": 1,
+      "name": "Design System",
+      "id": "asset-stub-assets_840bada86484403fb04dc459b28941ef",
+      "folder": "01_design_system",
+      "files": {
+        "json": "01_design_system/design-system.json",
+        "guidelines": "01_design_system/style-guidelines.md",
+        "css": "01_design_system/tokens.css"
+      }
+    },
+    {
+      "index": 2,
+      "name": "MedCheck - Landing Page (Desktop)",
+      "title": "MedCheck - Landing Page (Desktop)",
+      "id": "3b4e21fce80347dd963621c0cfc5bb41",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "4538",
+      "folder": "02_landing_page_desktop",
+      "files": {
+        "html": "02_landing_page_desktop/index.html",
+        "screenshot": "02_landing_page_desktop/screenshot.jpg",
+        "metadata": "02_landing_page_desktop/metadata.json"
+      },
+      "html_size_bytes": 16475,
+      "img_size_bytes": 24371
+    },
+    {
+      "index": 3,
+      "name": "MedCheck - Privacy Policy (Revised Colors)",
+      "title": "MedCheck - Privacy Policy (Revised Colors)",
+      "id": "1bcb055b8f514081a8b066f042603144",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "3872",
+      "folder": "03_privacy_policy",
+      "files": {
+        "html": "03_privacy_policy/index.html",
+        "screenshot": "03_privacy_policy/screenshot.jpg",
+        "metadata": "03_privacy_policy/metadata.json"
+      },
+      "html_size_bytes": 18838,
+      "img_size_bytes": 77401
+    },
+    {
+      "index": 4,
+      "name": "MedCheck - Contact Support (Desktop)",
+      "title": "MedCheck - Contact Support (Desktop)",
+      "id": "6635dd27ee4b4b8ba0010c32e3b2f271",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "2622",
+      "folder": "04_contact_support_desktop",
+      "files": {
+        "html": "04_contact_support_desktop/index.html",
+        "screenshot": "04_contact_support_desktop/screenshot.jpg",
+        "metadata": "04_contact_support_desktop/metadata.json"
+      },
+      "html_size_bytes": 11147,
+      "img_size_bytes": 79609
+    },
+    {
+      "index": 5,
+      "name": "MedCheck - Terms of Service (Desktop)",
+      "title": "MedCheck - Terms of Service (Desktop)",
+      "id": "82df0b854b194cea8aa2658e64f65833",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "3410",
+      "folder": "05_terms_of_service_desktop",
+      "files": {
+        "html": "05_terms_of_service_desktop/index.html",
+        "screenshot": "05_terms_of_service_desktop/screenshot.jpg",
+        "metadata": "05_terms_of_service_desktop/metadata.json"
+      },
+      "html_size_bytes": 12297,
+      "img_size_bytes": 101073
+    },
+    {
+      "index": 6,
+      "name": "MedCheck - App Interface (Desktop)",
+      "title": "MedCheck - App Interface (Desktop)",
+      "id": "2c2481c2144f40a38f6603e00f1bdbdf",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "2338",
+      "folder": "06_app_interface_desktop",
+      "files": {
+        "html": "06_app_interface_desktop/index.html",
+        "screenshot": "06_app_interface_desktop/screenshot.jpg",
+        "metadata": "06_app_interface_desktop/metadata.json"
+      },
+      "html_size_bytes": 13450,
+      "img_size_bytes": 98186
+    },
+    {
+      "index": 7,
+      "name": "MedCheck - Sign Up (Desktop)",
+      "title": "MedCheck - Sign Up (Desktop)",
+      "id": "7cfb26ba9c444ecdbddea1977b71c992",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "2048",
+      "folder": "07_sign_up_desktop",
+      "files": {
+        "html": "07_sign_up_desktop/index.html",
+        "screenshot": "07_sign_up_desktop/screenshot.jpg",
+        "metadata": "07_sign_up_desktop/metadata.json"
+      },
+      "html_size_bytes": 12792,
+      "img_size_bytes": 48089
+    },
+    {
+      "index": 8,
+      "name": "MedCheck - Login (Desktop)",
+      "title": "MedCheck - Login (Desktop)",
+      "id": "c8bf738b6e9a4d8c92ce217041358684",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "2048",
+      "folder": "08_login_desktop",
+      "files": {
+        "html": "08_login_desktop/index.html",
+        "screenshot": "08_login_desktop/screenshot.jpg",
+        "metadata": "08_login_desktop/metadata.json"
+      },
+      "html_size_bytes": 12277,
+      "img_size_bytes": 49034
+    },
+    {
+      "index": 9,
+      "name": "MedCheck - Landing Page (Mobile)",
+      "title": "MedCheck - Landing Page (Mobile)",
+      "id": "4c1be0b3016b4130a9643cfd1a31d418",
+      "deviceType": "MOBILE",
+      "width": "780",
+      "height": "5748",
+      "folder": "09_landing_page_mobile",
+      "files": {
+        "html": "09_landing_page_mobile/index.html",
+        "screenshot": "09_landing_page_mobile/screenshot.jpg",
+        "metadata": "09_landing_page_mobile/metadata.json"
+      },
+      "html_size_bytes": 17045,
+      "img_size_bytes": 29364
+    },
+    {
+      "index": 10,
+      "name": "MedCheck - App Interface (Mobile)",
+      "title": "MedCheck - App Interface (Mobile)",
+      "id": "31139356b5f34c8c961a04ef867d8886",
+      "deviceType": "MOBILE",
+      "width": "780",
+      "height": "1768",
+      "folder": "10_app_interface_mobile",
+      "files": {
+        "html": "10_app_interface_mobile/index.html",
+        "screenshot": "10_app_interface_mobile/screenshot.jpg",
+        "metadata": "10_app_interface_mobile/metadata.json"
+      },
+      "html_size_bytes": 13573,
+      "img_size_bytes": 17504
+    }
+  ]
+}
