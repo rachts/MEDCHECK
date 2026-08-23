@@ -3,13 +3,12 @@ import logging
 from typing import Optional, Dict, Any, List
 from models import InteractionItem, Severity, RuleConfidence, ParsedDrugInfo
 from services.clinical_rules import match_known_clinical_rule, expand_aliases, resolve_canonical_name
-from services.mistral_client import call_mistral_api
 
 logger = logging.getLogger("interaction_analyzer")
 
 def parse_drug_label_from_dict(label_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Parses OpenFDA drug label dictionary into structured pharmacology fields.
+    Parses OpenFDA drug label dictionary into structured pharmacology fields deterministically.
     """
     generic_name = label_dict.get("generic_name", "").lower().strip()
     brand_names = [b.lower().strip() for b in label_dict.get("brand_names", [])]
@@ -19,7 +18,6 @@ def parse_drug_label_from_dict(label_dict: Dict[str, Any]) -> Dict[str, Any]:
     food_warnings = []
     drug_interactions = []
 
-    # Heuristic clinical extraction from FDA text sections
     text_lower = raw_text.lower()
     if "bleeding" in text_lower or "hemorrhage" in text_lower:
         side_effects.append("Increased bleeding risk")
@@ -55,79 +53,59 @@ async def analyze_drug_pair(
 ) -> Optional[InteractionItem]:
     """
     Multi-stage interaction analyzer:
-    1. Gold-standard deterministic clinical rule engine (sub-millisecond).
+    1. Gold-standard deterministic clinical rule engine (sub-millisecond priority).
     2. FDA Label cross-referencing for verified pharmacological interactions.
-    3. Mistral AI structured synthesis (with circuit breaker & offline fallback).
     """
     # 1. Deterministic Rule Match
     rule_match = match_known_clinical_rule(drug_a, drug_b)
     if rule_match:
         return rule_match
 
-    # 2. FDA Label Cross-Mention Analysis
+    # 2. FDA Label Cross-Mention Analysis (Deterministic heuristic)
     aliases_a = expand_aliases(drug_a)
     aliases_b = expand_aliases(drug_b)
 
     found_in_a = False
     found_in_b = False
     excerpt = ""
+    is_boxed_warning = False
 
     if label_a and label_a.get("found"):
         text_a = label_a.get("raw_text_summary", "").lower()
+        boxed_a = " ".join(label_a.get("boxed_warnings", [])).lower()
         for b_alias in aliases_b:
             if b_alias in text_a and len(b_alias) > 3:
                 found_in_a = True
+                if b_alias in boxed_a:
+                    is_boxed_warning = True
                 idx = text_a.find(b_alias)
                 excerpt = label_a.get("raw_text_summary", "")[max(0, idx-100):min(len(text_a), idx+200)]
                 break
 
     if label_b and label_b.get("found"):
         text_b = label_b.get("raw_text_summary", "").lower()
+        boxed_b = " ".join(label_b.get("boxed_warnings", [])).lower()
         for a_alias in aliases_a:
             if a_alias in text_b and len(a_alias) > 3:
                 found_in_b = True
+                if a_alias in boxed_b:
+                    is_boxed_warning = True
                 if not excerpt:
                     idx = text_b.find(a_alias)
                     excerpt = label_b.get("raw_text_summary", "")[max(0, idx-100):min(len(text_b), idx+200)]
                 break
 
     if found_in_a or found_in_b:
-        # Check if Mistral AI is available to synthesize label excerpt
-        ai_prompt = (
-            f"Analyze the interaction between {drug_a} and {drug_b} based on this FDA drug label excerpt:\n"
-            f"\"{excerpt}\"\n\n"
-            f"Return a JSON object with: {{\"severity\": \"high\"|\"moderate\"|\"low\", \"explanation\": \"...\", \"mechanism\": \"...\", \"action_guidance\": \"...\"}}"
-        )
-        ai_response = await call_mistral_api(ai_prompt, system_prompt="You are a clinical pharmacologist. Output strict JSON only.")
-        if ai_response:
-            try:
-                data = json.loads(ai_response.strip().replace("```json", "").replace("```", ""))
-                sev_val = data.get("severity", "moderate").lower()
-                sev_enum = Severity.HIGH if sev_val == "high" else Severity.MODERATE if sev_val == "moderate" else Severity.LOW
-                return InteractionItem(
-                    drug_a=drug_a,
-                    drug_b=drug_b,
-                    severity=sev_enum,
-                    explanation=data.get("explanation", f"FDA drug label documents interaction between {drug_a} and {drug_b}."),
-                    mechanism=data.get("mechanism"),
-                    action_guidance=data.get("action_guidance", "Consult physician or pharmacist before combining."),
-                    evidence_source="OpenFDA Drug Label & Mistral AI Clinical Synthesis",
-                    confidence=RuleConfidence.CASE_REPORT,
-                    last_reviewed="2026-08-23"
-                )
-            except Exception as e:
-                logger.warning(f"Error parsing Mistral JSON response: {e}")
-
-        # Deterministic label fallback
+        severity = Severity.HIGH if is_boxed_warning else Severity.MODERATE
         return InteractionItem(
             drug_a=drug_a,
             drug_b=drug_b,
-            severity=Severity.MODERATE,
-            explanation=f"Official FDA drug labeling for {drug_a} mentions interaction considerations with {drug_b}.",
-            mechanism=f"FDA Label Excerpt: {excerpt[:180]}..." if excerpt else None,
-            action_guidance="Review administration schedule with your healthcare provider.",
-            evidence_source="OpenFDA Drug Labeling Section",
-            confidence=RuleConfidence.THEORETICAL,
+            severity=severity,
+            explanation=f"Official FDA drug labeling for {drug_a} documents interaction considerations with {drug_b}.",
+            mechanism=f"FDA Label Excerpt: {excerpt[:180]}..." if excerpt else "Documented in FDA drug interaction and warning sections.",
+            action_guidance="Review dosage schedule and precautions with your healthcare provider or pharmacist.",
+            evidence_source="OpenFDA Drug Labeling Section" if not is_boxed_warning else "FDA Boxed Warning Section",
+            confidence=RuleConfidence.ESTABLISHED if is_boxed_warning else RuleConfidence.THEORETICAL,
             last_reviewed="2026-08-23"
         )
 

@@ -8,7 +8,7 @@ def calculate_composite_gi_score(
 ) -> Tuple[int, str, List[Dict[str, Any]], List[str]]:
     """
     Calculates the Stomach Guardian Composite GI Score (0-100) based on cumulative mucosal load,
-    multi-NSAID compounding penalties, and PPI protection credits.
+    multi-NSAID compounding penalties, Anticoagulant + NSAID synergy, and PPI protection credits.
     """
     if not medicines:
         return 20, "gentle", [], []
@@ -17,6 +17,7 @@ def calculate_composite_gi_score(
     contributors = []
     nsaid_count = 0
     ppi_present = False
+    anticoagulant_count = 0
 
     for med in medicines:
         profile = profiles.get(med)
@@ -31,6 +32,10 @@ def calculate_composite_gi_score(
         # Check for NSAIDs / High GI irritants
         if any(nsaid in aliases for nsaid in ["ibuprofen", "aspirin", "naproxen", "diclofenac", "celecoxib", "ketoprofen", "meloxicam", "indomethacin"]):
             nsaid_count += 1
+
+        # Check for Anticoagulants / Antiplatelets
+        if any(ac in aliases for ac in ["warfarin", "clopidogrel", "apixaban", "rivaroxaban", "dabigatran", "edoxaban", "prasugrel", "ticagrelor"]):
+            anticoagulant_count += 1
 
         contributors.append({
             "drug": med.capitalize(),
@@ -54,6 +59,16 @@ def calculate_composite_gi_score(
             "mechanism_short": "Simultaneous inhibition of gastroprotective COX-1 prostaglandins multiplies ulcer risk"
         })
 
+    # Anticoagulant + NSAID Synergistic Hemorrhagic Hazard (+30 pts)
+    if anticoagulant_count > 0 and nsaid_count > 0:
+        composite += 30
+        contributors.append({
+            "drug": "Anticoagulant + NSAID Synergistic Bleeding Hazard",
+            "score_impact": 30,
+            "tier": "high",
+            "mechanism_short": "Synergistic breakdown of coagulation and gastric mucosal barrier multiplies major upper GI bleeding events 3-5x"
+        })
+
     # PPI Protective Mitigation Credit (-20 pts)
     if ppi_present:
         composite = max(10, composite - 20)
@@ -74,6 +89,8 @@ def calculate_composite_gi_score(
         tier = "gentle"
 
     recommendations = []
+    if anticoagulant_count > 0 and nsaid_count > 0:
+        recommendations.append("Critical Anticoagulant + NSAID combination: consult prescriber immediately regarding PPI gastro-protection or alternative analgesics.")
     if nsaid_count > 0:
         recommendations.append("Administer NSAID medications with meals or a glass of milk to buffer gastric acid.")
     if nsaid_count >= 2:
@@ -92,7 +109,13 @@ def detect_side_effect_amplifications(
     profiles: Dict[str, MedicineProfileResponse]
 ) -> List[AmplifiedSideEffect]:
     """
-    Scans across all active medicine profiles to detect compounded side effects.
+    Scans across all active medicine profiles to detect compounded physiological side effects:
+    - Bleeding & Hemorrhage
+    - Sedation & CNS Depression
+    - Hypotension & Dizziness
+    - Gastrointestinal Mucosal Stress
+    - Hyperkalemia (Potassium Elevation)
+    - Hepatic Strain & Transaminase Elevation
     """
     amplified_list: List[AmplifiedSideEffect] = []
     if len(medicines) < 2:
@@ -102,25 +125,35 @@ def detect_side_effect_amplifications(
     drowsiness_sources = []
     hypotension_sources = []
     gi_sources = []
+    hyperkalemia_sources = []
+    hepatic_sources = []
 
     for med in medicines:
         aliases = expand_aliases(med)
         
         # Bleeding risks
-        if any(d in aliases for d in ["warfarin", "aspirin", "ibuprofen", "clopidogrel", "naproxen", "apixaban", "rivaroxaban"]):
+        if any(d in aliases for d in ["warfarin", "aspirin", "ibuprofen", "clopidogrel", "naproxen", "apixaban", "rivaroxaban", "dabigatran", "prasugrel"]):
             bleeding_sources.append(med.capitalize())
             
         # Sedation / Drowsiness risks
-        if any(d in aliases for d in ["alprazolam", "diazepam", "diphenhydramine", "cetirizine", "gabapentin", "pregabalin", "alcohol"]):
+        if any(d in aliases for d in ["alprazolam", "diazepam", "diphenhydramine", "cetirizine", "gabapentin", "pregabalin", "alcohol", "lorazepam", "zolpidem"]):
             drowsiness_sources.append(med.capitalize())
             
         # Hypotension risks
-        if any(d in aliases for d in ["lisinopril", "amlodipine", "metoprolol", "furosemide", "sildenafil", "tadalafil"]):
+        if any(d in aliases for d in ["lisinopril", "amlodipine", "metoprolol", "furosemide", "sildenafil", "tadalafil", "atenolol", "losartan", "carvedilol"]):
             hypotension_sources.append(med.capitalize())
 
         # Gastrointestinal irritation
-        if any(d in aliases for d in ["ibuprofen", "aspirin", "naproxen", "metformin", "augmentin", "amoxicillin/clavulanate"]):
+        if any(d in aliases for d in ["ibuprofen", "aspirin", "naproxen", "metformin", "augmentin", "amoxicillin/clavulanate", "diclofenac", "prednisone"]):
             gi_sources.append(med.capitalize())
+
+        # Hyperkalemia risks
+        if any(d in aliases for d in ["lisinopril", "losartan", "spironolactone", "potassium", "eplerenone", "triamterene", "valsartan"]):
+            hyperkalemia_sources.append(med.capitalize())
+
+        # Hepatic stress risks
+        if any(d in aliases for d in ["paracetamol", "acetaminophen", "alcohol", "atorvastatin", "simvastatin", "methotrexate", "augmentin", "amoxicillin/clavulanate"]):
+            hepatic_sources.append(med.capitalize())
 
     if len(bleeding_sources) >= 2:
         amplified_list.append(AmplifiedSideEffect(
@@ -156,6 +189,24 @@ def detect_side_effect_amplifications(
             severity="moderate",
             amplified=True,
             clinical_note=f"Multiple gastrointestinal irritants ({', '.join(gi_sources)}) increase dyspepsia, nausea, and ulcer risk."
+        ))
+
+    if len(hyperkalemia_sources) >= 2:
+        amplified_list.append(AmplifiedSideEffect(
+            effect="Amplified Hyperkalemia Risk",
+            sources=hyperkalemia_sources,
+            severity="severe",
+            amplified=True,
+            clinical_note=f"Concurrent potassium-sparing or ACEi/ARB agents ({', '.join(hyperkalemia_sources)}) significantly increase life-threatening serum potassium retention."
+        ))
+
+    if len(hepatic_sources) >= 2:
+        amplified_list.append(AmplifiedSideEffect(
+            effect="Compounded Hepatic Metabolic Stress",
+            sources=hepatic_sources,
+            severity="moderate",
+            amplified=True,
+            clinical_note=f"Concurrent hepatically metabolized agents or alcohol ({', '.join(hepatic_sources)}) increase transaminase strain and liver injury risk."
         ))
 
     return amplified_list

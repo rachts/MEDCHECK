@@ -19,7 +19,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from config import settings
-from services.logging_config import setup_logging
+from services.logging_config import setup_logging, request_id_ctx
 from models import (
     CheckRequest,
     CheckResponse,
@@ -36,19 +36,31 @@ from services.auth import (
     create_user,
     authenticate_user,
     create_access_token,
-    get_current_user,
-    get_optional_user
+    get_current_user
 )
 from services.openfda import fetch_drug_label
-from services.mistral_parser import (
+from services.knowledge_base import (
     CLINICAL_KB_VERSION,
-    parse_drug_label_from_dict,
-    analyze_drug_pair,
-    get_or_build_medicine_profile,
+    get_or_build_medicine_profile
+)
+from services.clinical_rules import (
+    match_known_clinical_rule,
+    resolve_canonical_name,
+    expand_aliases
+)
+from services.gi_engine import (
     calculate_composite_gi_score,
-    detect_side_effect_amplifications,
-    generate_food_conflicts_and_timeline,
+    detect_side_effect_amplifications
+)
+from services.timeline_engine import (
+    generate_food_conflicts_and_timeline
+)
+from services.search_engine import (
     search_medicine_database
+)
+from services.interaction_analyzer import (
+    analyze_drug_pair,
+    parse_drug_label_from_dict
 )
 from services.supabase_cache import (
     get_cached_interaction,
@@ -60,18 +72,22 @@ from services.supabase_cache import (
 from services.audit_logger import log_clinical_check
 
 # 1. Initialize Structured Logging
-setup_logging("INFO")
+setup_logging(settings.LOG_LEVEL)
 logger = logging.getLogger("medcheck_api")
 
-# 2. Initialize Rate Limiter
+# 2. Initialize Rate Limiter (with optional Redis support)
 def rate_limit_key(request: Request) -> str:
-    # Use Bearer token or client IP for rate limiting
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
-        return auth_header[7:30]
+        token = auth_header[7:].strip()
+        return token[:30] if token else (get_remote_address(request) or "127.0.0.1")
     return get_remote_address(request) or "127.0.0.1"
 
-limiter = Limiter(key_func=rate_limit_key)
+limiter_kwargs = {"key_func": rate_limit_key}
+if settings.REDIS_URL:
+    limiter_kwargs["storage_uri"] = settings.REDIS_URL
+
+limiter = Limiter(**limiter_kwargs)
 
 # 3. Create FastAPI Application
 app = FastAPI(
@@ -113,9 +129,13 @@ async def security_and_tracing_middleware(request: Request, call_next):
         )
 
     req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    token = request_id_ctx.set(req_id)
     start_time = time.time()
     
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    finally:
+        request_id_ctx.reset(token)
     
     process_time = time.time() - start_time
     response.headers["X-Request-ID"] = req_id
@@ -147,7 +167,7 @@ app.add_middleware(
 @limiter.limit(settings.RATE_LIMIT_AUTH)
 async def register(request: Request, user_in: UserCreate):
     """Registers a new user account and returns a JWT access token."""
-    user = create_user(
+    user = await create_user(
         username=user_in.username,
         password=user_in.password,
         email=user_in.email,
@@ -166,7 +186,7 @@ async def register(request: Request, user_in: UserCreate):
 @limiter.limit(settings.RATE_LIMIT_AUTH)
 async def login(request: Request, user_in: UserLogin):
     """Authenticates user credentials and returns a JWT access token."""
-    user = authenticate_user(user_in.username, user_in.password)
+    user = await authenticate_user(user_in.username, user_in.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -188,7 +208,7 @@ async def create_guest_session(request: Request):
     """Generates an instant anonymous guest JWT session for clinical evaluation."""
     guest_name = f"guest_{uuid.uuid4().hex[:8]}"
     guest_pwd = uuid.uuid4().hex
-    user = create_user(username=guest_name, password=guest_pwd, is_guest=True)
+    user = await create_user(username=guest_name, password=guest_pwd, is_guest=True)
     token = create_access_token({"sub": user["username"], "uid": user["id"], "is_guest": True})
     return TokenResponse(
         access_token=token,
@@ -197,6 +217,12 @@ async def create_guest_session(request: Request):
         username=user["username"],
         is_guest=True
     )
+
+@app.post("/api/client-error")
+async def log_client_error(payload: Dict[str, Any]):
+    """Logs client-side React UI exceptions for diagnostic monitoring."""
+    logger.error(f"Client UI Error reported: {payload.get('error')} | Stack: {payload.get('stack')}")
+    return {"status": "logged"}
 
 # ==============================================================================
 # CLINICAL INTELLIGENCE ENDPOINTS
@@ -307,9 +333,8 @@ async def search_medicines(
     return results
 
 @app.post("/api/check", response_model=CheckResponse)
-@app.post("/api/basket/analyze", response_model=CheckResponse)
 @limiter.limit(settings.RATE_LIMIT_CHECK)
-async def check_or_analyze_basket(
+async def check_medicines_basket(
     request: Request,
     req: CheckRequest,
     current_user: Dict[str, Any] = Depends(get_current_user)
@@ -317,9 +342,9 @@ async def check_or_analyze_basket(
     """
     Full clinical intelligence pipeline for a basket of medicines:
     - Parallelized pairwise drug-drug interactions with concurrency throttling
-    - Composite Stomach Guardian GI Risk Score & Contributors
-    - Side Effect Amplification Detection
-    - Food Conflict & 24-Hour Daily Timing Schedule
+    - Composite Stomach Guardian GI Risk Score & Compounded Anticoagulant+NSAID Risk
+    - Side Effect Amplification Detection (Bleeding, Sedation, Hypotension, Hyperkalemia, Hepatic)
+    - Food Conflict & Dynamic 24-Hour Patient Schedule
     - Complete Individual Drug Intelligence Profiles
     """
     start_time = time.time()
@@ -431,11 +456,11 @@ async def check_or_analyze_basket(
     else:
         summary_text = f"Identified {len(detected_interactions)} potential interaction{'s' if len(detected_interactions) > 1 else ''} across {len(pairs)} analyzed pairs."
 
-    # 7. Audit Logging
+    # 7. Audit Logging (Non-blocking but resilient)
     latency_ms = (time.time() - start_time) * 1000.0
     client_ip = get_remote_address(request)
-    asyncio.create_task(
-        log_clinical_check(
+    try:
+        await log_clinical_check(
             user_id=user_id,
             medicines=medicines,
             interaction_count=len(detected_interactions),
@@ -443,7 +468,8 @@ async def check_or_analyze_basket(
             ip_address=client_ip,
             response_time_ms=latency_ms
         )
-    )
+    except Exception as e:
+        logger.warning(f"Audit log recording error: {e}")
 
     return CheckResponse(
         medicines=medicines,
@@ -461,6 +487,16 @@ async def check_or_analyze_basket(
         profiles=profiles,
         limited_data_warnings=limited_data_warnings
     )
+
+@app.post("/api/basket/analyze", response_model=CheckResponse, include_in_schema=False)
+@limiter.limit(settings.RATE_LIMIT_CHECK)
+async def analyze_basket_alias(
+    request: Request,
+    req: CheckRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Compatibility alias for /api/check."""
+    return await check_medicines_basket(request, req, current_user)
 
 if __name__ == "__main__":
     import uvicorn

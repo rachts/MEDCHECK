@@ -31,7 +31,6 @@ def truncate_to_sentences(text: str, max_chars: int = 8000) -> str:
         else:
             break
     if not result:
-        # Fallback: slice at last space
         truncated = text[:max_chars]
         last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
         if last_period > 0:
@@ -41,7 +40,7 @@ def truncate_to_sentences(text: str, max_chars: int = 8000) -> str:
 
 async def fetch_drug_label(drug_name: str) -> Optional[Dict[str, Any]]:
     """
-    Fetch drug label from openFDA with structured query fallbacks and 429 retry handling.
+    Fetch drug label from openFDA with structured query fallbacks and exponential backoff retry.
     """
     cleaned_name = sanitize_for_openfda_query(drug_name)
     if not cleaned_name:
@@ -57,7 +56,7 @@ async def fetch_drug_label(drug_name: str) -> Optional[Dict[str, Any]]:
 
     async with httpx.AsyncClient(timeout=8.0) as client:
         for query in search_queries:
-            # Retry loop for transient 429 rate limits
+            # Exponential backoff on 429 rate limit (1s, 2s, 4s)
             for attempt in range(3):
                 try:
                     response = await client.get(
@@ -75,11 +74,11 @@ async def fetch_drug_label(drug_name: str) -> Optional[Dict[str, Any]]:
                                 return extracted
                         break
                     elif response.status_code == 404:
-                        # Query strategy not found; move to next strategy immediately
                         break
                     elif response.status_code == 429:
-                        logger.warning(f"openFDA 429 Rate Limited on '{query}'. Backing off 1s (attempt {attempt+1}/3)...")
-                        await asyncio.sleep(1.0)
+                        backoff = 2 ** attempt
+                        logger.warning(f"openFDA 429 Rate Limited on '{query}'. Exponential backoff {backoff}s (attempt {attempt+1}/3)...")
+                        await asyncio.sleep(backoff)
                     else:
                         logger.debug(f"openFDA returned status {response.status_code} for query '{query}'")
                         break
@@ -99,6 +98,8 @@ def extract_label_info(raw_label: Dict[str, Any], fallback_name: str) -> Dict[st
     generic_names = [g.lower() for g in openfda.get("generic_name", []) if g]
     brand_names = [b.lower() for b in openfda.get("brand_name", []) if b]
     substance_names = [s.lower() for s in openfda.get("substance_name", []) if s]
+    product_types = openfda.get("product_type", [])
+    pharm_class_cs = openfda.get("pharm_class_cs", [])
     
     if generic_names:
         generic_name = generic_names[0]
@@ -106,6 +107,14 @@ def extract_label_info(raw_label: Dict[str, Any], fallback_name: str) -> Dict[st
         generic_name = substance_names[0]
     else:
         generic_name = fallback_name.lower().strip()
+
+    # Determine Prescription vs OTC from OpenFDA product_type metadata
+    is_rx = any("PRESCRIPTION" in str(pt).upper() for pt in product_types)
+    if not is_rx and not product_types:
+        # Fallback check on warnings / Rx-only statements in label text
+        dosage_admin = str(raw_label.get("dosage_and_administration", ""))
+        if "rx only" in dosage_admin.lower() or "prescription" in dosage_admin.lower():
+            is_rx = True
     
     warnings = raw_label.get("warnings", [])
     boxed_warnings = raw_label.get("boxed_warning", [])
@@ -123,6 +132,9 @@ def extract_label_info(raw_label: Dict[str, Any], fallback_name: str) -> Dict[st
         "generic_name": generic_name,
         "brand_names": brand_names,
         "substance_names": substance_names,
+        "product_types": product_types,
+        "pharm_class_cs": pharm_class_cs[0] if pharm_class_cs else "Prescription / OTC Drug",
+        "is_rx": is_rx,
         "warnings": warnings,
         "boxed_warnings": boxed_warnings,
         "drug_interactions": drug_interactions,

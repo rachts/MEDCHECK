@@ -3,6 +3,7 @@ import sqlite3
 import uuid
 import logging
 import bcrypt
+import anyio
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
@@ -17,11 +18,16 @@ logger = logging.getLogger("auth_service")
 # JWT HTTP Bearer scheme
 security = HTTPBearer(auto_error=False)
 
+def _get_sqlite_auth_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(settings.SQLITE_DB_PATH, timeout=15.0)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    return conn
+
 def _init_users_table():
     """Ensure users table exists in SQLite database."""
     try:
         os.makedirs(os.path.dirname(settings.SQLITE_DB_PATH), exist_ok=True)
-        conn = sqlite3.connect(settings.SQLITE_DB_PATH)
+        conn = _get_sqlite_auth_conn()
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -57,16 +63,20 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
+    now_utc = datetime.now(timezone.utc)
+    expire = now_utc + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({
+        "exp": expire,
+        "iat": now_utc
+    })
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
     return encoded_jwt
 
-def create_user(username: str, password: str, email: Optional[str] = None, is_guest: bool = False) -> Dict[str, Any]:
+def _sync_create_user(username: str, password: str, email: Optional[str] = None, is_guest: bool = False) -> Dict[str, Any]:
     user_id = str(uuid.uuid4())
     hashed_pwd = get_password_hash(password)
     
-    conn = sqlite3.connect(settings.SQLITE_DB_PATH)
+    conn = _get_sqlite_auth_conn()
     cursor = conn.cursor()
     try:
         cursor.execute("""
@@ -88,8 +98,11 @@ def create_user(username: str, password: str, email: Optional[str] = None, is_gu
     finally:
         conn.close()
 
-def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
-    conn = sqlite3.connect(settings.SQLITE_DB_PATH)
+async def create_user(username: str, password: str, email: Optional[str] = None, is_guest: bool = False) -> Dict[str, Any]:
+    return await anyio.to_thread.run_sync(_sync_create_user, username, password, email, is_guest)
+
+def _sync_get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    conn = _get_sqlite_auth_conn()
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT id, username, email, hashed_password, is_guest FROM users WHERE username = ?", (username.strip().lower(),))
@@ -106,8 +119,11 @@ def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
     finally:
         conn.close()
 
-def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
-    user = get_user_by_username(username)
+async def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    return await anyio.to_thread.run_sync(_sync_get_user_by_username, username)
+
+async def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
+    user = await get_user_by_username(username)
     if not user:
         return None
     if not verify_password(password, user["hashed_password"]):
@@ -137,16 +153,3 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
         }
     except JWTError:
         raise credentials_exception
-
-async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[Dict[str, Any]]:
-    if not credentials:
-        return None
-    try:
-        payload = jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        return {
-            "id": payload.get("uid") or payload.get("sub"),
-            "username": payload.get("sub"),
-            "is_guest": payload.get("is_guest", False)
-        }
-    except JWTError:
-        return None

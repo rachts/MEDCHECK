@@ -20,10 +20,12 @@ FROM python:3.11-slim as runtime
 WORKDIR /app
 
 # Create non-root clinical user
-RUN groupadd -r medcheck && useradd -r -g medcheck -s /bin/false medcheck
+RUN groupadd -r medcheck && useradd -r -g medcheck -s /bin/false -m -d /home/medcheck medcheck
 
-# Copy installed Python packages
-COPY --from=builder /root/.local /home/medcheck/.local
+# Copy installed Python packages with correct ownership
+COPY --from=builder --chown=medcheck:medcheck /root/.local /home/medcheck/.local
+RUN chown -R medcheck:medcheck /home/medcheck/.local
+
 ENV PATH=/home/medcheck/.local/bin:$PATH
 ENV PYTHONUNBUFFERED=1
 ENV SQLITE_DB_PATH=/app/data/local_cache.db

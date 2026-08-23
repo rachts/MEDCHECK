@@ -76,26 +76,26 @@ def _sync_init_sqlite():
             )
         """)
 
-        # Parameterized migration check without f-strings
+        # Static migration checks
         cursor.execute("PRAGMA table_info(interaction_pairs)")
         existing_cols = {row[1] for row in cursor.fetchall()}
         
-        cols_to_add = [
-            ("mechanism", "TEXT"),
-            ("clinical_impact", "TEXT"),
-            ("stomach_impact", "TEXT"),
-            ("food_consideration", "TEXT"),
-            ("action_guidance", "TEXT"),
-            ("evidence_source", "TEXT"),
-            ("confidence", "TEXT"),
-            ("last_reviewed", "TEXT"),
-            ("expires_at", "TIMESTAMP")
+        static_migrations = [
+            ("mechanism", "ALTER TABLE interaction_pairs ADD COLUMN mechanism TEXT"),
+            ("clinical_impact", "ALTER TABLE interaction_pairs ADD COLUMN clinical_impact TEXT"),
+            ("stomach_impact", "ALTER TABLE interaction_pairs ADD COLUMN stomach_impact TEXT"),
+            ("food_consideration", "ALTER TABLE interaction_pairs ADD COLUMN food_consideration TEXT"),
+            ("action_guidance", "ALTER TABLE interaction_pairs ADD COLUMN action_guidance TEXT"),
+            ("evidence_source", "ALTER TABLE interaction_pairs ADD COLUMN evidence_source TEXT"),
+            ("confidence", "ALTER TABLE interaction_pairs ADD COLUMN confidence TEXT"),
+            ("last_reviewed", "ALTER TABLE interaction_pairs ADD COLUMN last_reviewed TEXT"),
+            ("expires_at", "ALTER TABLE interaction_pairs ADD COLUMN expires_at TIMESTAMP")
         ]
         
-        for col_name, col_type in cols_to_add:
+        for col_name, ddl_stmt in static_migrations:
             if col_name not in existing_cols:
                 try:
-                    cursor.execute(f"ALTER TABLE interaction_pairs ADD COLUMN {col_name} {col_type}")
+                    cursor.execute(ddl_stmt)
                 except Exception:
                     pass
 

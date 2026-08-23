@@ -1,4 +1,5 @@
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
+from datetime import datetime, timedelta
 from models import (
     MedicineProfileResponse, 
     FoodConflictDetail, 
@@ -6,13 +7,30 @@ from models import (
 )
 from services.clinical_rules import expand_aliases
 
+def _offset_time_str(base_time_str: str, hour_offset: float) -> str:
+    try:
+        # Parse base time e.g. "07:00" or "07:00 AM"
+        clean = base_time_str.strip()
+        if " " in clean:
+            t = datetime.strptime(clean, "%I:%M %p")
+        elif ":" in clean:
+            t = datetime.strptime(clean, "%H:%M")
+        else:
+            t = datetime.strptime("07:00", "%H:%M")
+
+        adjusted = t + timedelta(hours=hour_offset)
+        return adjusted.strftime("%I:%M %p").lstrip("0")
+    except Exception:
+        return "07:00 AM"
+
 def generate_food_conflicts_and_timeline(
     medicines: List[str], 
-    profiles: Dict[str, MedicineProfileResponse]
+    profiles: Dict[str, MedicineProfileResponse],
+    patient_wake_time: str = "07:00 AM"
 ) -> Tuple[List[FoodConflictDetail], List[TimelineSlot]]:
     """
     Analyzes dietary instructions across all active medicines to detect timing/food conflicts
-    and generates a synchronized 24-hour patient dosing schedule.
+    and generates a patient-tailored 24-hour daily dosing schedule starting from their wake time.
     """
     conflicts: List[FoodConflictDetail] = []
     timeline: List[TimelineSlot] = []
@@ -60,11 +78,17 @@ def generate_food_conflicts_and_timeline(
                 recommended_schedule=f"Space all milk, yogurt, and calcium/iron supplements by at least 4 hours from {m_dairy}."
             ))
 
-    # Build 24-Hour Patient Daily Schedule
-    # 07:00 AM - Empty Stomach Meds
+    # Dynamic Time Offsets from Patient Wake Time
+    time_fast = _offset_time_str(patient_wake_time, 0.0)      # e.g. 7:00 AM (Fast)
+    time_breakfast = _offset_time_str(patient_wake_time, 1.0) # e.g. 8:00 AM (Breakfast)
+    time_lunch = _offset_time_str(patient_wake_time, 6.0)     # e.g. 1:00 PM (Lunch)
+    time_dinner = _offset_time_str(patient_wake_time, 12.0)   # e.g. 7:00 PM (Dinner)
+    time_bedtime = _offset_time_str(patient_wake_time, 15.0)  # e.g. 10:00 PM (Bedtime)
+
+    # 1. Empty Stomach Window
     if has_empty_stomach_meds:
         timeline.append(TimelineSlot(
-            time="07:00 AM",
+            time=time_fast,
             title=f"Take {', '.join(has_empty_stomach_meds)} (Fast)",
             medicine=", ".join(has_empty_stomach_meds),
             action_type="med_empty_stomach",
@@ -72,10 +96,10 @@ def generate_food_conflicts_and_timeline(
             note="Take with a full 8 oz glass of water 30-60 minutes before food."
         ))
 
-    # 08:00 AM - Breakfast & Morning Food Meds
+    # 2. Breakfast & Morning Food Meds
     morning_food_meds = [m for m in has_with_food_meds if m not in ["Metformin"]]
     timeline.append(TimelineSlot(
-        time="08:00 AM",
+        time=time_breakfast,
         title="Breakfast Meal Window",
         medicine=", ".join(morning_food_meds) if morning_food_meds else None,
         action_type="meal",
@@ -83,9 +107,9 @@ def generate_food_conflicts_and_timeline(
         note="Substantial meal buffers stomach acid." + (f" Administer {', '.join(morning_food_meds)} with meal." if morning_food_meds else "")
     ))
 
-    # 01:00 PM - Lunch Window
+    # 3. Lunch Window
     timeline.append(TimelineSlot(
-        time="01:00 PM",
+        time=time_lunch,
         title="Lunch & Mid-Day Dosing",
         medicine=None,
         action_type="meal",
@@ -93,10 +117,10 @@ def generate_food_conflicts_and_timeline(
         note="If taking twice-daily antibiotic (e.g. Augmentin), take with lunch."
     ))
 
-    # 07:00 PM - Dinner & Evening Meds
+    # 4. Dinner & Evening Meds
     evening_food_meds = [m for m in medicines if "metformin" in expand_aliases(m) or "atorvastatin" in expand_aliases(m) or "warfarin" in expand_aliases(m)]
     timeline.append(TimelineSlot(
-        time="07:00 PM",
+        time=time_dinner,
         title="Dinner Meal & Evening Dosing",
         medicine=", ".join([m.capitalize() for m in evening_food_meds]) if evening_food_meds else None,
         action_type="med_with_food" if evening_food_meds else "meal",
@@ -104,9 +128,9 @@ def generate_food_conflicts_and_timeline(
         note="Take evening medications with dinner to maximize tolerance and maintain stable overnight levels."
     ))
 
-    # 10:00 PM - Bedtime
+    # 5. Bedtime
     timeline.append(TimelineSlot(
-        time="10:00 PM",
+        time=time_bedtime,
         title="Bedtime Review",
         medicine=None,
         action_type="bedtime_med",

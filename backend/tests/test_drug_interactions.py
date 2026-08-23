@@ -5,20 +5,35 @@ import os
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from models import CheckRequest, InteractionItem
+from models import CheckRequest, InteractionItem, Severity
 from services.supabase_cache import get_canonical_pair
 from services.openfda import sanitize_for_openfda_query, extract_label_info
-from services.mistral_parser import (
-    resolve_drug_aliases,
-    get_primary_generic_name,
-    get_or_build_medicine_profile,
-    calculate_composite_gi_score,
-    detect_side_effect_amplifications,
-    generate_food_conflicts_and_timeline,
-    search_medicine_database,
-    analyze_drug_pair,
-    KNOWN_CLINICAL_RULES
+from services.knowledge_base import (
+    CLINICAL_KB_VERSION,
+    get_or_build_medicine_profile
 )
+from services.clinical_rules import (
+    KNOWN_CLINICAL_RULES,
+    resolve_canonical_name,
+    expand_aliases
+)
+from services.gi_engine import (
+    calculate_composite_gi_score,
+    detect_side_effect_amplifications
+)
+from services.timeline_engine import (
+    generate_food_conflicts_and_timeline
+)
+from services.search_engine import (
+    search_medicine_database
+)
+from services.interaction_analyzer import (
+    analyze_drug_pair
+)
+
+# Aliases for tests
+get_primary_generic_name = resolve_canonical_name
+resolve_drug_aliases = expand_aliases
 from services.auth import create_access_token
 from fastapi.testclient import TestClient
 from main import app
@@ -91,7 +106,7 @@ async def test_rule_order_invariance():
     reverse = await analyze_drug_pair("Aspirin", "Ibuprofen")
     assert forward is not None
     assert reverse is not None
-    assert forward.severity == reverse.severity == "moderate"
+    assert forward.severity == reverse.severity == Severity.MODERATE
 
 # =============================================================================
 # 3. Individual Medicine Profile Intelligence Tests

@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     ENV: Literal["development", "staging", "production"] = "development"
     PORT: int = 8000
     HOST: str = "0.0.0.0"
+    LOG_LEVEL: str = "INFO"
     
     # Security & Auth
     JWT_SECRET: str = "medcheck-dev-secret-change-in-production-32bytes-min"
@@ -17,6 +18,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_SEARCH: str = "30/minute"
     RATE_LIMIT_PROFILE: str = "20/minute"
     RATE_LIMIT_AUTH: str = "10/minute"
+    REDIS_URL: Optional[str] = None
     
     # External APIs & Database
     MISTRAL_API_KEY: Optional[str] = None

@@ -1,6 +1,8 @@
 import React from 'react';
 import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -13,6 +15,18 @@ export class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('MEDCHECK Clinical UI Error caught by boundary:', error, errorInfo);
+    try {
+      fetch(`${API_BASE}/api/client-error`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          error: error?.toString() || 'Unknown UI Error',
+          stack: errorInfo?.componentStack || error?.stack || ''
+        })
+      }).catch(() => {});
+    } catch {
+      // ignore client reporting failure
+    }
   }
 
   handleReset = () => {
