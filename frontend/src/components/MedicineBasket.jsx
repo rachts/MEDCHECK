@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useMedicine } from '../context/MedicineContext';
 import { MedicineChip } from './MedicineChip';
 import { searchMedicines } from '../lib/api';
+import { useDebounce } from '../hooks/useDebounce';
 import { 
   Plus, 
   Trash2, 
@@ -34,21 +35,27 @@ export function MedicineBasket() {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
 
+  const debouncedQuery = useDebounce(inputVal, 250);
+
   useEffect(() => {
-    if (!inputVal.trim()) {
+    if (!debouncedQuery.trim()) {
       setSearchResults([]);
       setShowDropdown(false);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      const data = await searchMedicines(inputVal);
-      setSearchResults(data);
-      setShowDropdown(data.length > 0);
-    }, 150);
+    let isMounted = true;
+    searchMedicines(debouncedQuery).then((data) => {
+      if (isMounted) {
+        setSearchResults(data);
+        setShowDropdown(data.length > 0);
+      }
+    });
 
-    return () => clearTimeout(timer);
-  }, [inputVal]);
+    return () => {
+      isMounted = false;
+    };
+  }, [debouncedQuery]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -89,7 +96,7 @@ export function MedicineBasket() {
   }
 
   return (
-    <div className="card flex flex-col gap-4">
+    <div className="card flex flex-col gap-4" role="region" aria-label="Medicine Basket">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[var(--border-default)] pb-3">
         <div className="flex items-center gap-2">
@@ -110,6 +117,7 @@ export function MedicineBasket() {
           <button
             onClick={clearBasket}
             className="text-xs text-[var(--text-muted)] hover:text-[var(--severity-high)] flex items-center gap-1 transition-colors cursor-pointer py-1 px-1.5 rounded hover:bg-[#E2E8F0]"
+            aria-label="Clear all medicines from basket"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>Clear</span>
@@ -129,6 +137,7 @@ export function MedicineBasket() {
               onFocus={() => inputVal.trim() && searchResults.length > 0 && setShowDropdown(true)}
               placeholder="Search brand or generic name..."
               className="w-full bg-[var(--bg-input)] border border-[var(--border-default)] focus:border-[var(--border-hover)] focus:bg-[var(--bg-surface)] rounded-[6px] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[44px] transition-colors"
+              aria-label="Medicine search query"
             />
           </div>
 
@@ -136,6 +145,7 @@ export function MedicineBasket() {
             type="submit"
             disabled={!inputVal.trim()}
             className="btn-primary min-h-[44px] px-3.5 disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="Add medicine to basket"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Add</span>
@@ -144,23 +154,28 @@ export function MedicineBasket() {
 
         {/* Dropdown */}
         {showDropdown && searchResults.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[8px] p-1 shadow-lg z-50 flex flex-col gap-1 max-h-[260px] overflow-y-auto">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[8px] p-1 shadow-lg z-50 flex flex-col gap-1 max-h-[280px] overflow-y-auto">
             {searchResults.map((item, idx) => (
               <div
                 key={idx}
                 onClick={() => handleSelectSearchResult(item)}
-                className="p-2.5 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-transparent hover:border-[var(--border-hover)] transition-colors cursor-pointer flex items-center justify-between gap-2 min-h-[44px]"
+                className="p-2.5 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-transparent hover:border-[var(--border-hover)] transition-colors cursor-pointer flex items-center justify-between gap-2 min-h-[48px]"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleSelectSearchResult(item)}
               >
                 <div className="flex items-center gap-2.5">
                   <div className="w-6 h-6 rounded-[4px] bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-primary)] shrink-0">
                     <Pill className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-serif text-[16px] font-bold text-[var(--text-primary)]">{item.name}</span>
-                      <span className="tag">
-                        {item.drug_type}
-                      </span>
+                      {item.brand_context ? (
+                        <span className="text-xs text-slate-500 font-sans">({item.brand_context})</span>
+                      ) : (
+                        <span className="tag">{item.drug_type}</span>
+                      )}
                     </div>
                     <p className="text-xs text-[var(--text-muted)] line-clamp-1 font-sans">
                       {item.category}
@@ -168,8 +183,8 @@ export function MedicineBasket() {
                   </div>
                 </div>
 
-                <span className={`tag ${
-                  item.stomach_risk_badge === 'High'
+                <span className={`tag shrink-0 ${
+                  item.stomach_risk_badge === 'Critical'
                     ? 'tag-danger'
                     : item.stomach_risk_badge === 'Moderate'
                     ? 'tag-warning'
@@ -184,7 +199,7 @@ export function MedicineBasket() {
       </div>
 
       {inputError && (
-        <div className="alert-danger text-sm flex items-center gap-2">
+        <div className="alert-danger text-sm flex items-center gap-2" role="alert">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{inputError}</span>
         </div>
@@ -193,7 +208,6 @@ export function MedicineBasket() {
       {/* Medicines Chips Container */}
       <div className="flex flex-col gap-2 min-h-[120px]">
         {medicines.length === 0 ? (
-          /* Clean Empty Cabinet State */
           <div className="flex-1 flex flex-col items-center justify-center text-center p-5 border border-dashed border-[var(--border-default)] rounded-[8px] bg-[var(--bg-elevated)]">
             <Archive className="w-7 h-7 text-[var(--text-muted)] mb-1.5 stroke-1" />
             <h4 className="font-serif text-[18px] font-bold text-[var(--text-primary)] mb-0.5">
@@ -247,6 +261,9 @@ export function MedicineBasket() {
           <div 
             onClick={() => setStomachModalOpen(true)}
             className="bg-[var(--bg-elevated)] border border-[var(--border-default)] hover:border-[var(--border-hover)] rounded-[8px] p-3 flex flex-col gap-2 transition-colors cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-label={`Stomach Guardian Score: ${giScore} out of 100, Tier: ${giTier}`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -298,11 +315,12 @@ export function MedicineBasket() {
             </div>
           )}
 
-          {/* Primary Action Button (Near-Black Authoritative) */}
+          {/* Primary Action Button */}
           <button
             onClick={checkSafety}
             disabled={loading || medicines.length < 1}
-            className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed min-h-[48px]"
+            aria-label="Analyze Medicine Safety"
           >
             {loading ? (
               <>
@@ -322,3 +340,5 @@ export function MedicineBasket() {
     </div>
   );
 }
+
+export default MedicineBasket;

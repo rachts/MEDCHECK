@@ -1,0 +1,152 @@
+import os
+import sqlite3
+import uuid
+import logging
+import bcrypt
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Dict, Any
+
+from jose import JWTError, jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+from config import settings
+
+logger = logging.getLogger("auth_service")
+
+# JWT HTTP Bearer scheme
+security = HTTPBearer(auto_error=False)
+
+def _init_users_table():
+    """Ensure users table exists in SQLite database."""
+    try:
+        os.makedirs(os.path.dirname(settings.SQLITE_DB_PATH), exist_ok=True)
+        conn = sqlite3.connect(settings.SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE,
+                hashed_password TEXT NOT NULL,
+                is_guest INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error initializing users table: {e}")
+
+_init_users_table()
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8")[:72],
+            hashed_password.encode("utf-8")
+        )
+    except Exception as e:
+        logger.warning(f"Password verification error: {e}")
+        return False
+
+def get_password_hash(password: str) -> str:
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode("utf-8")[:72], salt)
+    return hashed.decode("utf-8")
+
+def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    return encoded_jwt
+
+def create_user(username: str, password: str, email: Optional[str] = None, is_guest: bool = False) -> Dict[str, Any]:
+    user_id = str(uuid.uuid4())
+    hashed_pwd = get_password_hash(password)
+    
+    conn = sqlite3.connect(settings.SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO users (id, username, email, hashed_password, is_guest)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, username.strip().lower(), email.strip().lower() if email else None, hashed_pwd, 1 if is_guest else 0))
+        conn.commit()
+        return {
+            "id": user_id,
+            "username": username.strip().lower(),
+            "email": email,
+            "is_guest": is_guest
+        }
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email already registered."
+        )
+    finally:
+        conn.close()
+
+def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    conn = sqlite3.connect(settings.SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, username, email, hashed_password, is_guest FROM users WHERE username = ?", (username.strip().lower(),))
+        row = cursor.fetchone()
+        if row:
+            return {
+                "id": row[0],
+                "username": row[1],
+                "email": row[2],
+                "hashed_password": row[3],
+                "is_guest": bool(row[4])
+            }
+        return None
+    finally:
+        conn.close()
+
+def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
+    user = get_user_by_username(username)
+    if not user:
+        return None
+    if not verify_password(password, user["hashed_password"]):
+        return None
+    return user
+
+async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Dict[str, Any]:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate clinical session credentials. Provide a valid Bearer token.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not credentials:
+        raise credentials_exception
+
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        username: Optional[str] = payload.get("sub")
+        user_id: Optional[str] = payload.get("uid")
+        if username is None:
+            raise credentials_exception
+        return {
+            "id": user_id or username,
+            "username": username,
+            "is_guest": payload.get("is_guest", False)
+        }
+    except JWTError:
+        raise credentials_exception
+
+async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[Dict[str, Any]]:
+    if not credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        return {
+            "id": payload.get("uid") or payload.get("sub"),
+            "username": payload.get("sub"),
+            "is_guest": payload.get("is_guest", False)
+        }
+    except JWTError:
+        return None

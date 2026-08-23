@@ -18,6 +18,8 @@ import {
   X
 } from 'lucide-react';
 
+import { SkeletonProfile } from './SkeletonCard';
+
 export function MedicineProfilePanel({ onCloseMobile }) {
   const { 
     selectedMedicineName, 
@@ -48,23 +50,7 @@ export function MedicineProfilePanel({ onCloseMobile }) {
   }
 
   if (profileLoading) {
-    return (
-      <div className="card flex flex-col gap-3 animate-pulse min-h-[380px]">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[6px] bg-[var(--bg-elevated)]" />
-          <div className="flex-1">
-            <div className="h-5 w-32 bg-[var(--bg-elevated)] rounded mb-1.5" />
-            <div className="h-3.5 w-20 bg-[var(--bg-elevated)]/60 rounded" />
-          </div>
-        </div>
-        <div className="h-8 w-full bg-[var(--bg-elevated)]/40 rounded-[6px] mt-1" />
-        <div className="grid grid-cols-2 gap-2 mt-1">
-          <div className="h-16 bg-[var(--bg-elevated)]/30 rounded-[6px]" />
-          <div className="h-16 bg-[var(--bg-elevated)]/30 rounded-[6px]" />
-        </div>
-        <div className="h-28 bg-[var(--bg-elevated)]/20 rounded-[6px] mt-1" />
-      </div>
-    );
+    return <SkeletonProfile />;
   }
 
   const profile = selectedProfile || {

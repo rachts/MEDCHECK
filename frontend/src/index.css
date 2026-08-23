@@ -477,3 +477,31 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* 10. Print Stylesheet for Doctor's Report */
+@media print {
+  body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+  }
+
+  header, nav, .bottom-nav, .btn-sticky, button, .modal-backdrop {
+    display: none !important;
+  }
+
+  .card, .card-elevated, .card-surface {
+    border: 1px solid #CCCCCC !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+    background: #FFFFFF !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
+

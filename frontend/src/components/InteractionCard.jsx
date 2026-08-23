@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { 
   Utensils, 
-  Wine,
-  UserCheck,
-  Clock,
-  Pill,
-  FileText,
-  ChevronDown,
-  ChevronUp
+  Wine, 
+  UserCheck, 
+  Clock, 
+  Pill, 
+  FileText, 
+  ChevronDown, 
+  ChevronUp,
+  ShieldCheck
 } from 'lucide-react';
 import { useMedicine } from '../context/MedicineContext';
 
@@ -21,27 +22,30 @@ export function InteractionCard({ interaction }) {
   const badgeClass = isHigh ? 'badge-high' : isMod ? 'badge-moderate' : 'badge-low';
   const badgeLabel = isHigh ? 'CRITICAL RISK' : isMod ? 'MODERATE CAUTION' : 'LOW RISK';
 
-  // Build Action Tags
+  // Build Action Tags with strict word boundary regex
   const actionTags = [];
-  const fullText = `${interaction.explanation} ${interaction.stomach_impact || ''} ${interaction.food_consideration || ''} ${interaction.action_guidance || ''}`.toLowerCase();
+  const fullText = `${interaction.explanation} ${interaction.stomach_impact || ''} ${interaction.food_consideration || ''} ${interaction.action_guidance || ''}`;
 
-  if (fullText.includes('alcohol')) {
+  if (/\balcohol\b/i.test(fullText)) {
     actionTags.push({ label: 'Avoid Alcohol', icon: Wine, type: 'tag-danger' });
   }
-  if (fullText.includes('food') || fullText.includes('meal')) {
+  if (/\b(food|meal|milk)\b/i.test(fullText)) {
     actionTags.push({ label: 'Take With Food', icon: Utensils, type: 'tag-warning' });
   }
-  if (fullText.includes('doctor') || fullText.includes('consult') || isHigh) {
+  if (/\b(doctor|consult|physician|prescriber)\b/i.test(fullText) || isHigh) {
     actionTags.push({ label: 'Doctor Consult', icon: UserCheck, type: 'tag' });
   }
-  if (fullText.includes('hour') || fullText.includes('spacing') || fullText.includes('before') || fullText.includes('after')) {
+  if (/\b(hour|hours|spacing|before|after)\b/i.test(fullText)) {
     actionTags.push({ label: 'Dose Spacing', icon: Clock, type: 'tag' });
   }
 
   return (
-    <div className={`card card-enter flex flex-col gap-3.5 ${
-      isHigh ? 'border-l-4 border-l-[var(--severity-high)]' : isMod ? 'border-l-4 border-l-[var(--severity-moderate)]' : 'border-l-4 border-l-[var(--severity-low)]'
-    }`}>
+    <article 
+      className={`card card-enter flex flex-col gap-3.5 ${
+        isHigh ? 'border-l-4 border-l-[var(--severity-high)]' : isMod ? 'border-l-4 border-l-[var(--severity-moderate)]' : 'border-l-4 border-l-[var(--severity-low)]'
+      }`}
+      aria-label={`Interaction between ${interaction.drug_a} and ${interaction.drug_b}, severity: ${interaction.severity}`}
+    >
       {/* Header: Dot + Uppercase Severity Label + Drug Pair Tags */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* Severity Badge */}
@@ -54,6 +58,7 @@ export function InteractionCard({ interaction }) {
           <button
             onClick={() => selectMedicine(interaction.drug_a)}
             className="px-2.5 py-1 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] font-serif font-bold text-[15px] text-[var(--text-primary)] transition-colors cursor-pointer capitalize"
+            aria-label={`View clinical profile for ${interaction.drug_a}`}
           >
             {interaction.drug_a}
           </button>
@@ -61,6 +66,7 @@ export function InteractionCard({ interaction }) {
           <button
             onClick={() => selectMedicine(interaction.drug_b)}
             className="px-2.5 py-1 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] font-serif font-bold text-[15px] text-[var(--text-primary)] transition-colors cursor-pointer capitalize"
+            aria-label={`View clinical profile for ${interaction.drug_b}`}
           >
             {interaction.drug_b}
           </button>
@@ -72,12 +78,16 @@ export function InteractionCard({ interaction }) {
         {interaction.explanation}
       </p>
 
-      {/* Mechanism Snippet (Collapsible on mobile) */}
+      {/* Mechanism Snippet (Collapsible on mobile only) */}
       {interaction.mechanism && (
         <div className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-[6px] p-3 text-sm text-[var(--text-secondary)]">
           <div 
-            onClick={() => setExpandedMobile(!expandedMobile)}
-            className="flex items-center justify-between cursor-pointer md:cursor-default"
+            onClick={() => {
+              if (window.innerWidth < 768) {
+                setExpandedMobile(!expandedMobile);
+              }
+            }}
+            className="flex items-center justify-between cursor-pointer md:cursor-default select-none"
           >
             <span className="text-label text-[var(--text-muted)] block">
               Biological Mechanism
@@ -89,6 +99,17 @@ export function InteractionCard({ interaction }) {
           <div className={`${expandedMobile ? 'block' : 'hidden md:block'} mt-1`}>
             <span>{interaction.mechanism}</span>
           </div>
+        </div>
+      )}
+
+      {/* Evidence Source Metadata Bar */}
+      {interaction.evidence_source && (
+        <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200/60 rounded px-2.5 py-1">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          <span className="truncate"><strong>Evidence:</strong> {interaction.evidence_source}</span>
+          {interaction.confidence && (
+            <span className="hidden sm:inline text-slate-400">({interaction.confidence})</span>
+          )}
         </div>
       )}
 
@@ -135,6 +156,8 @@ export function InteractionCard({ interaction }) {
           <span className="hidden sm:inline">Add to Report</span>
         </button>
       </div>
-    </div>
+    </article>
   );
 }
+
+export default InteractionCard;

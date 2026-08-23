@@ -4,31 +4,43 @@ import sqlite3
 import logging
 import uuid
 import anyio
-from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Dict, Any, List, Tuple
 from supabase import create_client, Client
-from models import InteractionItem
+from models import InteractionItem, Severity, RuleConfidence
+from config import settings
 
 logger = logging.getLogger("supabase_cache")
 
-# Configuration
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-SQLITE_DB_PATH = os.environ.get("SQLITE_DB_PATH", os.path.join(os.path.dirname(__file__), "..", "local_cache.db"))
+# Lazy Supabase Client Singleton
+_supabase_client: Optional[Client] = None
 
 def get_supabase_client() -> Optional[Client]:
-    if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL.strip() and SUPABASE_KEY.strip():
+    global _supabase_client
+    if _supabase_client is not None:
+        return _supabase_client
+    if settings.SUPABASE_URL and settings.SUPABASE_KEY and settings.SUPABASE_URL.strip() and settings.SUPABASE_KEY.strip():
         try:
-            return create_client(SUPABASE_URL, SUPABASE_KEY)
+            _supabase_client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            return _supabase_client
         except Exception as e:
             logger.warning(f"Failed to initialize Supabase client: {e}")
             return None
     return None
 
+def _get_sqlite_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(settings.SQLITE_DB_PATH, timeout=20.0)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    return conn
+
 def _sync_init_sqlite():
-    """Initializes local SQLite tables synchronously."""
+    """Initializes local SQLite tables synchronously with WAL mode and TTL."""
     try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
+        os.makedirs(os.path.dirname(settings.SQLITE_DB_PATH), exist_ok=True)
+        conn = _get_sqlite_conn()
         cursor = conn.cursor()
+        
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS interaction_pairs (
                 id TEXT PRIMARY KEY,
@@ -42,9 +54,14 @@ def _sync_init_sqlite():
                 stomach_impact TEXT,
                 food_consideration TEXT,
                 action_guidance TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                evidence_source TEXT,
+                confidence TEXT,
+                last_reviewed TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP
             )
         """)
+        
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS drug_details (
                 generic_name TEXT PRIMARY KEY,
@@ -54,19 +71,46 @@ def _sync_init_sqlite():
                 drug_interactions TEXT,
                 severity TEXT,
                 raw_text TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP
             )
         """)
 
-        # Migration: ensure rich clinical columns exist
+        # Parameterized migration check without f-strings
         cursor.execute("PRAGMA table_info(interaction_pairs)")
-        existing_cols = [row[1] for row in cursor.fetchall()]
-        for col in ["mechanism", "clinical_impact", "stomach_impact", "food_consideration", "action_guidance"]:
-            if col not in existing_cols:
+        existing_cols = {row[1] for row in cursor.fetchall()}
+        
+        cols_to_add = [
+            ("mechanism", "TEXT"),
+            ("clinical_impact", "TEXT"),
+            ("stomach_impact", "TEXT"),
+            ("food_consideration", "TEXT"),
+            ("action_guidance", "TEXT"),
+            ("evidence_source", "TEXT"),
+            ("confidence", "TEXT"),
+            ("last_reviewed", "TEXT"),
+            ("expires_at", "TIMESTAMP")
+        ]
+        
+        for col_name, col_type in cols_to_add:
+            if col_name not in existing_cols:
                 try:
-                    cursor.execute(f"ALTER TABLE interaction_pairs ADD COLUMN {col} TEXT")
+                    cursor.execute(f"ALTER TABLE interaction_pairs ADD COLUMN {col_name} {col_type}")
                 except Exception:
                     pass
+
+        cursor.execute("PRAGMA table_info(drug_details)")
+        existing_drug_cols = {row[1] for row in cursor.fetchall()}
+        if "expires_at" not in existing_drug_cols:
+            try:
+                cursor.execute("ALTER TABLE drug_details ADD COLUMN expires_at TIMESTAMP")
+            except Exception:
+                pass
+
+        # Clean expired rows on startup
+        now_iso = datetime.now(timezone.utc).isoformat()
+        cursor.execute("DELETE FROM interaction_pairs WHERE expires_at IS NOT NULL AND expires_at < ?", (now_iso,))
+        cursor.execute("DELETE FROM drug_details WHERE expires_at IS NOT NULL AND expires_at < ?", (now_iso,))
 
         conn.commit()
         conn.close()
@@ -79,16 +123,17 @@ def get_canonical_pair(drug_a: str, drug_b: str) -> str:
     a, b = drug_a.lower().strip(), drug_b.lower().strip()
     return f"{a}::{b}" if a < b else f"{b}::{a}"
 
-# Synchronous worker functions to be offloaded to thread pool via anyio
-
 def _sync_get_interaction(canonical: str) -> Optional[tuple]:
     try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn = _get_sqlite_conn()
         cursor = conn.cursor()
+        now_iso = datetime.now(timezone.utc).isoformat()
         cursor.execute("""
-            SELECT severity, explanation, mechanism, clinical_impact, stomach_impact, food_consideration, action_guidance 
-            FROM interaction_pairs WHERE canonical_pair = ?
-        """, (canonical,))
+            SELECT severity, explanation, mechanism, clinical_impact, stomach_impact, 
+                   food_consideration, action_guidance, evidence_source, confidence, last_reviewed, expires_at
+            FROM interaction_pairs 
+            WHERE canonical_pair = ? AND (expires_at IS NULL OR expires_at > ?)
+        """, (canonical, now_iso))
         row = cursor.fetchone()
         conn.close()
         return row
@@ -106,17 +151,24 @@ def _sync_save_interaction(
     clinical_impact: Optional[str] = None,
     stomach_impact: Optional[str] = None,
     food_consideration: Optional[str] = None,
-    action_guidance: Optional[str] = None
+    action_guidance: Optional[str] = None,
+    evidence_source: Optional[str] = None,
+    confidence: Optional[str] = "established",
+    last_reviewed: Optional[str] = "2026-08-23",
+    ttl_days: int = 90
 ) -> None:
     try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=ttl_days)).isoformat()
+        conn = _get_sqlite_conn()
         cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
         cursor.execute("""
             INSERT INTO interaction_pairs (
                 id, drug_a, drug_b, canonical_pair, severity, explanation,
-                mechanism, clinical_impact, stomach_impact, food_consideration, action_guidance
+                mechanism, clinical_impact, stomach_impact, food_consideration, action_guidance,
+                evidence_source, confidence, last_reviewed, expires_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(canonical_pair) DO UPDATE SET
                 severity=excluded.severity,
                 explanation=excluded.explanation,
@@ -124,7 +176,11 @@ def _sync_save_interaction(
                 clinical_impact=excluded.clinical_impact,
                 stomach_impact=excluded.stomach_impact,
                 food_consideration=excluded.food_consideration,
-                action_guidance=excluded.action_guidance
+                action_guidance=excluded.action_guidance,
+                evidence_source=excluded.evidence_source,
+                confidence=excluded.confidence,
+                last_reviewed=excluded.last_reviewed,
+                expires_at=excluded.expires_at
         """, (
             str(uuid.uuid4()), 
             drug_a.lower().strip(), 
@@ -136,7 +192,11 @@ def _sync_save_interaction(
             clinical_impact,
             stomach_impact,
             food_consideration,
-            action_guidance
+            action_guidance,
+            evidence_source,
+            confidence,
+            last_reviewed,
+            expires_at
         ))
         conn.commit()
         conn.close()
@@ -145,9 +205,14 @@ def _sync_save_interaction(
 
 def _sync_get_drug_detail(name: str) -> Optional[tuple]:
     try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn = _get_sqlite_conn()
         cursor = conn.cursor()
-        cursor.execute("SELECT brand_names, side_effects, food_warnings, drug_interactions, severity, raw_text FROM drug_details WHERE generic_name = ?", (name,))
+        now_iso = datetime.now(timezone.utc).isoformat()
+        cursor.execute("""
+            SELECT brand_names, side_effects, food_warnings, drug_interactions, severity, raw_text 
+            FROM drug_details 
+            WHERE generic_name = ? AND (expires_at IS NULL OR expires_at > ?)
+        """, (name, now_iso))
         row = cursor.fetchone()
         conn.close()
         return row
@@ -155,20 +220,32 @@ def _sync_get_drug_detail(name: str) -> Optional[tuple]:
         logger.warning(f"SQLite drug details lookup error: {e}")
         return None
 
-def _sync_save_drug_detail(name: str, brand_names_json: str, side_effects_json: str, food_warnings_json: str, drug_interactions_json: str, severity: str, raw_text: Optional[str]) -> None:
+def _sync_save_drug_detail(
+    name: str, 
+    brand_names_json: str, 
+    side_effects_json: str, 
+    food_warnings_json: str, 
+    drug_interactions_json: str, 
+    severity: str, 
+    raw_text: Optional[str],
+    ttl_days: int = 30
+) -> None:
     try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=ttl_days)).isoformat()
+        conn = _get_sqlite_conn()
         cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
         cursor.execute("""
-            INSERT INTO drug_details (generic_name, brand_names, side_effects, food_warnings, drug_interactions, severity, raw_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO drug_details (generic_name, brand_names, side_effects, food_warnings, drug_interactions, severity, raw_text, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(generic_name) DO UPDATE SET
                 brand_names=excluded.brand_names,
                 side_effects=excluded.side_effects,
                 food_warnings=excluded.food_warnings,
                 drug_interactions=excluded.drug_interactions,
                 severity=excluded.severity,
-                raw_text=excluded.raw_text
+                raw_text=excluded.raw_text,
+                expires_at=excluded.expires_at
         """, (
             name,
             brand_names_json,
@@ -176,7 +253,8 @@ def _sync_save_drug_detail(name: str, brand_names_json: str, side_effects_json: 
             food_warnings_json,
             drug_interactions_json,
             severity,
-            raw_text
+            raw_text,
+            expires_at
         ))
         conn.commit()
         conn.close()
@@ -186,10 +264,6 @@ def _sync_save_drug_detail(name: str, brand_names_json: str, side_effects_json: 
 # Async public methods
 
 async def get_cached_interaction(drug_a: str, drug_b: str) -> Optional[InteractionItem]:
-    """
-    Check cache for existing interaction between drug_a and drug_b.
-    Checks Supabase first (non-blocking HTTP); falls back to thread-pool SQLite.
-    """
     canonical = get_canonical_pair(drug_a, drug_b)
     supabase = get_supabase_client()
 
@@ -201,30 +275,36 @@ async def get_cached_interaction(drug_a: str, drug_b: str) -> Optional[Interacti
                 return InteractionItem(
                     drug_a=drug_a,
                     drug_b=drug_b,
-                    severity=item.get("severity", "moderate"),
+                    severity=Severity(item.get("severity", "moderate")),
                     explanation=item.get("explanation", ""),
                     mechanism=item.get("mechanism"),
                     clinical_impact=item.get("clinical_impact"),
                     stomach_impact=item.get("stomach_impact"),
                     food_consideration=item.get("food_consideration"),
-                    action_guidance=item.get("action_guidance")
+                    action_guidance=item.get("action_guidance"),
+                    evidence_source=item.get("evidence_source"),
+                    confidence=RuleConfidence(item.get("confidence", "established")),
+                    last_reviewed=item.get("last_reviewed", "2026-08-23")
                 )
         except Exception as e:
             logger.warning(f"Supabase interaction cache lookup error: {e}")
 
-    # Fallback to local SQLite cache in worker thread
+    # Fallback to local SQLite in worker thread
     row = await anyio.to_thread.run_sync(_sync_get_interaction, canonical)
     if row:
         return InteractionItem(
             drug_a=drug_a,
             drug_b=drug_b,
-            severity=row[0],
+            severity=Severity(row[0]) if row[0] in [s.value for s in Severity] else Severity.MODERATE,
             explanation=row[1],
             mechanism=row[2] if len(row) > 2 else None,
             clinical_impact=row[3] if len(row) > 3 else None,
             stomach_impact=row[4] if len(row) > 4 else None,
             food_consideration=row[5] if len(row) > 5 else None,
-            action_guidance=row[6] if len(row) > 6 else None
+            action_guidance=row[6] if len(row) > 6 else None,
+            evidence_source=row[7] if len(row) > 7 else None,
+            confidence=RuleConfidence(row[8]) if len(row) > 8 and row[8] in [c.value for c in RuleConfidence] else RuleConfidence.ESTABLISHED,
+            last_reviewed=row[9] if len(row) > 9 and row[9] else "2026-08-23"
         )
 
     return None
@@ -238,11 +318,11 @@ async def save_interaction_to_cache(
     clinical_impact: Optional[str] = None,
     stomach_impact: Optional[str] = None,
     food_consideration: Optional[str] = None,
-    action_guidance: Optional[str] = None
+    action_guidance: Optional[str] = None,
+    evidence_source: Optional[str] = None,
+    confidence: Optional[str] = "established",
+    last_reviewed: Optional[str] = "2026-08-23"
 ) -> None:
-    """
-    Saves an interaction pair to Supabase and local SQLite cache asynchronously.
-    """
     canonical = get_canonical_pair(drug_a, drug_b)
     supabase = get_supabase_client()
 
@@ -260,12 +340,14 @@ async def save_interaction_to_cache(
             if stomach_impact: payload["stomach_impact"] = stomach_impact
             if food_consideration: payload["food_consideration"] = food_consideration
             if action_guidance: payload["action_guidance"] = action_guidance
+            if evidence_source: payload["evidence_source"] = evidence_source
+            if confidence: payload["confidence"] = confidence
+            if last_reviewed: payload["last_reviewed"] = last_reviewed
 
             supabase.table("interaction_pairs").upsert(payload, on_conflict="canonical_pair").execute()
         except Exception as e:
             logger.warning(f"Failed to cache interaction in Supabase: {e}")
 
-    # Offload SQLite write to thread pool
     await anyio.to_thread.run_sync(
         _sync_save_interaction,
         drug_a,
@@ -277,7 +359,10 @@ async def save_interaction_to_cache(
         clinical_impact,
         stomach_impact,
         food_consideration,
-        action_guidance
+        action_guidance,
+        evidence_source,
+        confidence,
+        last_reviewed
     )
 
 async def get_cached_drug_details(generic_name: str) -> Optional[Dict[str, Any]]:
@@ -301,7 +386,6 @@ async def get_cached_drug_details(generic_name: str) -> Optional[Dict[str, Any]]
         except Exception as e:
             logger.warning(f"Supabase drug details lookup error: {e}")
 
-    # Fallback to local SQLite in worker thread
     row = await anyio.to_thread.run_sync(_sync_get_drug_detail, name)
     if row:
         return {
@@ -348,7 +432,6 @@ async def save_drug_details_to_cache(
         return
 
     supabase = get_supabase_client()
-
     if supabase:
         try:
             supabase.table("drug_details").upsert({
@@ -363,7 +446,6 @@ async def save_drug_details_to_cache(
         except Exception as e:
             logger.warning(f"Failed to cache drug details in Supabase: {e}")
 
-    # Offload SQLite write to worker thread
     await anyio.to_thread.run_sync(
         _sync_save_drug_detail,
         name,
@@ -375,6 +457,5 @@ async def save_drug_details_to_cache(
         raw_text
     )
 
-# Aliases for compatibility
 get_cached_drug_detail = get_cached_drug_details
 save_drug_detail_to_cache = save_drug_details_to_cache
