@@ -1,129 +1,136 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
-import { ShieldCheck, ArrowRight, Lock, Mail, User } from 'lucide-react';
+import { useMedicine } from '../context/MedicineContext';
+import { ShieldCheck, ArrowRight, User, Sparkles } from 'lucide-react';
 
 export function Auth() {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [userName, setUserName] = useState(() => localStorage.getItem('medcheck_user_name') || '');
+  const { loadScenario } = useMedicine();
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleGuestAccess = (e) => {
     e.preventDefault();
-    // Non-blocking demo auth
+    if (userName.trim()) {
+      localStorage.setItem('medcheck_user_name', userName.trim());
+    }
+    navigate('/app');
+  };
+
+  const handleProfileSelect = (scenarioKey) => {
+    loadScenario(scenarioKey);
     navigate('/app');
   };
 
   return (
-    <div className="min-h-screen flex flex-col antialiased">
+    <div className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
       <Navbar />
 
-      <main className="flex-grow pt-28 pb-20 px-4 sm:px-8 flex flex-col items-center justify-center max-w-md mx-auto w-full">
-        <div className="w-full bg-white/[0.08] backdrop-blur-[20px] border border-white/[0.15] rounded-3xl p-8 flex flex-col gap-6 shadow-glass relative overflow-hidden">
+      <main className="flex-1 pt-24 pb-12 px-4 sm:px-8 flex flex-col items-center justify-center max-w-md mx-auto w-full">
+        <div className="w-full card flex flex-col gap-4">
           {/* Top Logo */}
           <div className="text-center">
-            <div className="w-12 h-12 rounded-full bg-secondary-fixed text-deep-olive flex items-center justify-center font-bold text-xl shadow-inner-glow mx-auto mb-3">
-              <ShieldCheck className="w-6 h-6" />
+            <div className="w-9 h-9 rounded-[4px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center font-bold mx-auto mb-2">
+              <ShieldCheck className="w-5 h-5" />
             </div>
-            <h1 className="font-headline text-3xl font-bold text-primary-fixed mb-1">
-              {isSignUp ? 'Create MedCheck Account' : 'Welcome to MedCheck'}
+            <h1 className="font-serif text-[28px] font-bold text-[var(--text-primary)] tracking-tight">
+              MEDCHECK Access
             </h1>
-            <p className="text-xs sm:text-sm text-tertiary-fixed-dim/80">
-              {isSignUp
-                ? 'Save your prescriptions and track medication history.'
-                : 'Sign in to access your personal medicine basket.'}
+            <p className="text-xs text-[var(--text-muted)] mt-0.5 font-sans">
+              Zero login required. All clinical pharmacology analysis runs privately in your secure browser session.
             </p>
           </div>
 
-          {/* Tab switch */}
-          <div className="flex bg-white/10 p-1 rounded-full border border-white/10">
-            <button
-              onClick={() => setIsSignUp(false)}
-              className={`flex-1 py-2 text-xs font-semibold rounded-full transition-all ${
-                !isSignUp ? 'bg-secondary-fixed text-deep-olive shadow-sm' : 'text-white/70 hover:text-white'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => setIsSignUp(true)}
-              className={`flex-1 py-2 text-xs font-semibold rounded-full transition-all ${
-                isSignUp ? 'bg-secondary-fixed text-deep-olive shadow-sm' : 'text-white/70 hover:text-white'
-              }`}
-            >
-              Sign Up
-            </button>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {isSignUp && (
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-white/80">Full Name</label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Dr. Jane Doe"
-                    className="w-full bg-white/5 border border-white/15 focus:border-secondary-fixed rounded-xl py-3 pl-10 pr-4 text-sm text-white placeholder-white/30 outline-none"
-                  />
-                </div>
-              </div>
-            )}
-
+          {/* Guest Entry */}
+          <form onSubmit={handleGuestAccess} className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-white/80">Email Address</label>
+              <label className="text-xs font-semibold text-[var(--text-secondary)]">
+                Patient / Provider Name <span className="text-[var(--text-muted)]">(Optional)</span>
+              </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
-                  className="w-full bg-white/5 border border-white/15 focus:border-secondary-fixed rounded-xl py-3 pl-10 pr-4 text-sm text-white placeholder-white/30 outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-white/80">Password</label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-white/5 border border-white/15 focus:border-secondary-fixed rounded-xl py-3 pl-10 pr-4 text-sm text-white placeholder-white/30 outline-none"
+                  type="text"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="e.g. Mrs. Sharma or Dr. Patel"
+                  className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] focus:border-[var(--border-hover)] focus:bg-[var(--bg-surface)] rounded-[6px] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[44px] transition-colors"
                 />
               </div>
             </div>
 
             <button
               type="submit"
-              className="mt-2 w-full font-body text-sm font-semibold bg-secondary-fixed text-deep-olive py-3.5 rounded-full shadow-button-glow hover:bg-secondary-fixed-dim transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="btn-primary w-full"
             >
-              <span>{isSignUp ? 'Create Free Account' : 'Sign In & Continue'}</span>
+              <span>Continue to Safety Dashboard</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          {/* Guest Link */}
-          <div className="text-center pt-2 border-t border-white/10">
-            <Link
-              to="/app"
-              className="text-xs text-secondary-fixed hover:underline inline-flex items-center gap-1"
-            >
-              Continue without signing in as Guest →
-            </Link>
+          {/* Quick Scenario Launchers */}
+          <div className="flex flex-col gap-2 pt-3 border-t border-[var(--border-default)]">
+            <div className="badge badge-info">
+              <Sparkles className="w-3 h-3" />
+              <span>Preloaded Scenarios</span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => handleProfileSelect('highRisk')}
+                className="text-left p-3 rounded-[6px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] hover:border-[rgba(220,38,38,0.4)] transition-colors flex items-center justify-between group cursor-pointer min-h-[48px]"
+              >
+                <div>
+                  <div className="font-serif text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--severity-high)]">
+                    Anticoagulant + NSAID
+                  </div>
+                  <div className="text-xs text-[var(--text-muted)] font-sans">
+                    Warfarin + Aspirin + Ibuprofen
+                  </div>
+                </div>
+                <div className="badge badge-high">
+                  CRITICAL
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleProfileSelect('moderateRisk')}
+                className="text-left p-3 rounded-[6px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] hover:border-[rgba(217,119,6,0.4)] transition-colors flex items-center justify-between group cursor-pointer min-h-[48px]"
+              >
+                <div>
+                  <div className="font-serif text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--severity-moderate)]">
+                    Competitive NSAID Inhibition
+                  </div>
+                  <div className="text-xs text-[var(--text-muted)] font-sans">
+                    Aspirin + Ibuprofen
+                  </div>
+                </div>
+                <div className="badge badge-moderate">
+                  MODERATE
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleProfileSelect('safe')}
+                className="text-left p-3 rounded-[6px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] hover:border-[rgba(5,150,105,0.4)] transition-colors flex items-center justify-between group cursor-pointer min-h-[48px]"
+              >
+                <div>
+                  <div className="font-serif text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--severity-low)]">
+                    Verified Safe Regimen
+                  </div>
+                  <div className="text-xs text-[var(--text-muted)] font-sans">
+                    Paracetamol + Amoxicillin
+                  </div>
+                </div>
+                <div className="badge badge-low">
+                  SAFE
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       </main>

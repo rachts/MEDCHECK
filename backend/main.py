@@ -1,18 +1,36 @@
 import os
+import sys
+import asyncio
 import itertools
 import logging
-from typing import List
+from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
+
+# Ensure backend directory is on sys.path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import ValidationError
 
-from models import CheckRequest, CheckResponse, InteractionItem
+from models import (
+    CheckRequest,
+    CheckResponse,
+    InteractionItem,
+    MedicineProfileResponse,
+    MedicineSearchResult
+)
 from services.openfda import fetch_drug_label
-from services.mistral_parser import parse_drug_label_with_mistral, analyze_drug_pair
+from services.mistral_parser import (
+    parse_drug_label_with_mistral,
+    analyze_drug_pair,
+    get_or_build_medicine_profile,
+    calculate_composite_gi_score,
+    detect_side_effect_amplifications,
+    generate_food_conflicts_and_timeline,
+    search_medicine_database
+)
 from services.supabase_cache import (
     get_cached_interaction,
     save_interaction_to_cache,
@@ -25,9 +43,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("medcheck_api")
 
 app = FastAPI(
-    title="MedCheck API",
-    description="AI-powered medicine interaction and safety checker",
-    version="1.0.0"
+    title="MedCheck Clinical Intelligence Platform",
+    description="Next-generation medicine safety dashboard with deep individual drug profiling, GI health scoring, and pairwise interaction checking.",
+    version="2.0.0"
 )
 
 # CORS configuration
@@ -53,65 +71,113 @@ app.add_middleware(
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint required by spec."""
-    return {"status": "ok", "service": "MedCheck API", "version": "1.0.0"}
+    return {"status": "ok", "service": "MedCheck Clinical Intelligence API", "version": "2.0.0"}
+
+async def fetch_and_cache_single_drug(drug_name: str) -> Dict[str, Any]:
+    """
+    Fetch drug label from cache or openFDA.
+    Always returns a dictionary with a 'found' boolean flag to prevent repeated fetching.
+    """
+    cleaned_name = drug_name.strip().lower()
+
+    # 1. Check local/Supabase cache
+    cached_detail = await get_cached_drug_detail(cleaned_name)
+    if cached_detail:
+        return {
+            "generic_name": cached_detail.get("generic_name", cleaned_name),
+            "brand_names": cached_detail.get("brand_names", []),
+            "raw_text_summary": cached_detail.get("raw_text_summary", "") or cached_detail.get("raw_text", "") or "",
+            "found": True
+        }
+
+    # 2. Fetch live openFDA label
+    try:
+        raw_label = await fetch_drug_label(cleaned_name)
+        if raw_label:
+            parsed = await parse_drug_label_with_mistral(raw_label)
+            await save_drug_detail_to_cache(
+                generic_name=parsed.get("generic_name", cleaned_name),
+                brand_names=parsed.get("brand_names", []),
+                side_effects=parsed.get("side_effects", []),
+                food_warnings=parsed.get("food_warnings", []),
+                drug_interactions=parsed.get("drug_interactions", []),
+                severity=parsed.get("severity", "moderate"),
+                raw_text=raw_label.get("raw_text_summary")
+            )
+            raw_label["found"] = True
+            return raw_label
+    except Exception as e:
+        logger.warning(f"Error fetching openFDA label for '{drug_name}': {e}")
+
+    return {
+        "generic_name": cleaned_name,
+        "brand_names": [],
+        "substance_names": [],
+        "raw_text_summary": "",
+        "found": False
+    }
+
+@app.get("/api/medicine/{name}/profile", response_model=MedicineProfileResponse)
+async def get_medicine_profile(name: str):
+    """
+    Returns rich individual medicine profile: side effects by frequency,
+    food interactions, stomach health score, and clinical guidance.
+    """
+    label_info = await fetch_and_cache_single_drug(name)
+    profile = get_or_build_medicine_profile(name, label=label_info if label_info.get("found") else None)
+    return profile
+
+@app.get("/api/medicines/search", response_model=List[MedicineSearchResult])
+async def search_medicines(q: str = Query("", description="Search term for medicine name or brand")):
+    """
+    Autocomplete search returning rich preview cards with stomach risk and top side effects.
+    """
+    results = search_medicine_database(q)
+    return results
 
 @app.post("/api/check", response_model=CheckResponse)
-async def check_medicines(req: CheckRequest):
+@app.post("/api/basket/analyze", response_model=CheckResponse)
+async def check_or_analyze_basket(req: CheckRequest):
     """
-    Check for potential interactions across all unique pairs of submitted medicines.
-    Follows Cache-First architecture -> openFDA -> Mistral AI / Rule Engine -> Cache -> Response.
+    Full clinical intelligence pipeline for a basket of medicines:
+    - Pairwise drug-drug interactions
+    - Composite Stomach Guardian GI Risk Score & Contributors
+    - Side Effect Amplification Detection
+    - Food Conflict & 24-Hour Daily Timing Schedule
+    - Complete Individual Drug Intelligence Profiles
     """
     medicines = req.medicines
-    if len(medicines) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please provide at least two unique medicines to check for potential interactions."
-        )
+    logger.info(f"Analyzing basket ({len(medicines)} medicines): {medicines}")
 
-    logger.info(f"Checking interactions for: {medicines}")
+    # 1. Concurrently fetch/cache labels for all unique medicines in parallel
+    label_results = await asyncio.gather(*[fetch_and_cache_single_drug(m) for m in medicines])
+    drug_labels_map: Dict[str, Dict[str, Any]] = {
+        med: label for med, label in zip(medicines, label_results)
+    }
 
-    # Generate all unique pairwise combinations (e.g. A+B, A+C, B+C)
+    # 2. Build full profiles for all medicines in basket
+    profiles: Dict[str, MedicineProfileResponse] = {}
+    for med in medicines:
+        lbl = drug_labels_map.get(med)
+        profiles[med] = get_or_build_medicine_profile(med, label=lbl if lbl and lbl.get("found") else None)
+
+    # 3. Generate all unique pairwise combinations
     pairs = list(itertools.combinations(medicines, 2))
     detected_interactions: List[InteractionItem] = []
-    drug_labels_cache = {}
+    missing_data_count = 0
 
     for drug_a, drug_b in pairs:
-        # Step 1: Check interaction cache
+        label_a = drug_labels_map.get(drug_a)
+        label_b = drug_labels_map.get(drug_b)
+
+        # Check interaction cache
         cached_interaction = await get_cached_interaction(drug_a, drug_b)
         if cached_interaction:
             if cached_interaction.severity != "none":
                 detected_interactions.append(cached_interaction)
             continue
 
-        # Step 2: Fetch / Retrieve Drug A info
-        label_a = drug_labels_cache.get(drug_a)
-        if label_a is None:
-            cached_detail_a = await get_cached_drug_detail(drug_a)
-            if cached_detail_a:
-                label_a = {"generic_name": cached_detail_a.generic_name, "raw_text_summary": cached_detail_a.raw_text or ""}
-            else:
-                raw_label_a = await fetch_drug_label(drug_a)
-                if raw_label_a:
-                    parsed_a = await parse_drug_label_with_mistral(raw_label_a)
-                    await save_drug_detail_to_cache(parsed_a)
-                    label_a = raw_label_a
-            drug_labels_cache[drug_a] = label_a
-
-        # Step 3: Fetch / Retrieve Drug B info
-        label_b = drug_labels_cache.get(drug_b)
-        if label_b is None:
-            cached_detail_b = await get_cached_drug_detail(drug_b)
-            if cached_detail_b:
-                label_b = {"generic_name": cached_detail_b.generic_name, "raw_text_summary": cached_detail_b.raw_text or ""}
-            else:
-                raw_label_b = await fetch_drug_label(drug_b)
-                if raw_label_b:
-                    parsed_b = await parse_drug_label_with_mistral(raw_label_b)
-                    await save_drug_detail_to_cache(parsed_b)
-                    label_b = raw_label_b
-            drug_labels_cache[drug_b] = label_b
-
-        # Step 4: Analyze Interaction Pair
+        # Analyze Interaction Pair
         interaction = await analyze_drug_pair(
             drug_a=drug_a,
             drug_b=drug_b,
@@ -119,40 +185,71 @@ async def check_medicines(req: CheckRequest):
             label_b=label_b
         )
 
+        has_label_data = (label_a and label_a.get("found")) or (label_b and label_b.get("found"))
+
         if interaction:
             await save_interaction_to_cache(
                 drug_a=drug_a,
                 drug_b=drug_b,
                 severity=interaction.severity,
-                explanation=interaction.explanation
+                explanation=interaction.explanation,
+                mechanism=interaction.mechanism,
+                clinical_impact=interaction.clinical_impact,
+                stomach_impact=interaction.stomach_impact,
+                food_consideration=interaction.food_consideration,
+                action_guidance=interaction.action_guidance
             )
             detected_interactions.append(interaction)
-        else:
-            # Cache 'none' to accelerate future duplicate queries
+        elif has_label_data:
             await save_interaction_to_cache(
                 drug_a=drug_a,
                 drug_b=drug_b,
                 severity="none",
-                explanation="No clinically significant interaction detected."
+                explanation="No clinically significant interaction detected in verified database."
             )
+        else:
+            missing_data_count += 1
+
+    # 4. Calculate Stomach Guardian Composite GI Score
+    gi_score, gi_tier, gi_contributors, gi_recs = calculate_composite_gi_score(medicines, profiles)
+
+    # 5. Detect Side Effect Amplifications
+    amplified_side_effects = detect_side_effect_amplifications(medicines, profiles)
+
+    # 6. Generate Food Conflicts & 24-Hour Timeline
+    food_conflicts, timeline = generate_food_conflicts_and_timeline(medicines, profiles)
 
     is_safe = len(detected_interactions) == 0
-    summary_text = (
-        "No known interactions detected between the selected medicines in our database."
-        if is_safe
-        else f"Identified {len(detected_interactions)} potential interaction{'s' if len(detected_interactions) > 1 else ''}."
-    )
+
+    if is_safe:
+        if len(medicines) == 1:
+            summary_text = f"Profile analyzed for {medicines[0].capitalize()}. Add a second medicine to check pairwise interactions."
+        elif missing_data_count > 0:
+            summary_text = "No known drug-drug interactions detected. Note: Limited FDA label data for some items."
+        else:
+            summary_text = "No known interactions detected between the selected medicines in verified clinical databases."
+    else:
+        summary_text = f"Identified {len(detected_interactions)} potential interaction{'s' if len(detected_interactions) > 1 else ''} across {len(pairs)} analyzed pairs."
 
     return CheckResponse(
         medicines=medicines,
         interactions=detected_interactions,
         safe=is_safe,
         summary=summary_text,
-        analyzed_pairs_count=len(pairs)
+        analyzed_pairs_count=len(pairs),
+        composite_gi_score=gi_score,
+        composite_gi_tier=gi_tier,
+        composite_gi_contributors=gi_contributors,
+        composite_gi_recommendations=gi_recs,
+        food_conflicts=food_conflicts,
+        daily_food_timeline=timeline,
+        aggregated_side_effects=amplified_side_effects,
+        profiles=profiles
     )
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
-    uvicorn.run("main:app", host=host, port=port, reload=True)
+    is_dev = os.getenv("ENV", "production").lower() in ("development", "dev")
+    uvicorn.run("main:app", host=host, port=port, reload=is_dev)

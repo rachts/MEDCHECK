@@ -3,55 +3,477 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* === TYPOGRAPHY === */
+    --font-serif: 'Cormorant Garamond', 'Source Serif Pro', 'Georgia', serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+
+    /* === BACKGROUNDS === */
+    --bg-base:        #F1F5F9;   /* Very light cool grey. Page background. */
+    --bg-surface:     #FFFFFF;   /* Pure white. Cards, panels, modals. */
+    --bg-elevated:    #F8FAFC;   /* Slightly darker. Hover states, inner panels. */
+    --bg-input:       #F8FAFC;   /* Form fields. */
+
+    /* === BORDERS === */
+    --border-default: #E2E8F0;   /* Card borders. Visible but soft. */
+    --border-hover:   #CBD5E1;   /* Interactive hover. */
+    --border-alert:   #FECACA;   /* Alert banner borders. */
+
+    /* === TEXT === */
+    --text-primary:   #0F172A;   /* Near-black. Headlines, medicine names. */
+    --text-secondary: #475569;   /* Body text. */
+    --text-muted:     #64748B;   /* Labels, meta, timestamps. */
+    --text-inverse:   #FFFFFF;   /* Text on dark buttons. */
+
+    /* === ACCENT === */
+    --accent:         #0F172A;   /* Near-black buttons. Medical, authoritative. */
+    --accent-hover:   #1E293B;   /* Slightly lighter black. */
+    --accent-muted:   rgba(15, 23, 42, 0.06); /* Subtle backgrounds. */
+
+    /* === SEVERITY === */
+    --severity-high:     #DC2626;   /* True red. Unmissable on white. */
+    --severity-moderate: #D97706;   /* Amber. */
+    --severity-low:      #059669;   /* Emerald. */
+    --severity-info:     #0284C7;   /* Sky-600. */
+
+    /* === ALERT BACKGROUNDS === */
+    --alert-danger-bg:      #FEF2F2;
+    --alert-danger-border:  #FECACA;
+    --alert-danger-text:    #991B1B;
+    --alert-warning-bg:     #FFFBEB;
+    --alert-warning-border: #FDE68A;
+    --alert-warning-text:   #92400E;
+    --alert-success-bg:     #F0FDF4;
+    --alert-success-border: #BBF7D0;
+    --alert-success-text:   #065F46;
+
+    /* === SPACING === */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+
+    /* === RADII === */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+  }
+
   body {
-    background: radial-gradient(circle at 20% 30%, #4A5D2F 0%, #2A3818 60%, #111F00 100%);
+    background-color: var(--bg-base);
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
     min-height: 100vh;
-    color: #FAF7ED;
+  }
+
+  @media (max-width: 767px) {
+    body {
+      font-size: 14px;
+    }
+  }
+
+  /* Custom Clean Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-base);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-hover);
+    border-radius: var(--radius-sm);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
   }
 }
 
-.glass-panel {
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+/* ==========================================================================
+   MEDCHECK DESIGN SYSTEM V2.0 TYPE SCALE
+   ========================================================================== */
+
+/* Display — Hero headlines, landing page */
+.text-display { 
+  font-family: var(--font-serif); 
+  font-size: 48px; 
+  font-weight: 700; 
+  letter-spacing: -0.02em; 
+  line-height: 1.1; 
+}
+@media (max-width: 1023px) { .text-display { font-size: 40px; } }
+@media (max-width: 767px)  { .text-display { font-size: 32px; } }
+
+/* H1 — Page titles */
+.text-h1 { 
+  font-family: var(--font-serif); 
+  font-size: 32px; 
+  font-weight: 700; 
+  letter-spacing: -0.01em; 
+  line-height: 1.2; 
+}
+@media (max-width: 1023px) { .text-h1 { font-size: 28px; } }
+@media (max-width: 767px)  { .text-h1 { font-size: 24px; } }
+
+/* H2 — Section headers */
+.text-h2 { 
+  font-family: var(--font-serif); 
+  font-size: 24px; 
+  font-weight: 600; 
+  letter-spacing: 0; 
+  line-height: 1.3; 
+}
+@media (max-width: 1023px) { .text-h2 { font-size: 22px; } }
+@media (max-width: 767px)  { .text-h2 { font-size: 20px; } }
+
+/* H3 — Card titles, panel headers */
+.text-h3 { 
+  font-family: var(--font-sans); 
+  font-size: 15px; 
+  font-weight: 700; 
+  letter-spacing: -0.01em; 
+  line-height: 1.4; 
+}
+@media (max-width: 767px) { .text-h3 { font-size: 14px; } }
+
+/* Body — Descriptions, explanations */
+.text-body { 
+  font-family: var(--font-sans); 
+  font-size: 13px; 
+  font-weight: 400; 
+  letter-spacing: 0; 
+  line-height: 1.6; 
+}
+@media (max-width: 767px) { .text-body { font-size: 14px; } }
+
+/* Label — Uppercase tags, badges, meta */
+.text-label { 
+  font-family: var(--font-sans); 
+  font-size: 10px; 
+  font-weight: 800; 
+  letter-spacing: 1.5px; 
+  text-transform: uppercase; 
 }
 
-.glass-panel-warm {
-  background: rgba(250, 247, 237, 0.07);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(250, 247, 237, 0.18);
+/* Metric — Numbers, scores, dosages */
+.text-metric { 
+  font-family: var(--font-mono); 
+  font-size: 22px; 
+  font-weight: 700; 
+  font-variant-numeric: tabular-nums; 
+}
+@media (max-width: 1023px) { .text-metric { font-size: 20px; } }
+
+.metric {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-.glass-panel-hover {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+/* ==========================================================================
+   COMPONENT SPECIFICATIONS
+   ========================================================================== */
+
+/* 1. Cards */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.glass-panel-hover:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.4);
+.card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.text-glow {
-  text-shadow: 0 0 20px rgba(196, 217, 107, 0.25);
+@media (max-width: 767px) {
+  .card { 
+    padding: var(--space-4); 
+    border-radius: var(--radius-md); 
+  }
 }
 
-@keyframes pulse-slow {
-  0%, 100% { opacity: 0.2; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(1.05); }
+.card-elevated {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
 }
 
-.animate-pulse-slow {
-  animation: pulse-slow 4s ease-in-out infinite;
+/* 2. Severity Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
 }
 
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
-.animate-shimmer {
-  animation: shimmer 1.8s infinite;
+.badge-high     { color: var(--severity-high); }
+.badge-moderate { color: var(--severity-moderate); }
+.badge-low      { color: var(--severity-low); }
+.badge-info     { color: var(--severity-info); }
+
+/* 3. Action Tags */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.tag-danger {
+  background: var(--alert-danger-bg);
+  border-color: var(--alert-danger-border);
+  color: var(--alert-danger-text);
+}
+
+.tag-warning {
+  background: var(--alert-warning-bg);
+  border-color: var(--alert-warning-border);
+  color: var(--alert-warning-text);
+}
+
+.tag-success {
+  background: var(--alert-success-bg);
+  border-color: var(--alert-success-border);
+  color: var(--alert-success-text);
+}
+
+/* 4. Alert Banners */
+.alert-danger {
+  background: var(--alert-danger-bg);
+  border: 1px solid var(--alert-danger-border);
+  color: var(--alert-danger-text);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+
+.alert-warning {
+  background: var(--alert-warning-bg);
+  border: 1px solid var(--alert-warning-border);
+  color: var(--alert-warning-text);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+
+.alert-success {
+  background: var(--alert-success-bg);
+  border: 1px solid var(--alert-success-border);
+  color: var(--alert-success-text);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* 5. Medicine Chips */
+.chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--severity-color, var(--severity-low));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  min-height: 48px; /* Touch target */
+  transition: background 0.15s ease, transform 0.1s ease;
+  animation: slideInLeft 0.18s ease-out forwards;
+}
+
+.chip:hover {
+  background: #F1F5F9;
+  border-color: var(--border-hover);
+}
+
+.chip:active {
+  transform: scale(0.98);
+}
+
+@media (max-width: 767px) {
+  .chip { padding: var(--space-3) var(--space-4); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* 6. Buttons */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 12px 20px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  min-height: 48px; /* Touch target */
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 10px 16px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.btn-secondary:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-elevated);
+}
+
+/* Mobile Sticky Button */
+@media (max-width: 767px) {
+  .btn-sticky {
+    position: fixed;
+    bottom: 74px; /* Above bottom nav */
+    left: 16px;
+    right: 16px;
+    z-index: 50;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/* 7. Bottom Navigation (Mobile Only) */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 16px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  transition: color 0.15s ease;
+  min-height: 48px;
+  justify-content: center;
+}
+
+.bottom-nav-item.active {
+  color: var(--accent);
+}
+
+/* 8. Stomach Guardian Progress Bar */
+.gi-score-bar {
+  height: 6px;
+  background: var(--border-default);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.gi-score-fill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  transition: width 0.25s ease;
+}
+
+/* 9. Animations */
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card-enter {
+  animation: cardEnter 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.sheet-enter {
+  animation: slideUp 250ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.modal-backdrop {
+  animation: fadeIn 200ms ease forwards;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

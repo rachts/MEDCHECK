@@ -1,37 +1,31 @@
 import React from 'react';
-import { Loader2, Sparkles, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
+import { useMedicine } from '../context/MedicineContext';
 
 export function LoadingState() {
-  return (
-    <section className="w-full max-w-3xl bg-white/[0.08] backdrop-blur-[20px] border border-white/[0.15] rounded-2xl p-8 flex flex-col items-center justify-center gap-6 shadow-glass animate-fadeIn relative overflow-hidden">
-      {/* Shimmer sweep effect */}
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer pointer-events-none" />
+  const { loadingStage } = useMedicine();
 
-      <div className="relative flex items-center justify-center">
-        <div className="w-16 h-16 rounded-full bg-secondary-fixed/15 border border-secondary-fixed/40 flex items-center justify-center animate-pulse-slow">
-          <Shield className="w-8 h-8 text-secondary-fixed" />
-        </div>
-        <Loader2 className="w-20 h-20 text-secondary-fixed/60 animate-spin absolute" />
+  return (
+    <section className="card flex flex-col items-center justify-center gap-4 text-center py-8">
+      <div className="w-10 h-10 rounded-[6px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center animate-pulse">
+        <Shield className="w-5 h-5" />
       </div>
 
-      <div className="text-center space-y-2 relative z-10">
-        <div className="inline-flex items-center gap-2 text-xs font-semibold text-secondary-fixed uppercase tracking-wider">
-          <Sparkles className="w-3.5 h-3.5" />
-          Cross-Referencing OpenFDA & Pharmacology Cache
+      <div className="space-y-1 max-w-sm">
+        <div className="badge badge-info">
+          CLINICAL SCAN IN PROGRESS
         </div>
-        <h3 className="font-headline text-2xl font-semibold text-white">
-          Analyzing your medicines...
+        <h3 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">
+          {loadingStage || 'Analyzing Drug Interactions...'}
         </h3>
-        <p className="text-sm text-tertiary-fixed-dim/80 max-w-md">
-          Evaluating pairwise molecular kinetics, contraindications, and potential adverse interactions.
+        <p className="text-xs text-[var(--text-muted)]">
+          Evaluating pairwise kinetics, Stomach Guardian score, and 24-hour food schedule.
         </p>
       </div>
 
-      {/* Skeleton placeholders */}
-      <div className="w-full space-y-3 pt-4 border-t border-white/10">
-        <div className="h-4 bg-white/10 rounded-full w-3/4 animate-pulse" />
-        <div className="h-4 bg-white/10 rounded-full w-5/6 animate-pulse" />
-        <div className="h-4 bg-white/5 rounded-full w-1/2 animate-pulse" />
+      {/* Progress Bar Animation */}
+      <div className="w-full max-w-xs h-1.5 bg-[var(--bg-elevated)] rounded-full overflow-hidden border border-[var(--border-default)]">
+        <div className="h-full bg-[var(--accent)] rounded-full animate-pulse w-3/4" />
       </div>
     </section>
   );

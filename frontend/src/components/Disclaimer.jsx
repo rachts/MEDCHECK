@@ -1,15 +1,15 @@
 import React from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 
 export function Disclaimer() {
   return (
-    <div className="w-full max-w-3xl bg-white/[0.03] border border-white/[0.08] rounded-2xl p-5 backdrop-blur-sm text-center flex flex-col items-center gap-2">
-      <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-secondary-fixed uppercase tracking-wider">
-        <ShieldCheck className="w-4 h-4 text-secondary-fixed" />
-        Official Medical Disclaimer
+    <div className="w-full max-w-3xl card p-4 text-center flex flex-col items-center gap-1.5 shadow-none">
+      <div className="badge badge-info">
+        <ShieldAlert className="w-3.5 h-3.5" />
+        <span>Clinical Safety Disclaimer</span>
       </div>
-      <p className="font-body text-xs sm:text-sm text-tertiary-fixed-dim/80 max-w-2xl leading-relaxed">
-        MedCheck provides informational guidance based on available drug data. It is not a substitute for professional medical advice. Always consult a qualified healthcare professional for medical decisions.
+      <p className="text-xs text-[var(--text-muted)] max-w-2xl leading-relaxed">
+        MedCheck provides informational clinical pharmacology data synthesized from openFDA prescribing labels and verified pharmacological rules. It is not a substitute for clinical judgment or individualized medical advice. Always consult your prescribing physician before altering any drug regimen.
       </p>
     </div>
   );

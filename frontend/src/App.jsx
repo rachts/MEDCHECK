@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { MedicineProvider } from './context/MedicineContext';
 import { Landing } from './pages/Landing';
 import { AppInterface } from './pages/AppInterface';
+import { DrugExplorer } from './pages/DrugExplorer';
 import { Auth } from './pages/Auth';
 
 export function App() {
@@ -12,6 +13,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/app" element={<AppInterface />} />
+          <Route path="/explorer" element={<DrugExplorer />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

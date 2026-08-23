@@ -3,29 +3,35 @@ import { AlertCircle, RotateCcw } from 'lucide-react';
 
 export function ErrorState({ error, onRetry }) {
   return (
-    <section className="w-full max-w-3xl bg-danger-coral/10 backdrop-blur-[20px] border-2 border-severity-high/40 rounded-2xl p-6 sm:p-8 flex flex-col gap-4 shadow-glass animate-fadeIn">
-      <div className="flex items-start gap-3.5">
-        <div className="w-10 h-10 rounded-full bg-severity-high/20 border border-severity-high flex items-center justify-center flex-shrink-0 text-severity-high">
-          <AlertCircle className="w-5 h-5" />
+    <section 
+      style={{ borderLeftColor: 'var(--severity-high)', borderLeftWidth: '3px' }}
+      className="card flex flex-col gap-3"
+    >
+      <div className="flex items-start gap-2.5">
+        <div className="w-8 h-8 rounded-[6px] bg-[rgba(220,38,38,0.08)] border border-[rgba(220,38,38,0.2)] flex items-center justify-center shrink-0 text-[var(--severity-high)]">
+          <AlertCircle className="w-4 h-4" />
         </div>
-        <div className="flex-grow">
-          <h3 className="font-headline text-xl font-semibold text-white mb-1">
+        <div className="flex-1">
+          <div className="badge badge-high">
+            ANALYSIS PAUSED
+          </div>
+          <h3 className="text-base font-semibold text-[var(--text-primary)] mt-0.5 mb-0.5">
             Unable to Complete Safety Check
           </h3>
-          <p className="font-body text-sm sm:text-base text-white/80 leading-relaxed">
-            {error || 'Something went wrong while checking interactions. Please verify the medicine names and try again.'}
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+            {error || 'Something went wrong while analyzing medicines. Please verify the medicine names and retry.'}
           </p>
         </div>
       </div>
 
       {onRetry && (
-        <div className="pt-2 flex justify-end">
+        <div className="pt-1 flex justify-end">
           <button
             onClick={onRetry}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold uppercase tracking-wider border border-white/20 transition-all active:scale-95 cursor-pointer"
+            className="btn-primary"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            Try Again
+            <span>Try Again</span>
           </button>
         </div>
       )}

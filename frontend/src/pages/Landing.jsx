@@ -1,162 +1,218 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Disclaimer } from '../components/Disclaimer';
-import { ArrowRight, ShieldCheck, Database, Sparkles, Pill, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useMedicine } from '../context/MedicineContext';
+import { 
+  ShieldCheck, 
+  Sparkles, 
+  ArrowRight, 
+  Search, 
+  Activity, 
+  Flame, 
+  Lock,
+  AlertTriangle
+} from 'lucide-react';
 
 export function Landing() {
+  const { loadPreset, demoPresets } = useMedicine();
+  const navigate = useNavigate();
+
+  const handleLaunchNarrativeDemo = () => {
+    const preset = demoPresets.find(p => p.id === 'sarah-demo') || demoPresets[0];
+    loadPreset(preset);
+    navigate('/app');
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-surface text-on-surface antialiased">
+    <div className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
       <Navbar />
 
-      <main className="flex-grow pt-20">
-        {/* Hero Section */}
-        <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden bg-gradient-to-b from-primary-container to-sage-gradient-stop px-4 sm:px-8 md:px-16 py-16">
-          {/* Decorative Ambient Orbs */}
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-secondary-fixed/10 rounded-full blur-[120px] animate-pulse-slow" />
-            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary-fixed/10 rounded-full blur-[120px]" />
+      {/* HERO SECTION: Editorial Authority with Cormorant Garamond */}
+      <section className="pt-24 sm:pt-28 pb-12 px-4 sm:px-8 max-w-5xl mx-auto flex flex-col items-center text-center">
+        {/* Stat Pill Badge */}
+        <div className="badge badge-high mb-4 px-3 py-1 bg-[#FEF2F2] border border-[#FECACA] rounded-full">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span>1.3 Million Preventable Hospitalizations Annually</span>
+        </div>
+
+        {/* Serif Headline (Cormorant Garamond) */}
+        <h1 className="text-display max-w-3xl text-[var(--text-primary)] mb-4 font-serif font-bold">
+          Know Your Medicine.{' '}
+          <span className="italic font-normal underline decoration-[var(--border-hover)]">
+            Protect Your Body.
+          </span>
+        </h1>
+
+        {/* Subtitle with strong contrast and readable line-height */}
+        <p className="max-w-2xl text-[#334155] text-base sm:text-lg md:text-xl font-normal leading-relaxed mb-8">
+          A clinical intelligence platform analyzing drug-drug interactions, side effect amplification, food & alcohol administration schedules, and the proprietary <strong className="text-[var(--text-primary)] font-bold font-serif text-[18px] sm:text-[20px]">Stomach Guardian™</strong> mucosal stress score.
+        </p>
+
+        {/* CTA Button Group */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full justify-center max-w-md mb-12">
+          <Link
+            to="/app"
+            className="btn-primary w-full sm:w-auto px-7 py-3 text-sm sm:text-base font-bold shadow-sm"
+          >
+            <span>Analyze My Medicines</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+
+          <Link
+            to="/explorer"
+            className="btn-secondary w-full sm:w-auto px-6 py-3 text-sm sm:text-base font-semibold"
+          >
+            <Search className="w-4 h-4 text-[var(--text-muted)]" />
+            <span>Search a Drug First</span>
+          </Link>
+        </div>
+
+        {/* Trust Bar */}
+        <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-3 border-y border-[var(--border-default)] py-4 text-left">
+          <div className="flex items-center gap-2.5 p-3 bg-[var(--bg-surface)] rounded-[8px] border border-[var(--border-default)] shadow-sm">
+            <div className="w-7 h-7 rounded-[4px] bg-[var(--bg-elevated)] flex items-center justify-center text-[var(--text-primary)] shrink-0">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">OpenFDA Verified</div>
+              <div className="text-xs text-[var(--text-muted)] font-sans">Official FDA labels</div>
+            </div>
           </div>
 
-          <div className="relative z-10 w-full max-w-4xl mx-auto flex flex-col items-center text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-secondary-fixed/15 border border-secondary-fixed/30 text-secondary-fixed text-xs sm:text-sm font-semibold uppercase tracking-wider mb-6">
-              <Sparkles className="w-4 h-4" />
-              Next-Generation Medication Safety
+          <div className="flex items-center gap-2.5 p-3 bg-[var(--bg-surface)] rounded-[8px] border border-[var(--border-default)] shadow-sm">
+            <div className="w-7 h-7 rounded-[4px] bg-[var(--bg-elevated)] flex items-center justify-center text-[var(--text-primary)] shrink-0">
+              <Activity className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">10,000+ Drugs</div>
+              <div className="text-xs text-[var(--text-muted)] font-sans">Indexed pharmacology</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 p-3 bg-[var(--bg-surface)] rounded-[8px] border border-[var(--border-default)] shadow-sm">
+            <div className="w-7 h-7 rounded-[4px] bg-[var(--bg-elevated)] flex items-center justify-center text-[var(--severity-moderate)] shrink-0">
+              <Flame className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">Stomach Guardian</div>
+              <div className="text-xs text-[var(--text-muted)] font-sans">Mucosal risk scoring</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 p-3 bg-[var(--bg-surface)] rounded-[8px] border border-[var(--border-default)] shadow-sm">
+            <div className="w-7 h-7 rounded-[4px] bg-[var(--bg-elevated)] flex items-center justify-center text-[var(--severity-low)] shrink-0">
+              <Lock className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">Zero Stored Data</div>
+              <div className="text-xs text-[var(--text-muted)] font-sans">100% private in browser</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3 CORE PILLARS: Clinical Authority Cards */}
+      <section className="py-10 px-4 sm:px-8 max-w-5xl mx-auto w-full">
+        <div className="text-center mb-8">
+          <h2 className="text-h1 text-[var(--text-primary)] mb-2">
+            Comprehensive Clinical Intelligence
+          </h2>
+          <p className="text-body text-[#475569] max-w-lg mx-auto">
+            Clear, actionable medicine safety designed for patient understanding and clinical scrutiny.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Pillar 1 */}
+          <div className="card flex flex-col gap-3">
+            <div className="w-10 h-10 rounded-[6px] bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-default)] flex items-center justify-center">
+              <Activity className="w-5 h-5" />
+            </div>
+            <h3 className="font-serif text-[20px] font-bold text-[var(--text-primary)]">
+              Interaction Topology Matrix
+            </h3>
+            <p className="text-body text-[#475569] leading-relaxed">
+              Interactive node network graph connects your medications, surfacing pharmacokinetic conflicts and clinical severity hierarchies.
+            </p>
+          </div>
+
+          {/* Pillar 2 */}
+          <div className="card flex flex-col gap-3">
+            <div className="w-10 h-10 rounded-[6px] bg-[var(--alert-danger-bg)] text-[var(--severity-high)] border border-[var(--alert-danger-border)] flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <h3 className="font-serif text-[20px] font-bold text-[var(--text-primary)]">
+              Side Effect Amplification
+            </h3>
+            <p className="text-body text-[#475569] leading-relaxed">
+              Categorizes side effects by true clinical frequency (&gt;10%, 1-10%, &lt;0.1%) and flags when multiple drugs compound the exact same adverse risk.
+            </p>
+          </div>
+
+          {/* Pillar 3 */}
+          <div className="card flex flex-col gap-3">
+            <div className="w-10 h-10 rounded-[6px] bg-[var(--alert-success-bg)] text-[var(--severity-low)] border border-[var(--alert-success-border)] flex items-center justify-center">
+              <Flame className="w-5 h-5" />
+            </div>
+            <h3 className="font-serif text-[20px] font-bold text-[var(--text-primary)]">
+              Food & Stomach Guardian™
+            </h3>
+            <p className="text-body text-[#475569] leading-relaxed">
+              GI upset is the #1 reason patients discontinue medications. Stomach Guardian rates ulcer load and builds an actionable 24-hour meal schedule.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* NARRATIVE DEMO MODE SHOWCASE: Mrs. Sharma Scenario */}
+      <section className="py-8 px-4 sm:px-8 max-w-5xl mx-auto w-full mb-6">
+        <div 
+          style={{ borderLeftColor: 'var(--severity-high)', borderLeftWidth: '4px' }}
+          className="card flex flex-col md:flex-row items-center justify-between gap-6"
+        >
+          <div className="flex-1 space-y-2.5 text-left">
+            <div className="badge badge-info">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Interactive Narrative Demo</span>
             </div>
 
-            <h1 className="font-headline text-4xl sm:text-6xl md:text-7xl font-bold text-surface-bright mb-6 text-glow leading-[1.15]">
-              Know <span className="underline decoration-secondary-fixed/60 underline-offset-8">Before You</span> Take
-            </h1>
+            <h3 className="font-serif text-[26px] font-bold text-[var(--text-primary)] tracking-tight">
+              The "Mrs. Sharma" Clinical Case
+            </h3>
 
-            <p className="font-body text-base sm:text-xl text-surface-container-highest max-w-2xl mb-10 leading-relaxed">
-              Check your medicines for potential interactions, contraindications, and clinical warnings before they become a problem.
+            <p className="text-body text-[#334155] leading-relaxed">
+              Mrs. Sharma takes <strong>Warfarin</strong> for her heart, <strong>Aspirin</strong> as an antiplatelet, and was recommended <strong>Ibuprofen</strong> for knee pain. Let's see what MEDCHECK finds.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full sm:w-auto">
-              <Link
-                to="/app"
-                className="font-body text-base font-semibold bg-secondary-fixed text-deep-olive px-8 py-4 rounded-full shadow-button-glow hover:scale-105 hover:bg-secondary-fixed-dim transition-all flex items-center justify-center gap-2"
-              >
-                <span>Check Your Medicines</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-
-              <a
-                href="#how-it-works"
-                className="font-body text-base font-medium glass-panel text-surface-bright px-8 py-4 rounded-full hover:bg-white/15 transition-all flex items-center justify-center"
-              >
-                How It Works
-              </a>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <span className="tag font-serif text-[13px] font-bold">Warfarin (Rx)</span>
+              <span className="tag font-serif text-[13px] font-bold">Aspirin (OTC)</span>
+              <span className="tag font-serif text-[13px] font-bold">Ibuprofen (OTC)</span>
             </div>
 
-            {/* Quick trust metrics */}
-            <div className="grid grid-cols-3 gap-6 sm:gap-12 mt-16 pt-8 border-t border-white/15 text-white/80 w-full max-w-xl">
-              <div>
-                <div className="font-headline text-2xl sm:text-3xl font-bold text-secondary-fixed">100%</div>
-                <div className="text-xs text-tertiary-fixed-dim">OpenFDA Backed</div>
-              </div>
-              <div>
-                <div className="font-headline text-2xl sm:text-3xl font-bold text-secondary-fixed">Pairwise</div>
-                <div className="text-xs text-tertiary-fixed-dim">Combinatorial Check</div>
-              </div>
-              <div>
-                <div className="font-headline text-2xl sm:text-3xl font-bold text-secondary-fixed">&lt; 1 sec</div>
-                <div className="text-xs text-tertiary-fixed-dim">Cached Response</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* How It Works Section */}
-        <section id="how-it-works" className="py-24 px-4 sm:px-8 md:px-16 bg-[#232F16]">
-          <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-16">
-              <span className="text-xs font-semibold text-secondary-fixed uppercase tracking-wider">
-                Transparent 3-Step Process
-              </span>
-              <h2 className="font-headline text-3xl sm:text-5xl font-bold text-primary-fixed mt-2">
-                How MedCheck Works
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {/* Step 01 */}
-              <div className="glass-panel p-8 rounded-2xl relative overflow-hidden group hover:border-secondary-fixed/40 transition-all">
-                <div className="absolute top-4 right-4 font-headline text-3xl font-bold text-secondary-fixed/20 group-hover:text-secondary-fixed/40 transition-colors">
-                  01
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-secondary-fixed/15 flex items-center justify-center text-secondary-fixed mb-6">
-                  <Pill className="w-6 h-6" />
-                </div>
-                <h3 className="font-headline text-xl font-semibold text-white mb-2">
-                  Add Medicines
-                </h3>
-                <p className="font-body text-sm text-tertiary-fixed-dim/80 leading-relaxed">
-                  Enter generic or brand names into your Medicine Basket. Add multiple prescriptions or supplements seamlessly.
-                </p>
-              </div>
-
-              {/* Step 02 */}
-              <div className="glass-panel p-8 rounded-2xl relative overflow-hidden group hover:border-secondary-fixed/40 transition-all">
-                <div className="absolute top-4 right-4 font-headline text-3xl font-bold text-secondary-fixed/20 group-hover:text-secondary-fixed/40 transition-colors">
-                  02
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-secondary-fixed/15 flex items-center justify-center text-secondary-fixed mb-6">
-                  <Database className="w-6 h-6" />
-                </div>
-                <h3 className="font-headline text-xl font-semibold text-white mb-2">
-                  We Analyze
-                </h3>
-                <p className="font-body text-sm text-tertiary-fixed-dim/80 leading-relaxed">
-                  Our system evaluates all pairwise drug combinations against live OpenFDA labels, warnings, and clinical pharmacology data.
-                </p>
-              </div>
-
-              {/* Step 03 */}
-              <div className="glass-panel p-8 rounded-2xl relative overflow-hidden group hover:border-secondary-fixed/40 transition-all">
-                <div className="absolute top-4 right-4 font-headline text-3xl font-bold text-secondary-fixed/20 group-hover:text-secondary-fixed/40 transition-colors">
-                  03
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-secondary-fixed/15 flex items-center justify-center text-secondary-fixed mb-6">
-                  <AlertTriangle className="w-6 h-6" />
-                </div>
-                <h3 className="font-headline text-xl font-semibold text-white mb-2">
-                  Understand Risks
-                </h3>
-                <p className="font-body text-sm text-tertiary-fixed-dim/80 leading-relaxed">
-                  Receive clear, color-coded severity breakdowns (High, Moderate, Low) with plain-language explanations.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Clinical Transparency & Safety Section */}
-        <section className="py-20 px-4 sm:px-8 md:px-16 bg-deep-olive">
-          <div className="max-w-4xl mx-auto flex flex-col items-center text-center gap-6">
-            <ShieldCheck className="w-12 h-12 text-secondary-fixed" />
-            <h2 className="font-headline text-3xl sm:text-4xl font-bold text-white">
-              Built for Safety, Accuracy, and Transparency
-            </h2>
-            <p className="font-body text-base text-tertiary-fixed-dim/90 max-w-2xl leading-relaxed">
-              MedCheck bridges traditional pharmacological databases with modern AI parsing, transforming complex clinical warning labels into accessible insights you can discuss with your doctor.
+            <p className="text-xs text-[var(--severity-high)] font-semibold font-sans pt-0.5">
+              Result: Critical Bleeding Synergy + 100/100 High Stomach Guardian Risk.
             </p>
+          </div>
 
-            <Link
-              to="/app"
-              className="mt-4 font-body text-base font-semibold bg-secondary-fixed text-deep-olive px-8 py-4 rounded-full shadow-button-glow hover:bg-secondary-fixed-dim transition-all inline-flex items-center gap-2"
+          <div className="shrink-0 flex flex-col items-center gap-2">
+            <button
+              onClick={handleLaunchNarrativeDemo}
+              className="btn-primary w-full sm:w-auto"
             >
-              <span>Launch Medicine Basket</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-
-            <div className="mt-8 w-full">
-              <Disclaimer />
-            </div>
+              Run Mrs. Sharma Scenario →
+            </button>
+            <span className="text-xs text-[var(--text-muted)] font-sans">Instant one-click demo</span>
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
+
+      {/* Disclaimer */}
+      <div className="px-4 py-4 flex justify-center">
+        <Disclaimer />
+      </div>
 
       <Footer />
     </div>

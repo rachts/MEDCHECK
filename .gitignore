@@ -1,47 +1,24 @@
-# =============================================================================
-# MedCheck - Comprehensive .gitignore
-# =============================================================================
+# ==============================================================================
+# MEDCHECK — Comprehensive .gitignore
+# ==============================================================================
 
-# =============================================================================
-# OS & System Files
-# =============================================================================
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-*.swp
-*.swo
-*~
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+!.env.example
+secrets/
+*.pem
+*.key
 
-# =============================================================================
-# IDE / Editor
-# =============================================================================
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-*.code-workspace
-
-# =============================================================================
-# Python Backend
-# =============================================================================
-# Virtual environments
-venv/
-env/
-ENV/
-.venv/
-
-# Python cache
+# Python Bytecode & Packaging Cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-
-# Distribution / packaging
 build/
 develop-eggs/
 dist/
@@ -58,118 +35,80 @@ wheels/
 .installed.cfg
 *.egg
 
-# PyInstaller
-*.manifest
-*.spec
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+venv*/
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage
-htmlcov/
-.tox/
-.nox/
+# Testing & Coverage
+.pytest_cache/
 .coverage
 .coverage.*
 .cache
 nosetests.xml
 coverage.xml
 *.cover
-.hypothesis/
-.pytest_cache/
+*.py,cover
+htmlcov/
+.tox/
+.nox/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# =============================================================================
-# Node.js / Frontend
-# =============================================================================
-# Dependencies
+# Node.js & Frontend Build Artifacts
+node_modules/
 frontend/node_modules/
-frontend/.pnp
-frontend/.pnp.js
-
-# Production builds
 frontend/dist/
 frontend/dist-ssr/
-frontend/build/
-
-# Logs
+frontend/.vite/
+.npm
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Local env files
-frontend/.env
-frontend/.env.local
-frontend/.env.*.local
-
-# Vite
-frontend/.vite/
-
-# =============================================================================
-# Environment Variables & Secrets
-# =============================================================================
-.env
-.env.local
-.env.*.local
-!.env.example
-
-# =============================================================================
-# Supabase
-# =============================================================================
-# Local Supabase dev files
-.supabase/
-supabase/.temp/
-supabase/volumes/
-
-# =============================================================================
-# Database
-# =============================================================================
+# Databases & Local Caches
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
+backend/local_cache.db
+local_cache.db
 
-# =============================================================================
-# Stitch / Design Exports (Optional — keep if you want version control)
-# =============================================================================
-# Uncomment the lines below if you DON'T want to push Stitch exports to GitHub.
-# For hackathons, keeping them is fine — judges can see your design process.
-# But they are large binary files, so consider using Git LFS or excluding them.
-#
-01_design_system/
-02_landing_page_desktop/
-03_privacy_policy/
-04_contact_support_desktop/
-05_terms_of_service_desktop/
-06_app_interface_desktop/
-07_sign_up_desktop/
-08_login_desktop/
-09_landing_page_mobile/
-10_app_interface_mobile/
-download_stitch_project.py
+# IDE, OS & Editor Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
 
-# =============================================================================
-# Misc
-# =============================================================================
+# Logs
 *.log
-*.bak
-*.tmp
-.temp/
-tmp/
+logs/
 
-# =============================================================================
-# Hackathon / Demo Artifacts
-# =============================================================================
-# Keep these out of version control
-demo-videos/
-screenshots/
-pitch-deck-exports/
+# Temporary Files & Scratchpads
+tmp/
+temp/
+*.tmp
+*.bak
+
+# AI Prompts & Internal Scratch Folders
+prompts/
+*.prompt
+ai-generated/
+docs/
+
+# Binary & Document Blobs
+*.zip
+*.tar.gz
+*.pdf
+*.docx

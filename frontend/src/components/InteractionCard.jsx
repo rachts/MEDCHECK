@@ -1,91 +1,140 @@
-import React from 'react';
-import { AlertTriangle, AlertCircle, Info, ShieldAlert } from 'lucide-react';
-
-const SEVERITY_CONFIG = {
-  high: {
-    label: 'High Risk Interaction',
-    color: '#E07A5F',
-    bg: 'rgba(224, 122, 95, 0.12)',
-    border: 'rgba(224, 122, 95, 0.4)',
-    badgeBg: 'rgba(224, 122, 95, 0.25)',
-    icon: AlertTriangle,
-    description: 'Requires immediate clinical attention or prescription review.',
-  },
-  moderate: {
-    label: 'Moderate Risk Interaction',
-    color: '#E8C547',
-    bg: 'rgba(232, 197, 71, 0.12)',
-    border: 'rgba(232, 197, 71, 0.4)',
-    badgeBg: 'rgba(232, 197, 71, 0.25)',
-    icon: AlertCircle,
-    description: 'May alter therapeutic efficacy or increase side effect frequency.',
-  },
-  low: {
-    label: 'Low / Minor Interaction',
-    color: '#A8D5BA',
-    bg: 'rgba(168, 213, 186, 0.12)',
-    border: 'rgba(168, 213, 186, 0.4)',
-    badgeBg: 'rgba(168, 213, 186, 0.25)',
-    icon: Info,
-    description: 'Minor clinical significance. Standard monitoring advised.',
-  },
-};
+import React, { useState } from 'react';
+import { 
+  Utensils, 
+  Wine,
+  UserCheck,
+  Clock,
+  Pill,
+  FileText,
+  ChevronDown,
+  ChevronUp
+} from 'lucide-react';
+import { useMedicine } from '../context/MedicineContext';
 
 export function InteractionCard({ interaction }) {
-  const { drug_a, drug_b, severity, explanation } = interaction;
-  const sevKey = (severity || 'moderate').toLowerCase();
-  const config = SEVERITY_CONFIG[sevKey] || SEVERITY_CONFIG.moderate;
-  const IconComponent = config.icon;
+  const { selectMedicine, setDoctorReportOpen } = useMedicine();
+  const [expandedMobile, setExpandedMobile] = useState(false);
 
-  const capitalize = (str) =>
-    str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
+  const isHigh = interaction.severity === 'high';
+  const isMod = interaction.severity === 'moderate';
+
+  const badgeClass = isHigh ? 'badge-high' : isMod ? 'badge-moderate' : 'badge-low';
+  const badgeLabel = isHigh ? 'CRITICAL RISK' : isMod ? 'MODERATE CAUTION' : 'LOW RISK';
+
+  // Build Action Tags
+  const actionTags = [];
+  const fullText = `${interaction.explanation} ${interaction.stomach_impact || ''} ${interaction.food_consideration || ''} ${interaction.action_guidance || ''}`.toLowerCase();
+
+  if (fullText.includes('alcohol')) {
+    actionTags.push({ label: 'Avoid Alcohol', icon: Wine, type: 'tag-danger' });
+  }
+  if (fullText.includes('food') || fullText.includes('meal')) {
+    actionTags.push({ label: 'Take With Food', icon: Utensils, type: 'tag-warning' });
+  }
+  if (fullText.includes('doctor') || fullText.includes('consult') || isHigh) {
+    actionTags.push({ label: 'Doctor Consult', icon: UserCheck, type: 'tag' });
+  }
+  if (fullText.includes('hour') || fullText.includes('spacing') || fullText.includes('before') || fullText.includes('after')) {
+    actionTags.push({ label: 'Dose Spacing', icon: Clock, type: 'tag' });
+  }
 
   return (
-    <article
-      style={{
-        backgroundColor: config.bg,
-        borderColor: config.border,
-      }}
-      className="w-full max-w-3xl backdrop-blur-[20px] border-2 rounded-2xl p-6 sm:p-8 flex flex-col gap-4 shadow-glass transition-all duration-300 animate-fadeIn"
-    >
-      {/* Header with Severity Badge */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div
-          style={{
-            backgroundColor: config.badgeBg,
-            borderColor: config.color,
-            color: config.color,
-          }}
-          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold uppercase tracking-wider"
-        >
-          <IconComponent className="w-3.5 h-3.5" />
-          <span>{config.label}</span>
+    <div className={`card card-enter flex flex-col gap-3.5 ${
+      isHigh ? 'border-l-4 border-l-[var(--severity-high)]' : isMod ? 'border-l-4 border-l-[var(--severity-moderate)]' : 'border-l-4 border-l-[var(--severity-low)]'
+    }`}>
+      {/* Header: Dot + Uppercase Severity Label + Drug Pair Tags */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Severity Badge */}
+        <div className={`badge ${badgeClass}`}>
+          {badgeLabel}
         </div>
 
-        <span className="text-xs text-white/50 font-mono">
-          Pairwise Check
-        </span>
+        {/* Drug Pair Buttons with Serif typography */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => selectMedicine(interaction.drug_a)}
+            className="px-2.5 py-1 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] font-serif font-bold text-[15px] text-[var(--text-primary)] transition-colors cursor-pointer capitalize"
+          >
+            {interaction.drug_a}
+          </button>
+          <span className="text-[var(--text-muted)] text-xs font-bold font-sans">↔</span>
+          <button
+            onClick={() => selectMedicine(interaction.drug_b)}
+            className="px-2.5 py-1 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] font-serif font-bold text-[15px] text-[var(--text-primary)] transition-colors cursor-pointer capitalize"
+          >
+            {interaction.drug_b}
+          </button>
+        </div>
       </div>
 
-      {/* Drug Names */}
-      <div>
-        <h3 className="font-headline text-2xl sm:text-3xl font-semibold text-white mb-2">
-          {capitalize(drug_a)}{' '}
-          <span className="text-secondary-fixed font-normal text-xl">+</span>{' '}
-          {capitalize(drug_b)}
-        </h3>
+      {/* Body: Explanation */}
+      <p className="text-body text-[var(--text-primary)] font-normal">
+        {interaction.explanation}
+      </p>
 
-        {/* Mechanism Explanation */}
-        <p className="font-body text-base text-white/90 leading-relaxed">
-          {explanation}
-        </p>
-      </div>
+      {/* Mechanism Snippet (Collapsible on mobile) */}
+      {interaction.mechanism && (
+        <div className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-[6px] p-3 text-sm text-[var(--text-secondary)]">
+          <div 
+            onClick={() => setExpandedMobile(!expandedMobile)}
+            className="flex items-center justify-between cursor-pointer md:cursor-default"
+          >
+            <span className="text-label text-[var(--text-muted)] block">
+              Biological Mechanism
+            </span>
+            <span className="md:hidden text-xs text-[var(--text-muted)]">
+              {expandedMobile ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </span>
+          </div>
+          <div className={`${expandedMobile ? 'block' : 'hidden md:block'} mt-1`}>
+            <span>{interaction.mechanism}</span>
+          </div>
+        </div>
+      )}
 
-      {/* Clinical Guidance Footnote */}
-      <div className="pt-3 border-t border-white/10 flex items-center gap-2 text-xs text-white/60">
-        <ShieldAlert className="w-4 h-4 text-secondary-fixed flex-shrink-0" />
-        <span>{config.description} Consult your doctor before adjusting dosages.</span>
+      {/* Action Tags Bar */}
+      {actionTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          {actionTags.map((tag, idx) => {
+            const Icon = tag.icon;
+            return (
+              <span key={idx} className={`tag ${tag.type}`}>
+                <Icon className="w-3 h-3" />
+                <span>{tag.label}</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Action Footer */}
+      <div className="flex items-center justify-between pt-2 border-t border-[var(--border-default)] text-sm text-[var(--text-muted)]">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => selectMedicine(interaction.drug_a)}
+            className="hover:text-[var(--accent)] flex items-center gap-1 cursor-pointer transition-colors font-serif font-semibold text-[14px]"
+          >
+            <Pill className="w-3.5 h-3.5" />
+            <span>Profile {interaction.drug_a}</span>
+          </button>
+          <span>•</span>
+          <button
+            onClick={() => selectMedicine(interaction.drug_b)}
+            className="hover:text-[var(--accent)] flex items-center gap-1 cursor-pointer transition-colors font-serif font-semibold text-[14px]"
+          >
+            <Pill className="w-3.5 h-3.5" />
+            <span>Profile {interaction.drug_b}</span>
+          </button>
+        </div>
+
+        <button
+          onClick={() => setDoctorReportOpen(true)}
+          className="hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer transition-colors font-sans text-xs font-semibold"
+        >
+          <FileText className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Add to Report</span>
+        </button>
       </div>
-    </article>
+    </div>
   );
 }
