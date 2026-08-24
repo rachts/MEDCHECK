@@ -2,6 +2,23 @@
 
 All clinical rule modifications, pharmacology profile updates, and evidence metadata annotations are documented in this file.
 
+## [2026.08.24-1] - 2026-08-24
+
+### Added
+- **Restored Complete 17 Gold-Standard Rules**: Expanded deterministic clinical rules from 10 to 17 rules with full evidence citations and confidence metrics:
+  - *Omeprazole + Clopidogrel* (CYP2C19 competitive inhibition reducing clopidogrel active metabolite).
+  - *Metoprolol + Amlodipine* (Compounded negative chronotropy and peripheral vasodilation).
+  - *Levothyroxine + Omeprazole* (Impaired levothyroxine gastric absorption due to elevated gastric pH).
+  - *Paracetamol + Warfarin* (Sustained high-dose paracetamol enhancement of INR/hypoprothrombinemia).
+  - *Lisinopril + Potassium Chloride* (Compounded hyperkalemia risk from aldosterone suppression).
+  - *Ciprofloxacin + Theophylline* (CYP1A2 inhibition producing theophylline neuro/cardiotoxicity).
+  - *Atorvastatin + Clarithromycin* (CYP3A4 inhibition increasing atorvastatin systemic AUC and rhabdomyolysis hazard).
+- **Anticoagulant + NSAID Bleeding Penalty**: Added +30 pt GI compounding penalty for synergistic hemorrhagic hazards.
+- **Multi-Drug Amplification**: Added detection for compounded hyperkalemia and hepatic strain across active regimens.
+- **Dynamic 24-Hour Administration**: Added `patient_wake_time` offset to dynamically align meal/fasting dosing schedules.
+
+---
+
 ## [2026.08.23-1] - 2026-08-23
 
 ### Added

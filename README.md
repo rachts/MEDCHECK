@@ -6,24 +6,27 @@ MEDCHECK is an AI-powered medicine safety and clinical intelligence platform. De
 
 ## 🎯 Features
 
-- **Drug Interaction Matrix**: Pairwise pharmacokinetic and pharmacodynamic analysis with high-contrast, severity-coded clinical cards.
-- **Side Effect Radar**: Frequency-ranked adverse reaction profiles (`>10%`, `1-10%`, `0.1-1%`, `<0.1%`) with multi-drug compounding risk detection.
-- **Food Conflict Timeline**: 24-hour chronological daily dosing schedule surfacing meal buffers, dairy spacing, and grapefruit/alcohol contraindications.
-- **Stomach Guardian™ Score**: Composite gastrointestinal mucosal load metric (0–100) factoring in COX-1 inhibition and PPI protective mitigation.
+- **Drug Interaction Matrix**: Pairwise pharmacokinetic and pharmacodynamic analysis with high-contrast, severity-coded clinical cards backed by **17 curated gold-standard interaction rules** and OpenFDA label cross-referencing.
+- **Side Effect Radar**: Frequency-ranked adverse reaction profiles (`>10%`, `1-10%`, `0.1-1%`, `<0.1%`) with multi-drug compounding risk detection (Bleeding, Sedation, Hypotension, Hyperkalemia, Hepatic strain).
+- **Food Conflict Timeline**: Dynamic 24-hour chronological daily dosing schedule surfacing meal buffers, dairy spacing, and grapefruit/alcohol contraindications with configurable patient wake times.
+- **Stomach Guardian™ Score**: Composite gastrointestinal mucosal load metric (0–100) factoring in NSAID gastric load (+25 multi-NSAID), anticoagulant bleeding hazards (+30), and PPI protective mitigation (-20).
 - **Contextual Medicine Profile**: 5-tab deep dive with prescribing indications, equivalent brand names, and personal administration notes.
 - **Doctor's Safety Summary**: Instant clipboard export (Markdown) and printable clinical brief formatted for primary care provider visits.
-- **Deterministic Rule Engine**: Zero-hallucination guardrail validating AI outputs against curated pharmacology rules and OpenFDA drug labels.
+- **Deterministic Rule Engine**: Zero-hallucination guardrail validating AI outputs against evidence-annotated pharmacology rules and OpenFDA drug labels.
+- **Clinical Authentication**: Instant anonymous Guest sessions alongside registered Doctor/Pharmacist user accounts.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 18, Vite, React Router v6, Tailwind CSS, Lucide React
+- **Frontend**: React 18, Vite, React Router v6, Tailwind CSS, Lucide React, TypeScript definitions
 - **Typography**: Cormorant Garamond (Headlines), Inter (Body & UI), JetBrains Mono (Metrics)
-- **Backend**: FastAPI, Pydantic v2, HTTPX, Python-dotenv
-- **Database & Cache**: Supabase PostgreSQL + SQLite local fallback
-- **Clinical Data**: OpenFDA Drug Label API + Curated Deterministic Pharmacology Rules
-- **AI Processing**: Mistral AI (Optional for unstructured FDA label extraction)
+- **Backend**: FastAPI, Pydantic v2, SlowAPI Rate Limiter, AnyIO Async SQLite, HTTPX
+- **Security & Auth**: JWT (HS256) + direct `bcrypt` hashing + Bearer token authentication
+- **Database & Cache**: Local SQLite in WAL mode with TTL expiration + optional Supabase PostgreSQL sync
+- **Clinical Data**: OpenFDA Drug Label API + Curated Deterministic Pharmacology Rules (17 pairs)
+- **AI Processing**: Mistral AI (Optional circuit-breaker fallback for unstructured FDA label extraction)
+- **Containerization**: Multi-stage Docker & Docker Compose
 
 ---
 
@@ -31,6 +34,7 @@ MEDCHECK is an AI-powered medicine safety and clinical intelligence platform. De
 
 - **Node.js**: 18.0+
 - **Python**: 3.11+
+- **Docker & Docker Compose**: (Optional — for containerized deployment)
 - **Supabase Account**: (Optional — local SQLite cache operates out-of-the-box)
 
 ---
@@ -59,11 +63,21 @@ npm run dev
 
 The application will be accessible at `http://localhost:5173`.
 
+### 3. Docker Compose Deployment
+
+```bash
+# Set your environment variables in .env (or copy .env.example)
+cp .env.example .env
+
+# Build and start services
+docker-compose up --build
+```
+
 ---
 
 ## 🔐 Environment Variables
 
-Copy `.env.example` to `.env` in the project root or `backend/` and configure your API keys:
+Configure your `.env` file in the project root:
 
 ```bash
 cp .env.example .env
@@ -71,7 +85,8 @@ cp .env.example .env
 
 | Variable | Required | Description |
 | :--- | :--- | :--- |
-| `MISTRAL_API_KEY` | Optional | Mistral AI API key for unstructured FDA drug label analysis |
+| `JWT_SECRET` | Required in Prod | Minimum 32-character secret key for signing session tokens |
+| `MISTRAL_API_KEY` | Optional | Mistral AI API key for unstructured FDA drug label extraction |
 | `SUPABASE_URL` | Optional | Supabase PostgreSQL project URL |
 | `SUPABASE_KEY` | Optional | Supabase service or anon API key |
 | `PORT` | Optional | Backend port (default: `8000`) |
@@ -83,18 +98,31 @@ cp .env.example .env
 
 ## 📡 API Endpoints
 
+### Authentication
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/auth/register` | Register a new user account |
+| `POST` | `/api/auth/login` | Log in with username and password |
+| `POST` | `/api/auth/guest` | Generate an instant anonymous clinical guest token |
+
+### Clinical Intelligence (Protected by Bearer Token)
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/api/check` | Analyze multi-drug interactions, GI load, and side effects |
 | `GET` | `/api/medicine/{name}/profile` | Retrieve comprehensive clinical profile for a medicine |
 | `GET` | `/api/medicines/search?q={query}` | Search indexed medications and brand aliases |
-| `GET` | `/api/health` | Health check endpoint reporting cache and AI status |
+
+### Telemetry & Health
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/health` | Health check endpoint reporting cache, auth, and AI status |
+| `POST` | `/api/client-error` | Telemetry endpoint for logging frontend UI exceptions |
 
 ---
 
 ## 🧪 Testing
 
-Run the automated backend pytest suite (18 clinical & API tests):
+Run the full automated backend test suite (**32 tests** across auth, validation, circuit breakers, cache TTL, and clinical pharmacology):
 
 ```bash
 backend/venv/bin/pytest backend/tests/ -v
