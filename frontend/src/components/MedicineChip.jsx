@@ -2,6 +2,26 @@ import React from 'react';
 import { X, Pill } from 'lucide-react';
 import { useMedicine } from '../context/MedicineContext';
 
+/**
+ * One row in the medicine basket.
+ *
+ * Props are documented with JSDoc rather than `prop-types` deliberately:
+ * prop-types is a runtime dependency that only reports violations in the console
+ * after a bad render has already happened, whereas these annotations resolve
+ * against the real `types/api.ts` interfaces and surface in the editor before the
+ * call site is even saved. `tsconfig.json` keeps `checkJs: false` while the
+ * component tree is still .jsx, so these are documentation plus IDE
+ * IntelliSense, not a build gate.
+ *
+ * @param {object} props
+ * @param {import('../types/api').BasketMedicine} props.medicine
+ *   Basket entry to render. `medicine.name` carries the user's display casing, so
+ *   every comparison below lowercases it before matching against API payloads.
+ * @param {(id: string) => void} props.onRemove
+ *   Removes the entry by id. Must be referentially stable (a `useCallback` from
+ *   MedicineContext) or the `React.memo` wrapper at the bottom of this file is
+ *   defeated.
+ */
 function MedicineChipBase({ medicine, onRemove }) {
   const { selectedMedicineName, selectMedicine, results } = useMedicine();
   const isSelected = selectedMedicineName?.toLowerCase() === medicine.name.toLowerCase();

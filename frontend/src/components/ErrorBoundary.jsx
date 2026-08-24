@@ -20,7 +20,21 @@ function clamp(value, limit) {
   return `${text.slice(0, limit - 1)}…`;
 }
 
+/**
+ * Top-level render-error boundary. Catches anything thrown below it, reports a
+ * clamped crash payload to `POST /api/client-error`, and renders a recovery card.
+ *
+ * @typedef {object} ErrorBoundaryProps
+ * @property {import('react').ReactNode} children Subtree to guard.
+ *
+ * @typedef {object} ErrorBoundaryState
+ * @property {boolean} hasError Whether a descendant has thrown.
+ * @property {Error | null} error The thrown value, used for the fallback copy.
+ *
+ * @extends {React.Component<ErrorBoundaryProps, ErrorBoundaryState>}
+ */
 export class ErrorBoundary extends React.Component {
+  /** @param {ErrorBoundaryProps} props */
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };

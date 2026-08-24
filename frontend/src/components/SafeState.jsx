@@ -11,6 +11,14 @@ import { CheckCircle2, ShieldCheck, AlertTriangle } from 'lucide-react';
  * claim is downgraded from VERIFIED CLEAN PROFILE to a partial result and the
  * specific gaps are listed. Presenting the two identically would be the most
  * dangerous failure mode this screen has.
+ *
+ * @param {object} props
+ * @param {number} [props.medicinesCount=2]
+ *   How many medicines were compared, used only in the copy.
+ * @param {string[]} [props.limitedDataWarnings=[]]
+ *   `CheckResponse.limited_data_warnings`. Optional on the backend model, hence
+ *   the default: a missing field must degrade to "no known gaps", never to
+ *   `undefined.length`.
  */
 export function SafeState({ medicinesCount = 2, limitedDataWarnings = [] }) {
   const isPartial = limitedDataWarnings.length > 0;

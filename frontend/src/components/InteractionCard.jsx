@@ -12,6 +12,16 @@ import {
 } from 'lucide-react';
 import { useMedicine } from '../context/MedicineContext';
 
+/**
+ * Renders a single drug-drug interaction finding.
+ *
+ * @param {object} props
+ * @param {import('../types/api').InteractionItem} props.interaction
+ *   One entry from `CheckResponse.interactions`. `severity` drives the badge and
+ *   the left border; `mechanism`, `stomach_impact`, `food_consideration`,
+ *   `action_guidance`, `evidence_source` and `confidence` are all optional on the
+ *   backend model, so every read of them here is guarded.
+ */
 function InteractionCardBase({ interaction }) {
   const { selectMedicine, setDoctorReportOpen } = useMedicine();
   const [expandedMobile, setExpandedMobile] = useState(false);

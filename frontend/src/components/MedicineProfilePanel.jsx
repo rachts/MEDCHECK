@@ -48,6 +48,19 @@ function formatGiScore(score, tier) {
   return score;
 }
 
+/**
+ * Contextual intelligence panel for the currently selected medicine.
+ *
+ * Reads `selectedProfile` / `profileLoading` / `profileError` from
+ * MedicineContext rather than taking the profile as a prop, so the only prop is
+ * the mobile dismiss handler.
+ *
+ * @param {object} props
+ * @param {() => void} [props.onCloseMobile]
+ *   Invoked by the mobile-only close button. Must be referentially stable -- both
+ *   call sites in `pages/AppInterface.jsx` pass the same `useCallback`, because an
+ *   inline arrow here would make the `React.memo` wrapper below a no-op.
+ */
 function MedicineProfilePanelBase({ onCloseMobile }) {
   const {
     selectedMedicineName,

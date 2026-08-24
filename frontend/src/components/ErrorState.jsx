@@ -1,6 +1,18 @@
 import React from 'react';
 import { AlertCircle, RotateCcw } from 'lucide-react';
 
+/**
+ * Failure card shown in place of an analysis result.
+ *
+ * @param {object} props
+ * @param {string | null | undefined} props.error
+ *   Human-readable failure message from `MedicineContext.error`. Already
+ *   normalised to a string by `lib/api.ts`, so this component never has to deal
+ *   with an Error instance or an unknown thrown value.
+ * @param {() => void} [props.onRetry]
+ *   Re-runs the safety check. When omitted the retry button is still rendered but
+ *   inert, so callers that cannot retry should pass a handler that clears state.
+ */
 export function ErrorState({ error, onRetry }) {
   return (
     <section 

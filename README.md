@@ -22,7 +22,7 @@ MEDCHECK is an AI-powered medicine safety and clinical intelligence platform. De
 - **Frontend**: React 18, Vite, React Router v6, Tailwind CSS, Lucide React, TypeScript definitions
 - **Typography**: Cormorant Garamond (Headlines), Inter (Body & UI), JetBrains Mono (Metrics)
 - **Backend**: FastAPI, Pydantic v2, SlowAPI Rate Limiter, AnyIO Async SQLite, HTTPX
-- **Security & Auth**: JWT (HS256) + direct `bcrypt` hashing + Bearer token authentication
+- **Security & Auth**: JWT (HS256) + direct `bcrypt` hashing, delivered to browsers in an `httpOnly` `SameSite=Lax` session cookie (the `Authorization: Bearer` header is still accepted for non-browser callers)
 - **Database & Cache**: Local SQLite in WAL mode with TTL expiration + optional Supabase PostgreSQL sync
 - **Clinical Data**: OpenFDA Drug Label API + Curated Deterministic Pharmacology Rules (17 pairs)
 - **AI Processing**: Mistral AI (Optional circuit-breaker fallback for unstructured FDA label extraction)
@@ -44,14 +44,23 @@ MEDCHECK is an AI-powered medicine safety and clinical intelligence platform. De
 ### 1. Backend Setup
 
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+python -m venv backend/venv
+source backend/venv/bin/activate
+pip install -r backend/requirements.txt
 uvicorn backend.main:app --reload --port 8000
 ```
 
+Run `uvicorn` from the **repository root**, not from `backend/`. The app is
+imported as the `backend.main` module (see `backend/__init__.py`), so the repo
+root has to be the working directory or the import fails with
+`ModuleNotFoundError: No module named 'backend'`.
+
 The API will be live at `http://127.0.0.1:8000` (Interactive OpenAPI Swagger docs at `http://127.0.0.1:8000/docs`).
+
+With no `JWT_SECRET` set, the backend generates an ephemeral development key and
+says so on startup: tokens are invalidated on every restart. Set `JWT_SECRET` in
+`backend/.env` for a stable local session. In `ENV=production` or `staging` the
+app refuses to start without one of at least 32 characters.
 
 ### 2. Frontend Setup
 
@@ -85,12 +94,19 @@ cp .env.example .env
 
 | Variable | Required | Description |
 | :--- | :--- | :--- |
-| `JWT_SECRET` | Required in Prod | Minimum 32-character secret key for signing session tokens |
+| `JWT_SECRET` | Required in Prod | Minimum 32-character secret key for signing session tokens. Unset in development means an ephemeral key regenerated on every restart |
+| `ENV` | Optional | `development` \| `staging` \| `production` (default: `development`). Anything but `development` enforces the `JWT_SECRET` requirement |
+| `AUDIT_IP_SALT` | Optional | HMAC key used to pseudonymise client IPs in the audit log. Derived from `JWT_SECRET` when unset; set it explicitly to keep audit records correlatable across a secret rotation |
+| `FORCE_HTTPS` | Optional | Redirect plaintext HTTP to HTTPS in-app (default: `false`). Leave `false` when a reverse proxy terminates TLS, or requests redirect in a loop |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Optional | Registered-session lifetime (default: 7 days) |
+| `GUEST_TOKEN_EXPIRE_MINUTES` | Optional | Anonymous-session lifetime (default: 120 minutes) |
 | `MISTRAL_API_KEY` | Optional | Mistral AI API key for unstructured FDA drug label extraction |
 | `SUPABASE_URL` | Optional | Supabase PostgreSQL project URL |
 | `SUPABASE_KEY` | Optional | Supabase service or anon API key |
-| `PORT` | Optional | Backend port (default: `8000`) |
-| `ALLOWED_ORIGINS`| Optional | Allowed CORS origins for API requests |
+| `REDIS_URL` | Optional | Backing store for rate-limit counters. In-memory when unset, which means limits are per-process and reset on restart |
+| `PORT` / `HOST` | Optional | Backend bind address (defaults: `8000` / `0.0.0.0`) |
+| `ALLOWED_ORIGINS`| Optional | Comma-separated CORS origins for API requests |
+| `VITE_API_URL` | Optional | API base URL for the frontend. **Inlined into the JavaScript bundle at build time, so it must never hold a secret** |
 
 *Note: If no external keys are provided, MEDCHECK runs completely offline using its deterministic clinical knowledge base and local SQLite caching.*
 
@@ -104,6 +120,7 @@ cp .env.example .env
 | `POST` | `/api/auth/register` | Register a new user account |
 | `POST` | `/api/auth/login` | Log in with username and password |
 | `POST` | `/api/auth/guest` | Generate an instant anonymous clinical guest token |
+| `POST` | `/api/auth/logout` | Clear the `httpOnly` session cookie |
 
 ### Clinical Intelligence (Protected by Bearer Token)
 | Method | Endpoint | Description |
@@ -122,7 +139,7 @@ cp .env.example .env
 
 ## 🧪 Testing
 
-Run the full automated backend test suite (**32 tests** across auth, validation, circuit breakers, cache TTL, and clinical pharmacology):
+Run the full automated backend test suite (**45 tests** across auth, password policy, endpoint contracts, validation, circuit breakers, cache TTL, and clinical pharmacology) from the repository root:
 
 ```bash
 backend/venv/bin/pytest backend/tests/ -v
@@ -132,6 +149,14 @@ Validate the frontend production build:
 
 ```bash
 cd frontend && npm run build
+```
+
+Type-check the TypeScript half of the frontend (`src/lib/api.ts`, `src/types/api.ts`).
+Vite strips types without verifying them, so this is the only thing that catches a
+type error in the API client:
+
+```bash
+cd frontend && npm run typecheck
 ```
 
 ---

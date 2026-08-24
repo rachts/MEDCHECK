@@ -73,6 +73,13 @@ export const DEMO_PRESETS = [
   },
 ];
 
+/**
+ * Owns all analysis state: the basket, the last `CheckResponse`, the selected
+ * medicine's `MedicineProfileResponse`, and the two modal flags.
+ *
+ * @param {object} props
+ * @param {import('react').ReactNode} props.children
+ */
 export function MedicineProvider({ children }) {
   const [medicines, setMedicines] = useState([
     { id: '1', name: 'Warfarin', drugType: 'prescription' },
