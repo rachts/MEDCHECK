@@ -658,29 +658,65 @@ def get_or_build_medicine_profile(medicine_name: str, label: Optional[Dict[str, 
         brand_names = label.get("brand_names", [])
         generic_name = label.get("generic_name", canonical)
         raw_text = label.get("raw_text_summary", "")
+        raw_text_lower = raw_text.lower()
+        
+        # Parse prescription vs OTC
+        product_types = label.get("product_types", [])
+        is_prescription = label.get("is_rx", False) or any("PRESCRIPTION" in str(pt).upper() for pt in product_types)
+        
+        # Dynamically extract side effects from FDA label text
+        dynamic_side_effects = []
+        if "bleeding" in raw_text_lower or "hemorrhage" in raw_text_lower:
+            dynamic_side_effects.append(SideEffectDetail(effect="Increased Bleeding / Hemorrhage Risk", frequency=Frequency.COMMON, frequency_percentage="1-10%", severity="moderate", category="Hematologic"))
+        if "ulcer" in raw_text_lower or "gastrointestinal" in raw_text_lower or "stomach" in raw_text_lower:
+            dynamic_side_effects.append(SideEffectDetail(effect="Gastric Irritation & Dyspepsia", frequency=Frequency.COMMON, frequency_percentage="1-10%", severity="mild", category="Gastrointestinal"))
+        if "drowsiness" in raw_text_lower or "sedation" in raw_text_lower or "dizziness" in raw_text_lower:
+            dynamic_side_effects.append(SideEffectDetail(effect="Drowsiness & Dizziness", frequency=Frequency.COMMON, frequency_percentage="1-10%", severity="mild", category="Neurologic"))
+        if "nausea" in raw_text_lower or "vomiting" in raw_text_lower:
+            dynamic_side_effects.append(SideEffectDetail(effect="Nausea & Vomiting", frequency=Frequency.COMMON, frequency_percentage="1-10%", severity="mild", category="Gastrointestinal"))
+        if "hepat" in raw_text_lower or "liver" in raw_text_lower:
+            dynamic_side_effects.append(SideEffectDetail(effect="Hepatic Transaminase Elevation", frequency=Frequency.UNCOMMON, frequency_percentage="0.1-1%", severity="moderate", category="Hepatic"))
+        if "rash" in raw_text_lower or "pruritus" in raw_text_lower:
+            dynamic_side_effects.append(SideEffectDetail(effect="Allergic Skin Rash / Pruritus", frequency=Frequency.UNCOMMON, frequency_percentage="0.1-1%", severity="mild", category="Dermatologic"))
+
+        if not dynamic_side_effects:
+            dynamic_side_effects = [
+                SideEffectDetail(effect="Mild Gastrointestinal Upset", frequency=Frequency.COMMON, frequency_percentage="1-10%", severity="mild", category="Gastrointestinal"),
+                SideEffectDetail(effect="Headache / Dizziness", frequency=Frequency.COMMON, frequency_percentage="1-10%", severity="mild", category="Neurologic")
+            ]
+
+        # Extract food & stomach considerations
+        dynamic_food = []
+        if "alcohol" in raw_text_lower:
+            dynamic_food.append(FoodInteractionDetail(type="avoid_alcohol", title="Avoid Alcohol", description="Alcohol co-administration may amplify toxicity or adverse effects.", severity="warning", icon="wine"))
+        if "with food" in raw_text_lower or "meal" in raw_text_lower:
+            dynamic_food.append(FoodInteractionDetail(type="take_with_food", title="Take with Meals", description="Co-administer with food or milk to minimize gastric discomfort.", severity="recommended", icon="utensils"))
+        elif "empty stomach" in raw_text_lower:
+            dynamic_food.append(FoodInteractionDetail(type="empty_stomach", title="Take on Empty Stomach", description="Take 1 hour before or 2 hours after meals for optimal bioavailability.", severity="critical", icon="clock"))
+        else:
+            dynamic_food.append(FoodInteractionDetail(type="hydration", title="Take with Water", description="Take with a full 8 oz glass of water as directed by prescribing label.", severity="recommended", icon="glass"))
+
+        stomach_score = 45 if ("ulcer" in raw_text_lower or "bleeding" in raw_text_lower) else 25
 
         return MedicineProfileResponse(
             name=medicine_name.capitalize(),
             generic_name=generic_name,
             brand_names=brand_names,
-            category=label.get("pharm_class_cs", "Prescription / OTC Drug"),
-            drug_type=DrugType.PRESCRIPTION if label.get("is_rx") else DrugType.OTC,
+            category=label.get("pharm_class_cs", "Prescription Drug" if is_prescription else "Over-The-Counter Medicine"),
+            drug_type=DrugType.PRESCRIPTION if is_prescription else DrugType.OTC,
             dosage_forms=label.get("dosage_forms", ["Oral Formulation"]),
-            description=raw_text[:300] + "..." if len(raw_text) > 300 else raw_text or "FDA-indexed pharmacology data.",
-            side_effects=[
-                SideEffectDetail(effect="Gastrointestinal Discomfort", frequency=Frequency.COMMON, frequency_percentage="1-10%", severity="mild"),
-                SideEffectDetail(effect="Headache / Dizziness", frequency=Frequency.COMMON, frequency_percentage="1-10%", severity="mild")
-            ],
-            food_interactions=[
-                FoodInteractionDetail(type="hydration", title="Administer with Water", description="Take with a full glass of water as directed by prescribing label.", severity="recommended")
-            ],
+            description=raw_text[:300] + "..." if len(raw_text) > 300 else raw_text or "FDA-indexed pharmacology profile.",
+            side_effects=dynamic_side_effects,
+            food_interactions=dynamic_food,
             gi_profile=GIProfile(
-                stomach_health_score=30,
-                risk_tier=RiskTier.MODERATE,
-                nausea_risk="moderate",
-                recommendations=["Consult official pharmacist dispensing leaflet for specific dietary directions."]
+                stomach_health_score=stomach_score,
+                risk_tier=RiskTier.MODERATE if stomach_score >= 40 else RiskTier.GENTLE,
+                nausea_risk="moderate" if "nausea" in raw_text_lower else "low",
+                ulcer_risk="moderate" if "ulcer" in raw_text_lower else "low",
+                bleeding_risk="high" if "bleeding" in raw_text_lower else "none",
+                recommendations=["Follow prescribing leaflet and consult pharmacist for personalized administration advice."]
             ),
-            lifestyle_warnings=["Follow standard prescribing and storage directions."],
+            lifestyle_warnings=["Adhere to standard storage and dosage schedule guidelines."],
             data_source="openfda_live"
         )
 

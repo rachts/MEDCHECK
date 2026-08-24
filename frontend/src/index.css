@@ -397,7 +397,7 @@
   gap: var(--space-2);
   padding: 10px 16px;
   background: var(--bg-surface);
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
@@ -409,9 +409,21 @@
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
+.btn-secondary span {
+  color: var(--text-primary) !important;
+}
+
 .btn-secondary:hover {
   border-color: var(--border-hover);
   background: var(--bg-elevated);
+}
+
+/* Landing Subtitle High Contrast */
+.landing-subtitle {
+  color: #334155 !important;
+}
+[data-theme="dark"] .landing-subtitle, .dark .landing-subtitle {
+  color: #CBD5E1 !important;
 }
 
 /* Mobile Sticky Button */

@@ -8,8 +8,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Clinical White Design System Tokens
-        base: '#F1F5F9',
+        // Clinical White Design System Tokens (prefixed to prevent font-size class collisions)
+        'med-base': '#F1F5F9',
+        'canvas': '#F1F5F9',
         surface: '#FFFFFF',
         elevated: '#F8FAFC',
         input: '#F8FAFC',

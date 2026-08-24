@@ -333,17 +333,16 @@ async def save_interaction_to_cache(
                 "drug_b": drug_b.lower().strip(),
                 "canonical_pair": canonical,
                 "severity": severity,
-                "explanation": explanation
+                "explanation": explanation,
+                "mechanism": mechanism or None,
+                "clinical_impact": clinical_impact or None,
+                "stomach_impact": stomach_impact or None,
+                "food_consideration": food_consideration or None,
+                "action_guidance": action_guidance or None,
+                "evidence_source": evidence_source or None,
+                "confidence": confidence or "established",
+                "last_reviewed": last_reviewed or "2026-08-23"
             }
-            if mechanism: payload["mechanism"] = mechanism
-            if clinical_impact: payload["clinical_impact"] = clinical_impact
-            if stomach_impact: payload["stomach_impact"] = stomach_impact
-            if food_consideration: payload["food_consideration"] = food_consideration
-            if action_guidance: payload["action_guidance"] = action_guidance
-            if evidence_source: payload["evidence_source"] = evidence_source
-            if confidence: payload["confidence"] = confidence
-            if last_reviewed: payload["last_reviewed"] = last_reviewed
-
             supabase.table("interaction_pairs").upsert(payload, on_conflict="canonical_pair").execute()
         except Exception as e:
             logger.warning(f"Failed to cache interaction in Supabase: {e}")

@@ -144,7 +144,7 @@ async def security_and_tracing_middleware(request: Request, call_next):
     # Inject Security Headers
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.fda.gov; img-src 'self' data: https:;"
     if settings.ENV == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         
@@ -241,7 +241,14 @@ async def health_check():
     except Exception as e:
         db_status = f"unhealthy: {e}"
 
-    supabase_status = "connected" if get_supabase_client() is not None else "offline_fallback"
+    supabase_status = "offline_fallback"
+    sb_client = get_supabase_client()
+    if sb_client is not None:
+        try:
+            sb_client.table("interaction_pairs").select("canonical_pair").limit(1).execute()
+            supabase_status = "connected"
+        except Exception:
+            supabase_status = "error_fallback"
 
     return {
         "status": "ok" if db_status == "ok" else "degraded",

@@ -32,21 +32,21 @@ export function Landing() {
       {/* HERO SECTION: Editorial Authority with Cormorant Garamond */}
       <section className="pt-24 sm:pt-28 pb-12 px-4 sm:px-8 max-w-5xl mx-auto flex flex-col items-center text-center">
         {/* Stat Pill Badge */}
-        <div className="badge badge-high mb-4 px-3 py-1 bg-[#FEF2F2] border border-[#FECACA] rounded-full">
-          <AlertTriangle className="w-3.5 h-3.5" />
-          <span>1.3 Million Preventable Hospitalizations Annually</span>
+        <div className="badge badge-high mb-4 px-3.5 py-1.5 bg-[var(--alert-danger-bg)] border border-[var(--alert-danger-border)] text-[var(--alert-danger-text)] rounded-full flex items-center gap-2 shadow-sm">
+          <AlertTriangle className="w-3.5 h-3.5 text-[var(--severity-high)]" />
+          <span className="font-semibold text-xs sm:text-sm">1.3 Million Preventable Hospitalizations Annually</span>
         </div>
 
         {/* Serif Headline (Cormorant Garamond) */}
-        <h1 className="text-display max-w-3xl text-[var(--text-primary)] mb-4 font-serif font-bold">
+        <h1 className="text-display max-w-3xl text-[var(--text-primary)] mb-5 font-serif font-bold tracking-tight">
           Know Your Medicine.{' '}
           <span className="italic font-normal underline decoration-[var(--border-hover)]">
             Protect Your Body.
           </span>
         </h1>
 
-        {/* Subtitle with strong contrast and readable line-height */}
-        <p className="max-w-2xl text-[#334155] text-base sm:text-lg md:text-xl font-normal leading-relaxed mb-8">
+        {/* Subtitle with strong, unambiguous contrast and comfortable reading line-height */}
+        <p className="landing-subtitle max-w-2xl text-base sm:text-lg md:text-xl font-normal leading-relaxed mb-8">
           A clinical intelligence platform analyzing drug-drug interactions, side effect amplification, food & alcohol administration schedules, and the proprietary <strong className="text-[var(--text-primary)] font-bold font-serif text-[18px] sm:text-[20px]">Stomach Guardian™</strong> mucosal stress score.
         </p>
 
@@ -119,7 +119,7 @@ export function Landing() {
           <h2 className="text-h1 text-[var(--text-primary)] mb-2">
             Comprehensive Clinical Intelligence
           </h2>
-          <p className="text-body text-[#475569] max-w-lg mx-auto">
+          <p className="text-body text-[var(--text-secondary)] max-w-lg mx-auto">
             Clear, actionable medicine safety designed for patient understanding and clinical scrutiny.
           </p>
         </div>
@@ -133,7 +133,7 @@ export function Landing() {
             <h3 className="font-serif text-[20px] font-bold text-[var(--text-primary)]">
               Interaction Topology Matrix
             </h3>
-            <p className="text-body text-[#475569] leading-relaxed">
+            <p className="text-body text-[var(--text-secondary)] leading-relaxed">
               Interactive node network graph connects your medications, surfacing pharmacokinetic conflicts and clinical severity hierarchies.
             </p>
           </div>
@@ -146,7 +146,7 @@ export function Landing() {
             <h3 className="font-serif text-[20px] font-bold text-[var(--text-primary)]">
               Side Effect Amplification
             </h3>
-            <p className="text-body text-[#475569] leading-relaxed">
+            <p className="text-body text-[var(--text-secondary)] leading-relaxed">
               Categorizes side effects by true clinical frequency (&gt;10%, 1-10%, &lt;0.1%) and flags when multiple drugs compound the exact same adverse risk.
             </p>
           </div>
@@ -159,7 +159,7 @@ export function Landing() {
             <h3 className="font-serif text-[20px] font-bold text-[var(--text-primary)]">
               Food & Stomach Guardian™
             </h3>
-            <p className="text-body text-[#475569] leading-relaxed">
+            <p className="text-body text-[var(--text-secondary)] leading-relaxed">
               GI upset is the #1 reason patients discontinue medications. Stomach Guardian rates ulcer load and builds an actionable 24-hour meal schedule.
             </p>
           </div>
@@ -182,7 +182,7 @@ export function Landing() {
               The "Mrs. Sharma" Clinical Case
             </h3>
 
-            <p className="text-body text-[#334155] leading-relaxed">
+            <p className="text-body text-[var(--text-secondary)] leading-relaxed">
               Mrs. Sharma takes <strong>Warfarin</strong> for her heart, <strong>Aspirin</strong> as an antiplatelet, and was recommended <strong>Ibuprofen</strong> for knee pain. Let's see what MEDCHECK finds.
             </p>
 
