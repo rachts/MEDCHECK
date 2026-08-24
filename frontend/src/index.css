@@ -424,9 +424,18 @@
   background: var(--bg-elevated);
 }
 
-/* Landing Subtitle High Contrast */
+/* Landing Subtitle High Contrast & Clean Typography */
 .landing-subtitle {
+  font-family: var(--font-sans);
   color: #334155 !important;
+  font-size: 15px;
+  line-height: 1.65;
+  letter-spacing: -0.01em;
+}
+@media (min-width: 640px) {
+  .landing-subtitle {
+    font-size: 17px;
+  }
 }
 [data-theme="dark"] .landing-subtitle, .dark .landing-subtitle {
   color: #CBD5E1 !important;

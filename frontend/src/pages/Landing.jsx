@@ -45,9 +45,9 @@ export function Landing() {
           </span>
         </h1>
 
-        {/* Subtitle with strong, unambiguous contrast and comfortable reading line-height */}
-        <p className="landing-subtitle max-w-2xl text-base sm:text-lg md:text-xl font-normal leading-relaxed mb-8">
-          A clinical intelligence platform analyzing drug-drug interactions, side effect amplification, food & alcohol administration schedules, and the proprietary <strong className="text-[var(--text-primary)] font-bold font-serif text-[18px] sm:text-[20px]">Stomach Guardian™</strong> mucosal stress score.
+        {/* Subtitle with clean, consistent Inter typography and comfortable line-height */}
+        <p className="landing-subtitle max-w-2xl font-sans text-base sm:text-lg font-normal leading-relaxed mb-8">
+          A clinical intelligence platform analyzing drug-drug interactions, side effect amplification, food & alcohol administration schedules, and the proprietary <strong className="font-semibold text-[var(--text-primary)]">Stomach Guardian™</strong> mucosal stress score.
         </p>
 
         {/* CTA Button Group */}
