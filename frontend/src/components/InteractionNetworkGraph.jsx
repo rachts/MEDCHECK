@@ -1,10 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useMedicine } from '../context/MedicineContext';
-import { Pill, Activity } from 'lucide-react';
+import { Activity } from 'lucide-react';
 
-export function InteractionNetworkGraph() {
+function InteractionNetworkGraphBase() {
   const { medicines, results, selectMedicine, selectedMedicineName } = useMedicine();
-  const [hoveredNode, setHoveredNode] = useState(null);
 
   // Compute node coordinates arranged in a harmonic circle
   const nodePositions = useMemo(() => {
@@ -120,12 +119,18 @@ export function InteractionNetworkGraph() {
 
             let nodeFill = '#F8FAFC';
             let nodeStroke = '#CBD5E1';
+            // Literal colours, matching nodeFill/nodeStroke above: an SVG `stroke`
+            // attribute cannot resolve a Tailwind text-colour class, which is what
+            // the removed foreignObject relied on.
+            let iconColor = '#64748B';
 
             if (isSelected) {
               nodeFill = '#0F172A';
               nodeStroke = '#0F172A';
+              iconColor = '#FFFFFF';
             } else if (hasCritical) {
               nodeStroke = '#DC2626';
+              iconColor = '#DC2626';
             }
 
             return (
@@ -133,9 +138,21 @@ export function InteractionNetworkGraph() {
                 key={key}
                 transform={`translate(${node.x}, ${node.y})`}
                 onClick={() => selectMedicine(node.med.name)}
-                onMouseEnter={() => setHoveredNode(key)}
-                onMouseLeave={() => setHoveredNode(null)}
+                // The former onMouseEnter/onMouseLeave fed a `hoveredNode` state
+                // that nothing read, so every pointer movement across the graph
+                // re-rendered all nodes and links to no visible effect. The hover
+                // emphasis comes from the `group-hover:` class on the circle below,
+                // which is pure CSS and needs no state.
                 className="cursor-pointer group"
+                role="button"
+                tabIndex={0}
+                aria-label={`View profile for ${node.med.name}`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    selectMedicine(node.med.name);
+                  }
+                }}
               >
                 {/* Base Node Circle */}
                 <circle
@@ -146,12 +163,30 @@ export function InteractionNetworkGraph() {
                   className="transition-transform duration-150 group-hover:scale-105"
                 />
 
-                {/* Icon inside node */}
-                <foreignObject x={-7} y={-7} width={14} height={14} className="pointer-events-none">
-                  <div className={`w-full h-full flex items-center justify-center ${isSelected ? 'text-white' : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'}`}>
-                    <Pill className="w-3 h-3" />
-                  </div>
-                </foreignObject>
+                {/* Pill glyph, drawn as native SVG.
+                    This was a <foreignObject> wrapping the lucide <Pill> React
+                    component. foreignObject embeds an HTML subtree inside SVG and
+                    is unreliable in exactly the browsers this app targets on
+                    mobile: WebKit mis-positions or drops the content depending on
+                    transform and scaling context, so the node could render as a
+                    bare circle. Native <rect>/<line> primitives are painted by the
+                    same SVG code path as everything else here and are inert to
+                    pointer events without needing a pointer-events override.
+
+                    Geometry: a 12x6 capsule rotated 45deg about the node centre,
+                    with a divider across its short axis -- the standard pill
+                    silhouette, matching the 14x14 box the icon previously used. */}
+                <g
+                  transform="rotate(-45)"
+                  fill="none"
+                  stroke={iconColor}
+                  strokeWidth={1.4}
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <rect x={-6} y={-3} width={12} height={6} rx={3} ry={3} />
+                  <line x1={0} y1={-3} x2={0} y2={3} />
+                </g>
 
                 {/* Medicine Name Label */}
                 <text
@@ -171,3 +206,10 @@ export function InteractionNetworkGraph() {
     </div>
   );
 }
+
+// Memoised: this is the heaviest render on the analysis screen -- an SVG whose node
+// positions, link paths and per-node severity colours are all recomputed from the
+// basket and the results. It takes no props, so with the context value memoised it
+// now re-renders only when the basket or the analysis actually changes, rather than
+// on every mobile-tab switch and modal toggle in AppInterface.
+export const InteractionNetworkGraph = React.memo(InteractionNetworkGraphBase);

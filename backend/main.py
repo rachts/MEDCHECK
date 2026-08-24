@@ -5,15 +5,17 @@ import uuid
 import asyncio
 import itertools
 import logging
+from datetime import timedelta
 from typing import List, Dict, Any, Optional
 
 # Ensure backend directory is on sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fastapi import FastAPI, HTTPException, Request, Depends, Query, status
+from fastapi import FastAPI, HTTPException, Request, Response, Depends, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -23,6 +25,7 @@ from services.logging_config import setup_logging, request_id_ctx
 from models import (
     CheckRequest,
     CheckResponse,
+    ClientErrorReport,
     InteractionItem,
     MedicineProfileResponse,
     MedicineSearchResult,
@@ -36,7 +39,9 @@ from services.auth import (
     create_user,
     authenticate_user,
     create_access_token,
-    get_current_user
+    get_current_user,
+    set_session_cookie,
+    clear_session_cookie
 )
 from services.openfda import fetch_drug_label
 from services.knowledge_base import (
@@ -118,36 +123,76 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 # 5. Security & Request-ID Middleware
+
+# Content-Security-Policy for API-served responses.
+#
+# script-src is pinned to 'self' with no 'unsafe-inline' / 'unsafe-eval', which is
+# what actually blocks reflected-XSS execution. style-src retains 'unsafe-inline'
+# because the React SPA applies severity colours and progress-bar widths through
+# inline `style` attributes; removing it would break rendering without closing a
+# script-execution path. object-src/base-uri/frame-ancestors/form-action are locked
+# down so an injected <object>, <base> or form cannot be used as a pivot.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.fda.gov; "
+    "img-src 'self' data: https:; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self'"
+)
+
+# Deny access to device APIs this service has no use for.
+PERMISSIONS_POLICY = (
+    "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
+    "magnetometer=(), microphone=(), payment=(), usb=()"
+)
+
+
 @app.middleware("http")
 async def security_and_tracing_middleware(request: Request, call_next):
     # Maximum 1MB payload protection
     content_length = request.headers.get("Content-Length")
-    if content_length and int(content_length) > 1_048_576:
-        return JSONResponse(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            content={"detail": "Request payload exceeds maximum allowed size (1MB)."}
-        )
+    if content_length:
+        try:
+            declared_length = int(content_length)
+        except ValueError:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": "Malformed Content-Length header."}
+            )
+        if declared_length > 1_048_576:
+            return JSONResponse(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                content={"detail": "Request payload exceeds maximum allowed size (1MB)."}
+            )
 
     req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     token = request_id_ctx.set(req_id)
     start_time = time.time()
-    
+
     try:
         response = await call_next(request)
     finally:
         request_id_ctx.reset(token)
-    
+
     process_time = time.time() - start_time
     response.headers["X-Request-ID"] = req_id
     response.headers["X-Process-Time"] = f"{process_time:.4f}"
-    
+
     # Inject Security Headers
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.fda.gov; img-src 'self' data: https:;"
-    if settings.ENV == "production":
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = PERMISSIONS_POLICY
+    response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+    # HSTS applies to every TLS-terminated deployment, not production alone.
+    if settings.ENV in ("production", "staging"):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        
+
     return response
 
 # 6. Strict CORS Configuration
@@ -159,13 +204,21 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
 )
 
+# 7. Optional HTTP -> HTTPS redirect.
+# Added last so it becomes the outermost middleware and short-circuits before any
+# request body is read. Opt-in via FORCE_HTTPS because this service normally runs
+# behind a TLS-terminating proxy, where an unconditional redirect would loop.
+if settings.FORCE_HTTPS:
+    app.add_middleware(HTTPSRedirectMiddleware)
+    logger.info("FORCE_HTTPS enabled: plaintext HTTP requests will be redirected to HTTPS.")
+
 # ==============================================================================
 # AUTHENTICATION ENDPOINTS
 # ==============================================================================
 
 @app.post("/api/auth/register", response_model=TokenResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-async def register(request: Request, user_in: UserCreate):
+async def register(request: Request, response: Response, user_in: UserCreate):
     """Registers a new user account and returns a JWT access token."""
     user = await create_user(
         username=user_in.username,
@@ -174,6 +227,10 @@ async def register(request: Request, user_in: UserCreate):
         is_guest=False
     )
     token = create_access_token({"sub": user["username"], "uid": user["id"], "is_guest": False})
+    # The token is also written to an httpOnly cookie so a browser client has no
+    # reason to persist it in localStorage, where any injected script could read
+    # it. The body still carries it verbatim for non-browser callers.
+    set_session_cookie(response, token, settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
     return TokenResponse(
         access_token=token,
         token_type="bearer",
@@ -184,7 +241,7 @@ async def register(request: Request, user_in: UserCreate):
 
 @app.post("/api/auth/login", response_model=TokenResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-async def login(request: Request, user_in: UserLogin):
+async def login(request: Request, response: Response, user_in: UserLogin):
     """Authenticates user credentials and returns a JWT access token."""
     user = await authenticate_user(user_in.username, user_in.password)
     if not user:
@@ -194,6 +251,7 @@ async def login(request: Request, user_in: UserLogin):
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = create_access_token({"sub": user["username"], "uid": user["id"], "is_guest": user["is_guest"]})
+    set_session_cookie(response, token, settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
     return TokenResponse(
         access_token=token,
         token_type="bearer",
@@ -204,12 +262,18 @@ async def login(request: Request, user_in: UserLogin):
 
 @app.post("/api/auth/guest", response_model=TokenResponse)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
-async def create_guest_session(request: Request):
+async def create_guest_session(request: Request, response: Response):
     """Generates an instant anonymous guest JWT session for clinical evaluation."""
     guest_name = f"guest_{uuid.uuid4().hex[:8]}"
     guest_pwd = uuid.uuid4().hex
     user = await create_user(username=guest_name, password=guest_pwd, is_guest=True)
-    token = create_access_token({"sub": user["username"], "uid": user["id"], "is_guest": True})
+    # Anonymous sessions are short-lived: an unattended guest token is a bearer
+    # credential nobody can revoke, so it must not carry the 7-day account expiry.
+    token = create_access_token(
+        {"sub": user["username"], "uid": user["id"], "is_guest": True},
+        expires_delta=timedelta(minutes=settings.GUEST_TOKEN_EXPIRE_MINUTES)
+    )
+    set_session_cookie(response, token, settings.GUEST_TOKEN_EXPIRE_MINUTES * 60)
     return TokenResponse(
         access_token=token,
         token_type="bearer",
@@ -218,10 +282,34 @@ async def create_guest_session(request: Request):
         is_guest=True
     )
 
+@app.post("/api/auth/logout")
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+async def logout(request: Request, response: Response):
+    """
+    Clears the httpOnly session cookie.
+
+    Deliberately unauthenticated: logging out must succeed even when the session
+    has already expired or the cookie is corrupt, otherwise a client can be left
+    holding a cookie it has no way to shed. There is nothing to authorise -- the
+    only effect is deleting the caller's own cookie.
+    """
+    clear_session_cookie(response)
+    return {"status": "logged_out"}
+
 @app.post("/api/client-error")
-async def log_client_error(payload: Dict[str, Any]):
-    """Logs client-side React UI exceptions for diagnostic monitoring."""
-    logger.error(f"Client UI Error reported: {payload.get('error')} | Stack: {payload.get('stack')}")
+@limiter.limit("20/minute")
+async def log_client_error(request: Request, payload: ClientErrorReport):
+    """
+    Logs client-side React UI exceptions for diagnostic monitoring.
+
+    The payload is validated and length-bounded by ClientErrorReport, which also
+    strips control characters so a hostile client cannot forge log lines.
+    """
+    logger.error(
+        "Client UI Error reported: %s | Stack: %s",
+        payload.error,
+        payload.stack
+    )
     return {"status": "logged"}
 
 # ==============================================================================
@@ -229,7 +317,8 @@ async def log_client_error(payload: Dict[str, Any]):
 # ==============================================================================
 
 @app.get("/api/health")
-async def health_check():
+@limiter.limit("60/minute")
+async def health_check(request: Request):
     """Health check endpoint reporting database connectivity and clinical KB version."""
     db_status = "ok"
     try:
@@ -442,8 +531,13 @@ async def check_medicines_basket(
     # 5. Detect Side Effect Amplifications
     amplified_side_effects = detect_side_effect_amplifications(medicines, profiles)
 
-    # 6. Generate Food Conflicts & 24-Hour Timeline
-    food_conflicts, timeline = generate_food_conflicts_and_timeline(medicines, profiles)
+    # 6. Generate Food Conflicts & 24-Hour Timeline anchored to the patient's wake time
+    timeline_kwargs = {}
+    if req.patient_wake_time:
+        timeline_kwargs["patient_wake_time"] = req.patient_wake_time
+    food_conflicts, timeline = generate_food_conflicts_and_timeline(
+        medicines, profiles, **timeline_kwargs
+    )
 
     is_safe = len(detected_interactions) == 0
 

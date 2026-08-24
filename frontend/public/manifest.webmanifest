@@ -1,0 +1,38 @@
+{
+  "name": "MEDCHECK — Medicine Safety & Interaction Intelligence",
+  "short_name": "MEDCHECK",
+  "description": "Clinical-grade drug interaction checker, side effect radar, food conflict timeline, and Stomach Guardian mucosal stress score.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F1F5F9",
+  "theme_color": "#0F172A",
+  "categories": ["health", "medical", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Analyze my medicines",
+      "short_name": "Analyze",
+      "url": "/app"
+    },
+    {
+      "name": "Drug Explorer",
+      "short_name": "Explorer",
+      "url": "/explorer"
+    }
+  ]
+}

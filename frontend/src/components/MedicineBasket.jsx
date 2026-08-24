@@ -101,7 +101,7 @@ export function MedicineBasket() {
       <div className="flex items-center justify-between border-b border-[var(--border-default)] pb-3">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-[4px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center">
-            <Pill className="w-4 h-4" />
+            <Pill className="w-4 h-4" aria-hidden="true" />
           </div>
           <div>
             <h2 className="font-serif text-[20px] font-bold text-[var(--text-primary)] leading-tight">
@@ -119,7 +119,7 @@ export function MedicineBasket() {
             className="text-xs text-[var(--text-muted)] hover:text-[var(--severity-high)] flex items-center gap-1 transition-colors cursor-pointer py-1 px-1.5 rounded hover:bg-[#E2E8F0]"
             aria-label="Clear all medicines from basket"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Clear</span>
           </button>
         )}
@@ -129,7 +129,7 @@ export function MedicineBasket() {
       <div className="relative" ref={dropdownRef}>
         <form onSubmit={handleAddFromInput} className="flex gap-1.5">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
             <input
               type="text"
               value={inputVal}
@@ -147,7 +147,7 @@ export function MedicineBasket() {
             className="btn-primary min-h-[44px] px-3.5 disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label="Add medicine to basket"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4" aria-hidden="true" />
             <span className="hidden sm:inline">Add</span>
           </button>
         </form>
@@ -157,7 +157,11 @@ export function MedicineBasket() {
           <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[8px] p-1 shadow-lg z-50 flex flex-col gap-1 max-h-[280px] overflow-y-auto">
             {searchResults.map((item, idx) => (
               <div
-                key={idx}
+                // Identity is the medicine, not the row position. Search results are
+                // replaced wholesale as the query changes, so an index key made
+                // React reuse the previous query's row for a different drug -- the
+                // row the user's pointer was already over.
+                key={`${item.generic_name}-${item.name}-${idx}`}
                 onClick={() => handleSelectSearchResult(item)}
                 className="p-2.5 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-transparent hover:border-[var(--border-hover)] transition-colors cursor-pointer flex items-center justify-between gap-2 min-h-[48px]"
                 role="button"
@@ -166,7 +170,7 @@ export function MedicineBasket() {
               >
                 <div className="flex items-center gap-2.5">
                   <div className="w-6 h-6 rounded-[4px] bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-primary)] shrink-0">
-                    <Pill className="w-3.5 h-3.5" />
+                    <Pill className="w-3.5 h-3.5" aria-hidden="true" />
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -200,7 +204,7 @@ export function MedicineBasket() {
 
       {inputError && (
         <div className="alert-danger text-sm flex items-center gap-2" role="alert">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
           <span>{inputError}</span>
         </div>
       )}
@@ -209,7 +213,7 @@ export function MedicineBasket() {
       <div className="flex flex-col gap-2 min-h-[120px]">
         {medicines.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-5 border border-dashed border-[var(--border-default)] rounded-[8px] bg-[var(--bg-elevated)]">
-            <Archive className="w-7 h-7 text-[var(--text-muted)] mb-1.5 stroke-1" />
+            <Archive className="w-7 h-7 text-[var(--text-muted)] mb-1.5 stroke-1" aria-hidden="true" />
             <h4 className="font-serif text-[18px] font-bold text-[var(--text-primary)] mb-0.5">
               Your medicine cabinet is empty
             </h4>
@@ -258,16 +262,27 @@ export function MedicineBasket() {
       {medicines.length > 0 && (
         <div className="flex flex-col gap-3.5 pt-3 border-t border-[var(--border-default)]">
           {/* Stomach Guardian Score Card */}
-          <div 
+          <div
             onClick={() => setStomachModalOpen(true)}
+            // role="button" + tabIndex made this card focusable, but there was no key
+            // handler behind it: a keyboard user could tab to the score card, press
+            // Enter, and nothing opened. Native buttons get that for free; a div has
+            // to be given it explicitly. Space is included because that is what a
+            // button role implies.
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setStomachModalOpen(true);
+              }
+            }}
             className="bg-[var(--bg-elevated)] border border-[var(--border-default)] hover:border-[var(--border-hover)] rounded-[8px] p-3 flex flex-col gap-2 transition-colors cursor-pointer"
             role="button"
             tabIndex={0}
-            aria-label={`Stomach Guardian Score: ${giScore} out of 100, Tier: ${giTier}`}
+            aria-label={`Stomach Guardian Score: ${giScore} out of 100, Tier: ${giTier}. Open the full breakdown.`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-[var(--severity-moderate)]" />
+                <Flame className="w-4 h-4 text-[var(--severity-moderate)]" aria-hidden="true" />
                 <span className="font-serif text-[16px] font-bold text-[var(--text-primary)]">
                   Stomach Guardian
                 </span>
@@ -306,7 +321,7 @@ export function MedicineBasket() {
           {foodConflictCount > 0 && (
             <div className="alert-warning text-xs flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <Clock className="w-4 h-4 shrink-0 text-[var(--severity-moderate)]" />
+                <Clock className="w-4 h-4 shrink-0 text-[var(--severity-moderate)]" aria-hidden="true" />
                 <span className="font-semibold">
                   {foodConflictCount} timing conflict{foodConflictCount > 1 ? 's' : ''}
                 </span>
@@ -329,9 +344,9 @@ export function MedicineBasket() {
               </>
             ) : (
               <>
-                <ShieldCheck className="w-4 h-4" />
+                <ShieldCheck className="w-4 h-4" aria-hidden="true" />
                 <span>Analyze Medicine Safety</span>
-                <ArrowRight className="w-4 h-4 ml-0.5" />
+                <ArrowRight className="w-4 h-4 ml-0.5" aria-hidden="true" />
               </>
             )}
           </button>

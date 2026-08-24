@@ -1,6 +1,27 @@
+import re
 from enum import Enum
 from typing import List, Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field, field_validator
+
+# Permitted characters in a medicine name: letters, digits, whitespace,
+# hyphens, dots, slashes and parentheses.
+MEDICINE_NAME_RE = re.compile(r"^[a-zA-Z0-9\s\-\.\/\(\)]+$")
+
+# Pragmatic RFC-5322 subset. Deliberately a local regex rather than
+# pydantic's EmailStr, which would pull in the email-validator dependency.
+EMAIL_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+/=?^_`{|}~\-]+"
+                      r"(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~\-]+)*"
+                      r"@(?:[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?\.)+"
+                      r"[A-Za-z]{2,63}$")
+
+# "7:00 AM" / "07:00 am" (12-hour) or "07:00" / "23:30" (24-hour).
+WAKE_TIME_12H_RE = re.compile(r"^(0?[1-9]|1[0-2]):[0-5][0-9]\s?[APap][Mm]$")
+WAKE_TIME_24H_RE = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+
+MIN_PASSWORD_LENGTH = 8
+# bcrypt silently truncates beyond 72 bytes, so refuse longer inputs outright
+# rather than accepting a password whose tail is ignored.
+MAX_PASSWORD_LENGTH = 72
 
 # ==============================================================================
 # ENUMS
@@ -43,8 +64,50 @@ class RuleConfidence(str, Enum):
 
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_\-\.]+$")
-    password: str = Field(..., min_length=6, max_length=72, description="Password maximum length 72 bytes")
+    password: str = Field(
+        ...,
+        min_length=MIN_PASSWORD_LENGTH,
+        max_length=MAX_PASSWORD_LENGTH,
+        description=(
+            f"Minimum {MIN_PASSWORD_LENGTH} characters, including at least one "
+            f"uppercase letter, one lowercase letter and one digit. "
+            f"Maximum {MAX_PASSWORD_LENGTH} bytes (bcrypt limit)."
+        )
+    )
     email: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_complexity(cls, v: str) -> str:
+        if len(v.encode("utf-8")) > MAX_PASSWORD_LENGTH:
+            raise ValueError(
+                f"Password must not exceed {MAX_PASSWORD_LENGTH} bytes."
+            )
+        missing = []
+        if not any(c.isupper() for c in v):
+            missing.append("an uppercase letter")
+        if not any(c.islower() for c in v):
+            missing.append("a lowercase letter")
+        if not any(c.isdigit() for c in v):
+            missing.append("a digit")
+        if missing:
+            raise ValueError("Password must contain " + ", ".join(missing) + ".")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        # The email field is optional; the client sends "" when left blank.
+        if v is None:
+            return None
+        trimmed = v.strip()
+        if not trimmed:
+            return None
+        if len(trimmed) > 254:
+            raise ValueError("Email address exceeds the maximum length of 254 characters.")
+        if not EMAIL_RE.match(trimmed):
+            raise ValueError("Email address is not a valid address.")
+        return trimmed.lower()
 
 class UserLogin(BaseModel):
     username: str
@@ -63,6 +126,22 @@ class UserOut(BaseModel):
     email: Optional[str] = None
     is_guest: bool = False
 
+class ClientErrorReport(BaseModel):
+    """
+    Bounded schema for browser-reported UI exceptions. Both fields are truncated
+    and stripped of control characters before they reach the log sink so that a
+    hostile client cannot forge log lines or flood the log with a large payload.
+    """
+    error: str = Field(..., min_length=1, max_length=500)
+    stack: str = Field("", max_length=4000)
+
+    @field_validator("error", "stack")
+    @classmethod
+    def strip_control_characters(cls, v: str) -> str:
+        # Newlines and carriage returns permit log-injection; tabs and other C0
+        # control codes can corrupt structured log consumers.
+        return "".join(" " if c in "\r\n\t" else c for c in v if c.isprintable() or c in "\r\n\t").strip()
+
 # ==============================================================================
 # CLINICAL REQUEST & RESPONSE MODELS
 # ==============================================================================
@@ -73,6 +152,12 @@ class CheckRequest(BaseModel):
         min_length=1,
         max_length=20,
         description="List of 1 to 20 medicine names to analyze"
+    )
+    patient_wake_time: Optional[str] = Field(
+        None,
+        max_length=10,
+        description="Patient wake time as '07:00 AM' (12-hour) or '07:00' (24-hour). "
+                    "Anchors the generated 24-hour administration timeline."
     )
 
     @field_validator("medicines")
@@ -86,12 +171,11 @@ class CheckRequest(BaseModel):
             trimmed = raw.strip()
             if len(trimmed) > 100:
                 raise ValueError(f"Medicine name '{trimmed[:30]}...' exceeds maximum allowed length of 100 characters.")
-            
-            # Sanitization regex: allow alphanumeric, whitespace, hyphens, dots, slashes, and parentheses
-            import re
-            if not re.match(r"^[a-zA-Z0-9\s\-\.\/\(\)]+$", trimmed):
+
+            # Sanitization: allow alphanumeric, whitespace, hyphens, dots, slashes, and parentheses
+            if not MEDICINE_NAME_RE.match(trimmed):
                 raise ValueError(f"Invalid characters detected in medicine name '{trimmed}'. Only letters, numbers, hyphens, and dots are permitted.")
-            
+
             norm = trimmed.lower()
             if norm not in seen:
                 seen.add(norm)
@@ -102,6 +186,23 @@ class CheckRequest(BaseModel):
         if len(cleaned) > 20:
             raise ValueError("A maximum of 20 medicines can be checked simultaneously to ensure deterministic clinical performance.")
         return cleaned
+
+    @field_validator("patient_wake_time")
+    @classmethod
+    def validate_wake_time(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        trimmed = v.strip()
+        if not trimmed:
+            return None
+        if WAKE_TIME_12H_RE.match(trimmed):
+            return trimmed.upper()
+        if WAKE_TIME_24H_RE.match(trimmed):
+            return trimmed
+        raise ValueError(
+            "patient_wake_time must be formatted as '07:00 AM' (12-hour) or '07:00' (24-hour)."
+        )
+
 
 class InteractionItem(BaseModel):
     drug_a: str
@@ -189,6 +290,12 @@ class MedicineSearchResult(BaseModel):
     top_side_effects: List[str] = []
     food_warning_count: int = 0
     brand_context: Optional[str] = None
+    category_tags: List[str] = Field(
+        default_factory=list,
+        description="Stable machine-readable therapeutic-class slugs (e.g. 'nsaid', "
+                    "'cardio', 'diabetes', 'gi', 'antibiotic') for client-side filtering."
+    )
+
 
 class ParsedDrugInfo(BaseModel):
     generic_name: str

@@ -41,10 +41,12 @@ def test_user_registration_and_login_flow():
     assert reg_data["username"] == uname
     assert reg_data["is_guest"] is False
 
-    # 2. Reject duplicate username
+    # 2. Reject duplicate username.
+    # The password must satisfy the complexity policy so that a 400 here proves
+    # the duplicate-username branch was reached, not a 422 validation rejection.
     dup_resp = client.post("/api/auth/register", json={
         "username": uname,
-        "password": "anotherpassword"
+        "password": "AnotherPassword1"
     })
     assert dup_resp.status_code == 400
 
@@ -79,3 +81,78 @@ def test_guest_session_generation():
         headers={"Authorization": f"Bearer {data['access_token']}"}
     )
     assert search_resp.status_code == 200
+
+
+# ==============================================================================
+# httpOnly session cookie (audit item 5)
+#
+# The token is issued in the response body AND as an httpOnly cookie so a browser
+# client never has to keep it in localStorage. These tests pin both halves of
+# that contract: the cookie is set with the right flags, it authenticates a
+# subsequent request on its own, and logout revokes it.
+# ==============================================================================
+
+def test_auth_endpoints_set_httponly_session_cookie():
+    """Every credential-issuing endpoint must plant the httpOnly session cookie."""
+    guest_resp = client.post("/api/auth/guest")
+    assert guest_resp.status_code == 200
+
+    set_cookie = guest_resp.headers.get("set-cookie", "")
+    assert "medcheck_session=" in set_cookie
+    # Attribute names and values are case-insensitive per RFC 6265; Starlette
+    # emits "SameSite=lax", so compare in lowercase rather than pinning casing.
+    lowered = set_cookie.lower()
+    # httpOnly is the whole point: JavaScript -- including any injected script --
+    # must not be able to read this value.
+    assert "httponly" in lowered
+    # SameSite=Lax withholds the cookie on cross-site POST, standing in for a CSRF
+    # token on this JSON API.
+    assert "samesite=lax" in lowered
+    # The cookie must not outlive the token it carries, or the client believes it
+    # still has a session it cannot use. Guest tokens expire after 2 hours.
+    assert "max-age=7200" in lowered
+
+
+def test_session_cookie_alone_authenticates_a_protected_request():
+    """
+    A request carrying only the cookie (no Authorization header) must be accepted.
+    This is the browser reload path: the in-memory token is gone, the cookie is
+    all that remains, and the app must stay logged in.
+    """
+    cookie_client = TestClient(app)
+    guest_resp = cookie_client.post("/api/auth/guest")
+    assert guest_resp.status_code == 200
+    assert "medcheck_session" in cookie_client.cookies
+
+    # TestClient persists cookies on the instance; send no bearer header.
+    search_resp = cookie_client.get("/api/medicines/search?q=aspirin")
+    assert search_resp.status_code == 200
+
+
+def test_logout_clears_the_session_cookie():
+    """Logout must delete the cookie so the credential cannot be replayed."""
+    logout_resp = client.post("/api/auth/logout")
+    assert logout_resp.status_code == 200
+    assert logout_resp.json()["status"] == "logged_out"
+
+    set_cookie = logout_resp.headers.get("set-cookie", "")
+    assert "medcheck_session=" in set_cookie
+    # A deletion is a Set-Cookie that expires the value immediately.
+    assert 'Max-Age=0' in set_cookie or "expires=" in set_cookie.lower()
+
+
+def test_authorization_header_still_takes_precedence():
+    """
+    A valid Bearer header must authenticate even when no cookie is present -- the
+    non-browser contract is unchanged by the cookie addition.
+    """
+    header_only_client = TestClient(app)
+    guest_resp = header_only_client.post("/api/auth/guest")
+    token = guest_resp.json()["access_token"]
+    header_only_client.cookies.clear()
+
+    resp = header_only_client.get(
+        "/api/medicines/search?q=aspirin",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 200

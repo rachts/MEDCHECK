@@ -1,0 +1,15 @@
+# SPA history-API fallback for static hosts (Netlify, Cloudflare Pages).
+#
+# BrowserRouter serves /app, /explorer and /auth from the client. Those paths do
+# not exist as files on disk, so a host that resolves requests against the
+# filesystem returns 404 for a direct visit, a page refresh, or a shared deep
+# link -- the app only works if the user always arrives at "/" first.
+#
+# Rewriting every unmatched path to /index.html hands routing back to React
+# Router, which then resolves the real path client-side. The Docker image already
+# does the equivalent with `try_files $uri $uri/ /index.html` in nginx.conf; this
+# file covers the static-host deployment path, and vercel.json covers Vercel.
+#
+# 200 (rewrite), not 301/302 (redirect): the browser must keep the original URL
+# so React Router sees /explorer rather than /.
+/*    /index.html   200

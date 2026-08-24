@@ -2,7 +2,7 @@ import React from 'react';
 import { X, Pill } from 'lucide-react';
 import { useMedicine } from '../context/MedicineContext';
 
-export function MedicineChip({ medicine, onRemove }) {
+function MedicineChipBase({ medicine, onRemove }) {
   const { selectedMedicineName, selectMedicine, results } = useMedicine();
   const isSelected = selectedMedicineName?.toLowerCase() === medicine.name.toLowerCase();
 
@@ -30,17 +30,37 @@ export function MedicineChip({ medicine, onRemove }) {
   return (
     <div
       onClick={() => selectMedicine(medicine.name)}
+      // The left border carries the per-medicine severity, so it is set here rather
+      // than in `.chip`: the colour depends on this render's interaction/GI data,
+      // and an inline style is also the only form that survives the
+      // `border-[var(--accent)]` utility applied below when the chip is selected.
       style={{ borderLeftColor: leftBorderColor, borderLeftWidth: '3px' }}
       className={`chip ${
         isSelected ? 'border-[var(--accent)] bg-[#E2E8F0]' : ''
       }`}
       title="Click to view contextual intelligence profile"
     >
-      <div className="flex items-center gap-2.5 min-w-0">
+      {/* The whole chip stays mouse-clickable (above), but the keyboard and
+          screen-reader affordance is this real <button> rather than a
+          `role="button"` on the wrapper. A wrapper with that role would swallow the
+          remove button below it -- ARIA treats a button's children as
+          presentational, so the one control that destroys data would have stopped
+          being announced. stopPropagation keeps the wrapper's handler from firing a
+          second, duplicate profile fetch when the button itself is activated. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          selectMedicine(medicine.name);
+        }}
+        aria-pressed={isSelected}
+        aria-label={`View clinical profile for ${medicine.name}`}
+        className="flex items-center gap-2.5 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer"
+      >
         <div className={`w-6 h-6 rounded-[4px] flex items-center justify-center shrink-0 ${
           isSelected ? 'bg-[var(--accent)] text-[var(--text-inverse)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'
         }`}>
-          <Pill className="w-3.5 h-3.5" />
+          <Pill className="w-3.5 h-3.5" aria-hidden="true" />
         </div>
 
         <div className="flex flex-col min-w-0">
@@ -52,7 +72,7 @@ export function MedicineChip({ medicine, onRemove }) {
             {medProfile?.generic_name || medicine.name.toLowerCase()}
           </span>
         </div>
-      </div>
+      </button>
 
       <div className="flex items-center gap-2 shrink-0">
         {/* Category Tag in Inter */}
@@ -64,16 +84,23 @@ export function MedicineChip({ medicine, onRemove }) {
 
         {/* Remove Button with 44px hit target padding */}
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onRemove(medicine.id);
           }}
-          aria-label={`Remove ${medicine.name}`}
+          aria-label={`Remove ${medicine.name} from the basket`}
           className="w-7 h-7 rounded-[4px] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[#E2E8F0] transition-colors cursor-pointer"
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
       </div>
     </div>
   );
 }
+
+// Memoised: MedicineBasket owns the search input's local state, so every keystroke
+// re-renders the basket and, previously, every chip in it. Both props are stable --
+// `medicine` is an entry from the medicines array and `onRemove` is a useCallback --
+// so the chips now sit out those renders.
+export const MedicineChip = React.memo(MedicineChipBase);

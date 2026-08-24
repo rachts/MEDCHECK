@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="MEDCHECK">
+  <!--
+    Matches the in-app brand mark: the lucide ShieldCheck glyph on an
+    --accent (#0F172A) tile with the same 4px corner radius the Navbar logo uses.
+    Authored as SVG rather than a raster .ico so it stays sharp at every size and
+    needs no build step; index.html references it as /favicon.svg.
+  -->
+  <rect width="32" height="32" rx="6" fill="#0F172A"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 7 L23.5 9.6 v6.2 c0 4.6 -3.2 7.4 -7.5 9.2 c-4.3 -1.8 -7.5 -4.6 -7.5 -9.2 V9.6 Z"/>
+    <path d="M12.6 16.1 l2.4 2.4 l4.4 -4.6"/>
+  </g>
+</svg>

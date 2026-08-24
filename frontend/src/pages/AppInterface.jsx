@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Disclaimer } from '../components/Disclaimer';
@@ -14,18 +14,19 @@ import { SafeState } from '../components/SafeState';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { useMedicine } from '../context/MedicineContext';
-import { 
-  Activity, 
-  Pill, 
-  ShieldAlert, 
-  Sparkles, 
-  Layers, 
-  FileText, 
-  Home, 
-  Search, 
-  User, 
+import {
+  Activity,
+  Pill,
+  ShieldAlert,
+  Sparkles,
+  Layers,
+  FileText,
+  Home,
+  Search,
+  User,
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -48,6 +49,19 @@ export function AppInterface() {
   const interactions = results?.interactions || [];
   const isSafe = results?.safe;
 
+  // The backend populates limited_data_warnings whenever a medicine in the basket
+  // had no usable FDA label and fell back to a generic profile. That caveat has to
+  // reach the user: an analysis built on missing label data can return "safe"
+  // simply because there was nothing to compare, and silently discarding the
+  // warning turns an incomplete scan into an unqualified all-clear.
+  const limitedDataWarnings = results?.limited_data_warnings || [];
+
+  // Stable identity for the memoised MedicineProfilePanel. Passing
+  // `onCloseMobile={() => setMobileTab('matrix')}` inline created a new function on
+  // every render of this page -- including every keystroke in the medicine input --
+  // which defeats React.memo entirely: the prop compares unequal every time.
+  const closeMobileProfile = useCallback(() => setMobileTab('matrix'), []);
+
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
       <Navbar />
@@ -57,36 +71,41 @@ export function AppInterface() {
       <DoctorReportModal />
 
       {/* MOBILE BOTTOM NAVIGATION (< 768px) */}
-      <nav className="md:hidden bottom-nav">
+      <nav className="md:hidden bottom-nav" aria-label="Analysis sections">
         <button
           onClick={() => setMobileTab('basket')}
+          aria-current={mobileTab === 'basket' ? 'true' : undefined}
           className={`bottom-nav-item ${mobileTab === 'basket' ? 'active' : ''}`}
         >
-          <Pill className="w-5 h-5" />
+          <Pill className="w-5 h-5" aria-hidden="true" />
           <span>Basket ({medicines.length})</span>
         </button>
 
         <button
           onClick={() => setMobileTab('matrix')}
+          aria-current={mobileTab === 'matrix' ? 'true' : undefined}
           className={`bottom-nav-item ${mobileTab === 'matrix' ? 'active' : ''}`}
         >
-          <Activity className="w-5 h-5" />
+          <Activity className="w-5 h-5" aria-hidden="true" />
           <span>Matrix</span>
         </button>
 
         <button
           onClick={() => setMobileTab('profile')}
+          aria-current={mobileTab === 'profile' ? 'true' : undefined}
           className={`bottom-nav-item ${mobileTab === 'profile' ? 'active' : ''}`}
         >
-          <Layers className="w-5 h-5" />
+          <Layers className="w-5 h-5" aria-hidden="true" />
           <span>Profile</span>
         </button>
 
         <button
           onClick={() => setDoctorReportOpen(true)}
-          className="bottom-nav-item"
+          disabled={!results}
+          title={results ? "Export a clinical summary of this analysis" : "Run an analysis first to generate a report"}
+          className="bottom-nav-item disabled:opacity-45 disabled:cursor-not-allowed"
         >
-          <FileText className="w-5 h-5" />
+          <FileText className="w-5 h-5" aria-hidden="true" />
           <span>Report</span>
         </button>
       </nav>
@@ -122,17 +141,46 @@ export function AppInterface() {
           </div>
         )}
 
-        {/* DESKTOP / TABLET / MOBILE LAYOUT */}
+        {/* Incomplete-data caveat. Rendered immediately under the summary so it is
+            read together with the verdict it qualifies, and kept outside the
+            `results &&` banner above so it is visible whether the scan came back
+            safe or unsafe. */}
+        {limitedDataWarnings.length > 0 && (
+          <div
+            className="alert-warning w-full mb-4 flex items-start gap-2.5 card-enter"
+            role="status"
+          >
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+            <div className="space-y-1">
+              <p className="text-sm font-bold leading-tight">
+                Incomplete label data — treat this analysis as partial
+              </p>
+              {limitedDataWarnings.map((warning, idx) => (
+                <p key={`${warning}-${idx}`} className="text-xs leading-relaxed">
+                  {warning}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* DESKTOP / TABLET / MOBILE LAYOUT
+            Column spans must be whole numbers: Tailwind generates col-span-1 .. -12
+            for a 12-column grid and nothing fractional, so the `lg:col-span-3.5`
+            these side panels used to carry produced no CSS at all. Between 1024px
+            and 1279px both panels therefore fell back to `grid-column: auto` -- one
+            column each, roughly 85px wide -- and only the `xl:` spans repaired the
+            layout at 1280px and up. 3 + 6 + 3 fills the row exactly. */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* LEFT PANEL: MEDICINE BASKET (280px on desktop) */}
-          <div className={`lg:col-span-3.5 xl:col-span-3 ${
+          <div className={`lg:col-span-3 ${
             mobileTab === 'basket' ? 'block' : 'hidden md:block'
           }`}>
             <MedicineBasket />
           </div>
 
           {/* CENTER PANEL: INTERACTION MATRIX (flex-grow) */}
-          <div className={`lg:col-span-5 xl:col-span-6 flex flex-col gap-4 ${
+          <div className={`lg:col-span-6 flex flex-col gap-4 ${
             mobileTab === 'matrix' || mobileTab === 'basket' ? 'block' : 'hidden md:block'
           }`}>
             {loading && <LoadingState />}
@@ -162,7 +210,12 @@ export function AppInterface() {
 
                     {interactions.map((interaction, idx) => (
                       <InteractionCard
-                        key={`interaction-${idx}-${interaction.drug_a}-${interaction.drug_b}`}
+                        // Drug pair first, index only as a tiebreaker: the pair is
+                        // what identifies an interaction, and the backend sorts by
+                        // severity, so an index-first key reassigns a card's
+                        // expand/collapse state to a different pair whenever the
+                        // ordering shifts.
+                        key={`${interaction.drug_a}-${interaction.drug_b}-${idx}`}
                         interaction={interaction}
                       />
                     ))}
@@ -171,24 +224,27 @@ export function AppInterface() {
 
                 {/* Safe Regimen State */}
                 {results && isSafe && medicines.length >= 2 && (
-                  <SafeState medicinesCount={medicines.length} />
+                  <SafeState
+                    medicinesCount={medicines.length}
+                    limitedDataWarnings={limitedDataWarnings}
+                  />
                 )}
               </>
             )}
           </div>
 
           {/* RIGHT PANEL: CONTEXTUAL MEDICINE PROFILE (340px on desktop) */}
-          <div className={`lg:col-span-3.5 xl:col-span-3 ${
+          <div className={`lg:col-span-3 ${
             mobileTab === 'profile' ? 'block' : 'hidden lg:block'
           }`}>
-            <MedicineProfilePanel onCloseMobile={() => setMobileTab('matrix')} />
+            <MedicineProfilePanel onCloseMobile={closeMobileProfile} />
           </div>
         </div>
 
         {/* MOBILE FULL-SCREEN / SHEET PROFILE OVERLAY (< lg when profile is selected) */}
         {selectedMedicineName && mobileTab === 'profile' && (
           <div className="lg:hidden fixed inset-0 z-50 bg-[var(--bg-base)] overflow-y-auto p-4 flex flex-col gap-4 sheet-enter">
-            <MedicineProfilePanel onCloseMobile={() => setMobileTab('matrix')} />
+            <MedicineProfilePanel onCloseMobile={closeMobileProfile} />
           </div>
         )}
 

@@ -2,6 +2,7 @@ import os
 import json
 import sqlite3
 import hashlib
+import hmac
 import logging
 import anyio
 from datetime import datetime, timezone
@@ -36,9 +37,27 @@ def _init_audit_table():
 _init_audit_table()
 
 def hash_ip(ip_address: Optional[str]) -> str:
+    """
+    Produces a stable pseudonymous identifier for a client IP.
+
+    Two properties matter here and the previous implementation had neither:
+
+    1. Full digest. The old code truncated SHA-256 to 16 hex characters (64 bits),
+       which makes distinct addresses collide often enough to corrupt per-client
+       rate/abuse analysis over a long-lived audit table.
+    2. Keyed. An unkeyed hash of an IP address is not pseudonymisation: the entire
+       IPv4 space is only 2**32 entries, so anybody who obtains the audit table can
+       recover every address by exhaustive search in seconds. HMAC with a secret
+       key makes the mapping irreversible without that key.
+    """
     if not ip_address:
         return "unknown"
-    return hashlib.sha256(ip_address.strip().encode("utf-8")).hexdigest()[:16]
+    return hmac.new(
+        settings.AUDIT_IP_SALT.encode("utf-8"),
+        ip_address.strip().encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
 
 def _sync_record_audit_log(
     user_id: Optional[str],

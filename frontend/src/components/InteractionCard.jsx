@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useMedicine } from '../context/MedicineContext';
 
-export function InteractionCard({ interaction }) {
+function InteractionCardBase({ interaction }) {
   const { selectMedicine, setDoctorReportOpen } = useMedicine();
   const [expandedMobile, setExpandedMobile] = useState(false);
 
@@ -116,11 +116,11 @@ export function InteractionCard({ interaction }) {
       {/* Action Tags Bar */}
       {actionTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-          {actionTags.map((tag, idx) => {
+          {actionTags.map((tag) => {
             const Icon = tag.icon;
             return (
-              <span key={idx} className={`tag ${tag.type}`}>
-                <Icon className="w-3 h-3" />
+              <span key={tag.label} className={`tag ${tag.type}`}>
+                <Icon className="w-3 h-3" aria-hidden="true" />
                 <span>{tag.label}</span>
               </span>
             );
@@ -159,5 +159,11 @@ export function InteractionCard({ interaction }) {
     </article>
   );
 }
+
+// Memoised: these render one per interaction (a nine-medicine basket can produce
+// dozens), each with its own expand/collapse state. `interaction` is a stable object
+// off the results payload, so a re-render of AppInterface for any other reason --
+// switching mobile tab, opening a modal -- no longer re-renders the whole list.
+export const InteractionCard = React.memo(InteractionCardBase);
 
 export default InteractionCard;

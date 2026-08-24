@@ -1,9 +1,50 @@
-from typing import List, Dict, Any, Tuple
-from models import MedicineProfileResponse, AmplifiedSideEffect
+from typing import List, Dict, Any, Tuple, Optional
+from models import MedicineProfileResponse, AmplifiedSideEffect, RiskTier
 from services.clinical_rules import expand_aliases
 
+# Neutral values used when a profile carries no usable GI data.
+DEFAULT_GI_SCORE = 20
+DEFAULT_GI_TIER = "gentle"
+
+
+def _read_gi_profile(profile: Optional[MedicineProfileResponse]) -> Tuple[int, str]:
+    """
+    Reads (stomach_health_score, risk_tier) defensively from a medicine profile.
+
+    MedicineProfileResponse declares gi_profile as required, so a model built
+    through Pydantic always has one. This helper additionally tolerates a profile
+    supplied as a plain dict or built by a future code path that leaves gi_profile
+    unset, because a missing GI profile must degrade to the neutral baseline
+    rather than raise AttributeError mid-analysis.
+    """
+    if profile is None:
+        return DEFAULT_GI_SCORE, DEFAULT_GI_TIER
+
+    gi = getattr(profile, "gi_profile", None)
+    if gi is None and isinstance(profile, dict):
+        gi = profile.get("gi_profile")
+    if gi is None:
+        return DEFAULT_GI_SCORE, DEFAULT_GI_TIER
+
+    if isinstance(gi, dict):
+        score = gi.get("stomach_health_score", DEFAULT_GI_SCORE)
+        tier = gi.get("risk_tier", DEFAULT_GI_TIER)
+    else:
+        score = getattr(gi, "stomach_health_score", DEFAULT_GI_SCORE)
+        tier = getattr(gi, "risk_tier", DEFAULT_GI_TIER)
+
+    try:
+        score = int(score)
+    except (TypeError, ValueError):
+        score = DEFAULT_GI_SCORE
+
+    # risk_tier may arrive as a RiskTier enum or a bare string.
+    tier_str = tier.value if isinstance(tier, RiskTier) else str(tier or DEFAULT_GI_TIER)
+    return score, tier_str
+
+
 def calculate_composite_gi_score(
-    medicines: List[str], 
+    medicines: List[str],
     profiles: Dict[str, MedicineProfileResponse]
 ) -> Tuple[int, str, List[Dict[str, Any]], List[str]]:
     """
@@ -22,8 +63,7 @@ def calculate_composite_gi_score(
     for med in medicines:
         profile = profiles.get(med)
         aliases = expand_aliases(med)
-        med_score = profile.gi_profile.stomach_health_score if profile else 20
-        med_tier = profile.gi_profile.risk_tier if profile else "gentle"
+        med_score, med_tier = _read_gi_profile(profile)
 
         # Check for PPIs (protective)
         if any(ppi in aliases for ppi in ["omeprazole", "pantoprazole", "esomeprazole", "lansoprazole", "rabeprazole"]):
@@ -40,7 +80,7 @@ def calculate_composite_gi_score(
         contributors.append({
             "drug": med.capitalize(),
             "score_impact": med_score,
-            "tier": med_tier if isinstance(med_tier, str) else med_tier.value,
+            "tier": med_tier,
             "mechanism_short": "Direct mucosal erosion & COX inhibition" if med_score > 60 else "Metabolic / Mild GI burden" if med_score > 30 else "Gentle mucosal profile"
         })
         total_base_score += med_score

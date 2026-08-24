@@ -336,7 +336,13 @@
   padding: var(--space-3);
   background: var(--bg-input);
   border: 1px solid var(--border-default);
-  border-left: 3px solid var(--severity-color, var(--severity-low));
+  /* The 3px severity accent is applied inline by MedicineChip.jsx, which is the
+     only place that knows a given medicine's interaction severity and GI tier.
+     This declaration supplies the neutral baseline for chips rendered before an
+     analysis has run. It previously read `var(--severity-color, ...)`, a custom
+     property no code ever set -- misleading, since setting it would have had no
+     effect against the inline style that actually paints this border. */
+  border-left: 3px solid var(--severity-low);
   border-radius: var(--radius-md);
   cursor: pointer;
   min-height: 48px; /* Touch target */

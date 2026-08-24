@@ -12,4 +12,9 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.2.0
 slowapi==0.1.9
 python-json-logger==2.0.7
-anyio>=4.0.0
+# Pinned like every other dependency: anyio.to_thread underpins all cache and
+# audit writes, and its 4.x line has changed task-group and cancellation
+# semantics between minor releases. An unpinned floor made the image
+# non-reproducible -- two builds of the same commit could resolve different
+# anyio versions. 4.14.2 is the version the test suite is green against.
+anyio==4.14.2

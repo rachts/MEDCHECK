@@ -30,7 +30,7 @@ export function DemoModeToggle() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
         {demoPresets.map((preset, index) => (
           <button
-            key={index}
+            key={`${preset.name}-${index}`}
             onClick={() => loadPreset(preset)}
             className="text-left p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.1] hover:border-secondary-fixed/50 transition-all flex flex-col justify-between group active:scale-[0.98] cursor-pointer"
           >

@@ -1,0 +1,45 @@
+{
+  // MEDCHECK is a mixed .jsx/.ts codebase: the components are JSX and the API
+  // client plus the shared response types are TypeScript. This config exists so
+  // the .ts files are actually checked -- Vite strips types without verifying
+  // them, so before this file a type error in lib/api.ts or types/api.ts would
+  // build cleanly and fail at runtime.
+  //
+  // Run with: npm run typecheck
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    // Bundler resolution matches how Vite actually resolves imports, including
+    // the extensionless `from '../lib/api'` form used throughout the app.
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    // Vite owns emit; tsc is used purely as a checker.
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // noUnusedLocals / noUnusedParameters are deliberately omitted. They are
+    // style checks rather than soundness checks, and in a codebase mid-migration
+    // from .jsx they produce noise that obscures real type errors. Add them once
+    // the component tree is typed.
+
+    // The .jsx components are not typed and are not expected to be. Allowing JS
+    // without checking it keeps `npm run typecheck` meaningful for the .ts files
+    // instead of drowning in errors from untyped component code; drop
+    // checkJs:false only when the components are migrated.
+    "allowJs": true,
+    "checkJs": false,
+
+    // import.meta.env.VITE_* typings.
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}

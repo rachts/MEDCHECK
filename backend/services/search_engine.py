@@ -1,6 +1,45 @@
-from typing import List
+from typing import List, Tuple
 from models import MedicineSearchResult
 from services.knowledge_base import CURATED_MEDICINE_PROFILES, COMMON_BRAND_MAPPINGS
+
+# Machine-readable therapeutic-class slugs derived from the free-text `category`
+# prose. The client needs stable identifiers to filter on: matching the prose
+# directly means a filter labelled "Pain Relief" has to substring-search strings
+# like "Salicylate NSAID & Antiplatelet Agent", which silently stops matching the
+# moment the wording is edited. A drug can belong to several classes, so this is
+# a list rather than a single slug -- aspirin is genuinely both an NSAID and an
+# antiplatelet agent.
+CATEGORY_TAG_KEYWORDS: List[Tuple[str, Tuple[str, ...]]] = [
+    ("nsaid", ("nsaid", "salicylate", "anti-inflammatory")),
+    ("analgesic", ("analgesic", "antipyretic", "nsaid", "salicylate")),
+    ("anticoagulant", ("anticoagulant", "antiplatelet", "vitamin k antagonist")),
+    ("cardio", ("ace inhibitor", "angiotensin", "statin", "hmg-coa", "beta blocker",
+                "antihypertensive", "cardiovascular", "calcium channel")),
+    ("diabetes", ("antidiabetic", "biguanide", "insulin", "glycemic", "sulfonylurea")),
+    ("gi", ("proton pump", "ppi", "antacid", "gastric", "gastrointestinal",
+            "h2 receptor", "antiemetic")),
+    ("antibiotic", ("antibiotic", "penicillin", "beta-lactam", "cephalosporin",
+                    "macrolide", "quinolone", "tetracycline")),
+    ("endocrine", ("thyroid", "hormone", "endocrine", "corticosteroid")),
+    ("cns", ("cns", "depressant", "sedative", "benzodiazepine", "opioid",
+             "antidepressant", "anticonvulsant")),
+]
+
+DEFAULT_CATEGORY_TAG = "general"
+
+
+def derive_category_tags(category: str, generic_name: str = "") -> List[str]:
+    """
+    Maps a descriptive category string to stable therapeutic-class slugs.
+
+    The generic name is folded into the haystack so a curated profile whose
+    category wording omits the class (or a brand-only row) can still be tagged.
+    Always returns at least one tag, so a client filtering on tags never has to
+    special-case an empty list.
+    """
+    haystack = f"{category} {generic_name}".lower()
+    tags = [slug for slug, keywords in CATEGORY_TAG_KEYWORDS if any(k in haystack for k in keywords)]
+    return tags or [DEFAULT_CATEGORY_TAG]
 
 def search_medicine_database(query: str) -> List[MedicineSearchResult]:
     """
@@ -42,6 +81,7 @@ def search_medicine_database(query: str) -> List[MedicineSearchResult]:
                 name=name,
                 generic_name=generic_key,
                 category=category,
+                category_tags=derive_category_tags(category, generic_key),
                 drug_type=drug_type,
                 stomach_risk_badge=badge,
                 stomach_score=gi_score,
@@ -56,10 +96,15 @@ def search_medicine_database(query: str) -> List[MedicineSearchResult]:
             continue
         if q and (q in brand or q in generic):
             seen.add(generic)
+            # A brand-only row has no curated category prose of its own, so the
+            # curated profile for its generic is consulted when one exists.
+            curated = CURATED_MEDICINE_PROFILES.get(generic, {})
+            brand_category = curated.get("category", "Pharmacological Agent")
             results.append(MedicineSearchResult(
                 name=brand.capitalize(),
                 generic_name=generic,
                 category="Pharmacological Agent",
+                category_tags=derive_category_tags(brand_category, generic),
                 drug_type="prescription" if generic in ["warfarin", "lisinopril", "atorvastatin", "metformin", "amoxicillin"] else "otc",
                 stomach_risk_badge="Moderate",
                 stomach_score=35,

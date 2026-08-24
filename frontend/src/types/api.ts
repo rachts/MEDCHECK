@@ -92,7 +92,15 @@ export interface MedicineSearchResult {
   name: string;
   generic_name: string;
   category: string;
+  /**
+   * Stable therapeutic-class slugs derived server-side by
+   * derive_category_tags (backend/services/search_engine.py). `category` above is
+   * free-text prose meant for display; these are the values to filter on.
+   * Always non-empty -- the backend falls back to ["general"].
+   */
+  category_tags: string[];
   drug_type: string;
+  /** "Critical" | "Moderate" | "Gentle" -- note "Critical", not "High". */
   stomach_risk_badge: string;
   stomach_score: number;
   top_side_effects: string[];
@@ -128,4 +136,20 @@ export interface UserAuthSession {
   user_id: string;
   username: string;
   is_guest: boolean;
+}
+
+/**
+ * A row in the medicine basket. Client-side only -- this shape is built by
+ * `MedicineContext.addMedicine`, never returned by the API, so it does not
+ * correspond to any Pydantic model in `backend/models.py`.
+ *
+ * `id` exists solely as a stable React key and as the handle `removeMedicine`
+ * takes; `name` is the display casing the user typed, and lookups against the
+ * API (which keys `CheckResponse.profiles` by lowercase generic name) must
+ * lowercase it first. `drugType` drives the OTC / Rx / Supp badge on the chip.
+ */
+export interface BasketMedicine {
+  id: string;
+  name: string;
+  drugType: DrugType;
 }

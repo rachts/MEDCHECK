@@ -1,0 +1,37 @@
+# =============================================================================
+# Docker build-context exclusions for the frontend image.
+#
+# Required, not optional: docker-compose builds this image with
+# `context: ./frontend`, and Docker only reads the .dockerignore at the root of
+# the build context, so the repository-root .dockerignore is never consulted here.
+# =============================================================================
+
+# The host's node_modules must not enter the context. The Dockerfile runs
+# `npm ci` and then `COPY . .`, so a host node_modules would overwrite the
+# freshly installed tree -- replacing the linux-musl esbuild/rollup binaries with
+# the host's (darwin-arm64) ones and breaking `npm run build` inside the image.
+node_modules/
+
+# Stale local build output. The image builds its own dist; copying one in only
+# risks it being served if the build step is ever reordered.
+dist/
+build/
+
+# Secrets. Vite inlines every VITE_* variable into the JavaScript bundle at build
+# time, so anything here becomes public in the shipped assets.
+.env
+.env.*
+!.env.example
+
+# Tooling caches and logs
+.vite/
+*.log
+npm-debug.log*
+yarn-error.log*
+.eslintcache
+
+# Editor, OS and tooling noise
+.DS_Store
+.idea/
+.vscode/
+.claude/

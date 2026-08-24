@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useMedicine } from '../context/MedicineContext';
-import { 
+import { useModalDismiss } from '../hooks/useModalDismiss';
+import {
   X, 
   Printer, 
   Copy, 
@@ -24,6 +25,12 @@ export function DoctorReportModal() {
 
   const [copied, setCopied] = useState(false);
   const [providerName, setProviderName] = useState(() => localStorage.getItem('medcheck_user_name') || '');
+
+  // Stable identity: the dismiss hook focuses the dialog whenever its dependencies
+  // change, and this modal contains a text input -- an inline arrow here would pull
+  // focus back out of it on every keystroke.
+  const closeModal = useCallback(() => setDoctorReportOpen(false), [setDoctorReportOpen]);
+  const dialogRef = useModalDismiss(doctorReportOpen, closeModal);
 
   if (!doctorReportOpen) return null;
 
@@ -60,7 +67,7 @@ export function DoctorReportModal() {
     if (foodConflicts.length > 0) {
       reportMd += `## 3. FOOD & LIFESTYLE RESTRICTIONS\n`;
       foodConflicts.forEach(f => {
-        reportMd += `- **${f.drug}**: ${f.title} — ${f.description}\n`;
+        reportMd += `- **${f.medicine_a} + ${f.medicine_b}** (${f.conflict_type}): ${f.conflict} _Recommended:_ ${f.recommended_schedule}\n`;
       });
       reportMd += `\n`;
     }
@@ -85,19 +92,41 @@ export function DoctorReportModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/40 modal-backdrop overflow-y-auto">
-      <div className="card max-w-3xl w-full max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl sheet-enter">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/40 modal-backdrop overflow-y-auto"
+      // Clicking the backdrop closes; the guard keeps clicks that bubble up from
+      // inside the panel from dismissing it.
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeModal();
+      }}
+    >
+      {/* role/aria-modal mark the page behind as inert for assistive tech, and
+          aria-labelledby names the dialog -- without it the announcement is just
+          "dialog". tabIndex={-1} lets the dismiss hook move focus in on open
+          without adding a tab stop. */}
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="doctor-report-title"
+        aria-describedby="doctor-report-subtitle"
+        tabIndex={-1}
+        className="card max-w-3xl w-full max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl sheet-enter outline-none"
+      >
         {/* Modal Top Bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-default)] bg-[var(--bg-surface)]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-[4px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center">
-              <FileText className="w-4 h-4" />
+              <FileText className="w-4 h-4" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-serif text-[22px] font-bold text-[var(--text-primary)] leading-tight">
+              <h2
+                id="doctor-report-title"
+                className="font-serif text-[22px] font-bold text-[var(--text-primary)] leading-tight"
+              >
                 Doctor's Safety Summary Report
               </h2>
-              <p className="text-xs text-[var(--text-muted)] font-sans">
+              <p id="doctor-report-subtitle" className="text-xs text-[var(--text-muted)] font-sans">
                 Generated {currentDate} • Clinical Brief for Office Visits
               </p>
             </div>
@@ -105,26 +134,36 @@ export function DoctorReportModal() {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleCopyMarkdown}
               className="btn-secondary text-xs py-1.5 px-3 min-h-[36px] flex items-center gap-1.5"
+              aria-label="Copy the full report to the clipboard as text"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-[var(--severity-low)]" /> : <Copy className="w-3.5 h-3.5 text-[var(--text-primary)]" />}
+              {copied ? (
+                <Check className="w-3.5 h-3.5 text-[var(--severity-low)]" aria-hidden="true" />
+              ) : (
+                <Copy className="w-3.5 h-3.5 text-[var(--text-primary)]" aria-hidden="true" />
+              )}
               <span>{copied ? 'Copied' : 'Copy Text'}</span>
             </button>
 
             <button
+              type="button"
               onClick={handlePrint}
               className="btn-primary text-xs py-1.5 px-3 min-h-[36px] flex items-center gap-1.5"
+              aria-label="Print this clinical brief"
             >
-              <Printer className="w-3.5 h-3.5" />
+              <Printer className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Print Brief</span>
             </button>
 
             <button
-              onClick={() => setDoctorReportOpen(false)}
+              type="button"
+              onClick={closeModal}
+              aria-label="Close doctor's safety summary report"
               className="p-1.5 rounded-[4px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[#E2E8F0] transition-colors ml-1 cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -134,9 +173,20 @@ export function DoctorReportModal() {
           {/* Header Info */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-[8px]">
             <div>
-              <span className="text-xs text-[var(--text-muted)] uppercase block font-bold">Patient / Session</span>
+              {/* Was a bare <span>, so the only accessible name this field had was
+                  its placeholder -- which disappears the moment anything is typed.
+                  A real <label htmlFor> also makes the caption a click target. */}
+              <label
+                htmlFor="report-patient-name"
+                className="text-xs text-[var(--text-muted)] uppercase block font-bold"
+              >
+                Patient / Session
+              </label>
               <input
+                id="report-patient-name"
+                name="patientName"
                 type="text"
+                autoComplete="name"
                 value={providerName}
                 onChange={(e) => setProviderName(e.target.value)}
                 placeholder="Enter patient name..."
@@ -163,7 +213,7 @@ export function DoctorReportModal() {
           {/* Section 1: Identified Drug Interactions */}
           <div className="space-y-2.5">
             <h3 className="font-serif text-[18px] font-bold text-[var(--text-primary)] border-b border-[var(--border-default)] pb-1.5 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-[var(--text-primary)]" />
+              <ShieldCheck className="w-4 h-4 text-[var(--text-primary)]" aria-hidden="true" />
               <span>1. Drug Interaction Matrix ({interactions.length})</span>
             </h3>
 
@@ -174,7 +224,10 @@ export function DoctorReportModal() {
             ) : (
               <div className="space-y-2">
                 {interactions.map((i, idx) => (
-                  <div key={idx} className="p-3 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-[6px] text-xs space-y-1">
+                  <div
+                    key={`${i.drug_a}-${i.drug_b}-${idx}`}
+                    className="p-3 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-[6px] text-xs space-y-1"
+                  >
                     <div className="flex items-center justify-between">
                       <span className="font-serif font-bold text-[15px] text-[var(--text-primary)]">
                         {i.drug_a} + {i.drug_b}
@@ -204,7 +257,7 @@ export function DoctorReportModal() {
           {/* Section 2: Food & Administration Guidance */}
           <div className="space-y-2.5">
             <h3 className="font-serif text-[18px] font-bold text-[var(--text-primary)] border-b border-[var(--border-default)] pb-1.5 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-[var(--text-primary)]" />
+              <Clock className="w-4 h-4 text-[var(--text-primary)]" aria-hidden="true" />
               <span>2. Food, Beverage & Timing Rules ({foodConflicts.length})</span>
             </h3>
 
@@ -215,13 +268,20 @@ export function DoctorReportModal() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {foodConflicts.map((f, idx) => (
-                  <div key={idx} className="p-2.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-[6px] text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-serif font-bold text-[14px] text-[var(--text-primary)]">{f.drug}</span>
-                      <span className="tag tag-warning">{f.severity}</span>
+                  <div
+                    key={`${f.medicine_a}-${f.medicine_b}-${f.conflict_type}-${idx}`}
+                    className="p-2.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-[6px] text-xs"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-serif font-bold text-[14px] text-[var(--text-primary)]">
+                        {f.medicine_a} + {f.medicine_b}
+                      </span>
+                      <span className="tag tag-warning whitespace-nowrap">{f.conflict_type}</span>
                     </div>
-                    <p className="text-xs font-semibold text-[var(--text-primary)] mt-1">{f.title}</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">{f.description}</p>
+                    <p className="text-xs font-semibold text-[var(--text-primary)] mt-1">{f.conflict}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                      Recommended: {f.recommended_schedule}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -231,7 +291,7 @@ export function DoctorReportModal() {
           {/* Section 3: Patient Specific Notes */}
           <div className="space-y-2.5">
             <h3 className="font-serif text-[18px] font-bold text-[var(--text-primary)] border-b border-[var(--border-default)] pb-1.5 flex items-center gap-2">
-              <Pill className="w-4 h-4 text-[var(--text-primary)]" />
+              <Pill className="w-4 h-4 text-[var(--text-primary)]" aria-hidden="true" />
               <span>3. Patient Notes & Administration Context</span>
             </h3>
 

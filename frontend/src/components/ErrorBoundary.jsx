@@ -3,6 +3,23 @@ import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+// Must stay at or below the bounds ClientErrorReport enforces in backend/models.py
+// (error: max_length=500, stack: max_length=4000). A React componentStack from a
+// deep tree routinely exceeds 4000 characters, and an over-long payload is
+// rejected with a 422 that the .catch() below swallows -- so the crash report
+// silently never arrives. Truncating client-side means a long stack is reported
+// in part rather than not at all.
+const MAX_ERROR_CHARS = 500;
+const MAX_STACK_CHARS = 4000;
+
+function clamp(value, limit) {
+  const text = String(value ?? '');
+  if (text.length <= limit) return text;
+  // Keep the head: the innermost frames and the message itself lead the string,
+  // and they are what identifies the fault.
+  return `${text.slice(0, limit - 1)}…`;
+}
+
 export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -20,8 +37,8 @@ export class ErrorBoundary extends React.Component {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          error: error?.toString() || 'Unknown UI Error',
-          stack: errorInfo?.componentStack || error?.stack || ''
+          error: clamp(error?.toString() || 'Unknown UI Error', MAX_ERROR_CHARS),
+          stack: clamp(errorInfo?.componentStack || error?.stack || '', MAX_STACK_CHARS)
         })
       }).catch(() => {});
     } catch {

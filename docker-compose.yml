@@ -24,6 +24,13 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      # A compose healthcheck block replaces the image's HEALTHCHECK wholesale, so
+      # the start_period set in backend/Dockerfile does not carry over and has to
+      # be repeated here. Without it the grace period is 0s: the first probe fires
+      # while the app is still importing (schema migration, expired-row sweep,
+      # knowledge-base load) and the container is restarted before it ever
+      # finished starting.
+      start_period: 40s
 
   frontend:
     build:

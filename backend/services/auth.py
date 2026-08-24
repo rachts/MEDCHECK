@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from config import settings
@@ -17,6 +17,65 @@ logger = logging.getLogger("auth_service")
 
 # JWT HTTP Bearer scheme
 security = HTTPBearer(auto_error=False)
+
+# Name of the httpOnly session cookie. The same JWT that the auth endpoints return
+# in the response body is also written here, so a browser client never has to keep
+# the credential anywhere JavaScript -- and therefore any injected script -- can
+# read it. Non-browser callers keep using the Authorization header unchanged.
+SESSION_COOKIE_NAME = "medcheck_session"
+
+
+def _cookie_is_secure() -> bool:
+    """
+    Secure is mandatory everywhere except local development.
+
+    A Secure cookie is not sent over plaintext HTTP, so forcing it on in
+    development would silently break `vite dev` against `http://localhost:8000`.
+    Any deployment that is not explicitly ENV=development is treated as
+    TLS-terminated and gets the flag.
+    """
+    return settings.ENV.strip().lower() != "development"
+
+
+def set_session_cookie(response: Response, token: str, max_age_seconds: int) -> None:
+    """
+    Stores the session JWT in an httpOnly cookie.
+
+    - httponly: the defence itself. An XSS payload cannot read this value, which
+      is the difference between a cross-site script defacing the page and one
+      exfiltrating a credential that stays valid for days.
+    - samesite=lax: the browser withholds this cookie on cross-site POST, so the
+      cookie alone cannot be used to forge a state-changing call from another
+      origin. For a JSON API with no form-encoded endpoints that removes the need
+      for a separate CSRF token.
+    - max_age: pinned to the token's own lifetime so the cookie cannot outlive
+      the credential it carries and leave the client believing it has a session.
+    """
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=max_age_seconds,
+        httponly=True,
+        secure=_cookie_is_secure(),
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_session_cookie(response: Response) -> None:
+    """
+    Deletes the session cookie.
+
+    The attributes must match those used when setting it, or the browser treats
+    this as a different cookie and the original survives the logout.
+    """
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        httponly=True,
+        secure=_cookie_is_secure(),
+        samesite="lax",
+        path="/",
+    )
 
 def _get_sqlite_auth_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(settings.SQLITE_DB_PATH, timeout=15.0)
@@ -130,16 +189,29 @@ async def authenticate_user(username: str, password: str) -> Optional[Dict[str, 
         return None
     return user
 
-async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Dict[str, Any]:
+async def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> Dict[str, Any]:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate clinical session credentials. Provide a valid Bearer token.",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if not credentials:
+
+    # The Authorization header wins when present: it is an explicit, per-request
+    # assertion of identity from a non-browser caller, and honouring it first
+    # keeps the existing API contract byte-for-byte. The httpOnly cookie is the
+    # browser path -- see set_session_cookie for why the token lives there.
+    token: Optional[str] = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    else:
+        token = request.cookies.get(SESSION_COOKIE_NAME)
+
+    if not token:
         raise credentials_exception
 
-    token = credentials.credentials
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
         username: Optional[str] = payload.get("sub")

@@ -1,7 +1,34 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { checkMedicines, getMedicineProfile } from '../lib/api';
 
 const MedicineContext = createContext(null);
+
+/**
+ * Generates a collision-resistant id for a basket entry.
+ *
+ * `Date.now()` alone collides whenever two entries are created inside the same
+ * millisecond (loadPreset builds a whole basket in one synchronous pass), and
+ * `Math.random().toString(36).substr(2, 9)` adds only ~46 bits from a generator
+ * with no collision guarantee. Duplicate ids matter here because they are React
+ * keys and the argument to removeMedicine: a collision reconciles two rows as
+ * one, and deleting either removes both.
+ *
+ * crypto.randomUUID is available in every browser this app supports; the counter
+ * fallback covers non-secure contexts (plain http on a LAN IP) where the crypto
+ * API is unavailable, and is strictly monotonic so it cannot collide either.
+ */
+let idFallbackCounter = 0;
+function createEntryId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  idFallbackCounter += 1;
+  return `med-${Date.now()}-${idFallbackCounter}`;
+}
 
 export const DEMO_PRESETS = [
   {
@@ -63,6 +90,15 @@ export function MedicineProvider({ children }) {
   const [selectedMedicineName, setSelectedMedicineName] = useState('Ibuprofen');
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  // Distinguishing "the profile fetch failed" from "the profile says this drug is
+  // gentle" is not cosmetic. Without this flag MedicineProfilePanel has only
+  // `selectedProfile === null` to go on, and it filled that gap with an invented
+  // gentle profile -- presenting a network failure as a clinical all-clear.
+  const [profileError, setProfileError] = useState(null);
+  // Guards against out-of-order responses: clicking through three basket chips can
+  // resolve the first request last, repainting the panel with a profile for a
+  // medicine the user is no longer looking at.
+  const profileRequestRef = useRef(0);
 
   // Modals & Tools
   const [doctorReportOpen, setDoctorReportOpen] = useState(false);
@@ -94,7 +130,11 @@ export function MedicineProvider({ children }) {
   const selectMedicine = useCallback(async (medicineName) => {
     if (!medicineName) return;
     const cleanName = medicineName.trim();
+    const requestId = profileRequestRef.current + 1;
+    profileRequestRef.current = requestId;
+
     setSelectedMedicineName(cleanName);
+    setProfileError(null);
 
     // If profile already in current analysis results, use it instantly
     if (results && results.profiles && results.profiles[cleanName.toLowerCase()]) {
@@ -105,20 +145,34 @@ export function MedicineProvider({ children }) {
     setProfileLoading(true);
     try {
       const profile = await getMedicineProfile(cleanName);
+      if (profileRequestRef.current !== requestId) return;
       setSelectedProfile(profile);
     } catch (e) {
+      if (profileRequestRef.current !== requestId) return;
       console.warn('Failed to load profile for', cleanName, e);
+      // Clear the previous medicine's profile rather than leaving it on screen:
+      // selectedMedicineName has already moved on, so keeping it would attribute
+      // one drug's side effects and stomach score to another.
+      setSelectedProfile(null);
+      setProfileError(
+        e?.message
+          ? `Could not load the profile for ${cleanName}: ${e.message}`
+          : `Could not load the profile for ${cleanName}.`
+      );
     } finally {
-      setProfileLoading(false);
+      if (profileRequestRef.current === requestId) setProfileLoading(false);
     }
   }, [results]);
 
-  // Initial load of default medicine profile
+  // Initial load of default medicine profile.
+  // `!profileError` matters: without it a failed fetch leaves selectedProfile null,
+  // and any unrelated re-render that changes `results` (and therefore the
+  // selectMedicine identity) would silently retry in a tight loop.
   useEffect(() => {
-    if (selectedMedicineName && !selectedProfile) {
+    if (selectedMedicineName && !selectedProfile && !profileError) {
       selectMedicine(selectedMedicineName);
     }
-  }, [selectedMedicineName, selectedProfile, selectMedicine]);
+  }, [selectedMedicineName, selectedProfile, profileError, selectMedicine]);
 
   const addMedicine = useCallback((rawName, drugType = 'otc') => {
     setInputError(null);
@@ -138,7 +192,7 @@ export function MedicineProvider({ children }) {
     }
 
     const newMed = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: createEntryId(),
       name: trimmed.charAt(0).toUpperCase() + trimmed.slice(1),
       drugType: drugType || 'otc',
     };
@@ -181,7 +235,7 @@ export function MedicineProvider({ children }) {
         type = 'supplement';
       }
       return {
-        id: `demo-${index}-${Date.now()}`,
+        id: createEntryId(),
         name,
         drugType: type,
       };
@@ -246,14 +300,36 @@ export function MedicineProvider({ children }) {
     }
   }, [medicines, selectedMedicineName]);
 
-  // Run initial analysis if medicines are populated
-  useEffect(() => {
-    if (medicines.length >= 2 && !results && !loading) {
-      checkSafety();
-    }
-  }, []); // Run on mount
+  // Keep a ref to the current checkSafety so the mount-only effect below can call
+  // the latest version without listing it as a dependency (which would re-run the
+  // analysis on every basket edit) and without capturing a stale closure over the
+  // first render's medicines/results/loading.
+  const checkSafetyRef = useRef(checkSafety);
+  checkSafetyRef.current = checkSafety;
 
-  const value = {
+  // Run the initial analysis exactly once, after mount, if the default basket is
+  // populated. The ref guard makes this idempotent under React 18 StrictMode,
+  // which intentionally invokes effects twice in development.
+  const didRunInitialCheck = useRef(false);
+  useEffect(() => {
+    if (didRunInitialCheck.current) return;
+    if (medicines.length >= 2 && !results && !loading) {
+      didRunInitialCheck.current = true;
+      checkSafetyRef.current();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Memoised so the provider's own re-renders do not, by themselves, invalidate
+  // every consumer. React compares the context value by identity: a fresh object
+  // literal here meant that any state change anywhere in this provider re-rendered
+  // the Navbar, the basket, the interaction graph, the side-effect radar, the food
+  // timeline, both modals and the profile panel -- and it also made React.memo on
+  // those components inert, since a changed context value bypasses memo entirely.
+  //
+  // Every entry is either useState state or a useCallback, so the dependency list
+  // below is exactly the set of values whose identity can change.
+  const value = useMemo(() => ({
     medicines,
     results,
     loading,
@@ -264,6 +340,7 @@ export function MedicineProvider({ children }) {
     selectedMedicineName,
     selectedProfile,
     profileLoading,
+    profileError,
     doctorReportOpen,
     setDoctorReportOpen,
     stomachModalOpen,
@@ -280,7 +357,13 @@ export function MedicineProvider({ children }) {
     checkSafety,
     canCheck: medicines.length >= 1,
     demoPresets: DEMO_PRESETS,
-  };
+  }), [
+    medicines, results, loading, loadingStage, error, inputError, isDemoMode,
+    selectedMedicineName, selectedProfile, profileLoading, profileError,
+    doctorReportOpen, stomachModalOpen, personalNotes, savePersonalNote,
+    selectMedicine, addMedicine, removeMedicine, clearBasket, loadPreset,
+    loadScenario, toggleDemoMode, checkSafety,
+  ]);
 
   return <MedicineContext.Provider value={value}>{children}</MedicineContext.Provider>;
 }

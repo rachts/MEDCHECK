@@ -8,11 +8,35 @@ logger = logging.getLogger("openfda")
 
 OPENFDA_LABEL_URL = "https://api.fda.gov/drug/label.json"
 
+# openFDA search terms are Lucene-style. The term is always wrapped in double
+# quotes by the callers below, so the characters that could break out of the
+# quoted phrase are the quote itself and the backslash. Everything outside this
+# allow-list is dropped rather than escaped, because no legitimate drug name
+# needs it and dropping leaves no escape sequence to reason about.
+_OPENFDA_TERM_ALLOWED = re.compile(r"[^a-z0-9\s\-\./()',+]")
+_OPENFDA_WHITESPACE = re.compile(r"\s+")
+
+# openFDA rejects very long search phrases; drug names never approach this.
+MAX_OPENFDA_TERM_LENGTH = 100
+
+
 def sanitize_for_openfda_query(term: str) -> str:
+    """
+    Reduces a caller-supplied drug name to a safe quoted-phrase search term.
+
+    Strips quotes, backslashes, control characters and any other character
+    outside the allow-list, collapses whitespace, and caps the length.
+    """
+    if not term:
+        return ""
     cleaned = term.strip().lower()
-    cleaned = cleaned.strip('"\'')
-    cleaned = cleaned.replace('\\', '\\\\').replace('"', '\\"')
-    return cleaned
+    # Drop everything outside the allow-list. This removes the quote and
+    # backslash characters that would otherwise need escaping, as well as
+    # newlines and other control codes.
+    cleaned = _OPENFDA_TERM_ALLOWED.sub(" ", cleaned)
+    cleaned = _OPENFDA_WHITESPACE.sub(" ", cleaned).strip()
+    return cleaned[:MAX_OPENFDA_TERM_LENGTH].strip()
+
 
 def truncate_to_sentences(text: str, max_chars: int = 8000) -> str:
     """
@@ -79,8 +103,28 @@ async def fetch_drug_label(drug_name: str) -> Optional[Dict[str, Any]]:
                         backoff = 2 ** attempt
                         logger.warning(f"openFDA 429 Rate Limited on '{query}'. Exponential backoff {backoff}s (attempt {attempt+1}/3)...")
                         await asyncio.sleep(backoff)
+                    elif response.status_code in (401, 403):
+                        # Credential, quota or WAF rejection. It applies to the whole
+                        # API key, not this one query, so abandon every remaining
+                        # fallback instead of burning four more rejected requests.
+                        logger.error(
+                            f"openFDA rejected the request with HTTP {response.status_code} "
+                            f"(credentials, quota exhaustion or upstream block). "
+                            f"Abandoning all label lookups for '{drug_name}'; "
+                            f"the curated knowledge base will be used instead."
+                        )
+                        return None
+                    elif response.status_code >= 500:
+                        backoff = 2 ** attempt
+                        logger.warning(
+                            f"openFDA upstream error HTTP {response.status_code} on '{query}'. "
+                            f"Retrying in {backoff}s (attempt {attempt+1}/3)..."
+                        )
+                        await asyncio.sleep(backoff)
                     else:
-                        logger.debug(f"openFDA returned status {response.status_code} for query '{query}'")
+                        logger.warning(
+                            f"openFDA returned unexpected status {response.status_code} for query '{query}'"
+                        )
                         break
                 except httpx.TimeoutException:
                     logger.warning(f"openFDA request timed out for query '{query}'")

@@ -86,8 +86,8 @@ export function Landing() {
               <Activity className="w-4 h-4" />
             </div>
             <div>
-              <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">10,000+ Drugs</div>
-              <div className="text-xs text-[var(--text-muted)] font-sans">Indexed pharmacology</div>
+              <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">Live FDA Lookup</div>
+              <div className="text-xs text-[var(--text-muted)] font-sans">Curated core + OpenFDA labels</div>
             </div>
           </div>
 
@@ -106,8 +106,8 @@ export function Landing() {
               <Lock className="w-4 h-4" />
             </div>
             <div>
-              <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">Zero Stored Data</div>
-              <div className="text-xs text-[var(--text-muted)] font-sans">100% private in browser</div>
+              <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">No Signup Required</div>
+              <div className="text-xs text-[var(--text-muted)] font-sans">Anonymous guest sessions</div>
             </div>
           </div>
         </div>

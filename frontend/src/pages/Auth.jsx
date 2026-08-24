@@ -6,6 +6,34 @@ import { useMedicine } from '../context/MedicineContext';
 import { loginUser, registerUser, getStoredUser, logoutUser } from '../lib/api';
 import { ShieldCheck, ArrowRight, User, Lock, Mail, AlertTriangle, LogOut, CheckCircle2, Sparkles } from 'lucide-react';
 
+// Mirrors the backend policy in models.py (UserCreate.validate_password_complexity).
+// Validating here is a UX affordance only -- the server remains the authority --
+// but the two must agree, or the form accepts a password the API then rejects
+// with an opaque 422.
+const MIN_PASSWORD_LENGTH = 8;
+const PASSWORD_RULE_HINT = 'Min 8 chars, with upper, lower & a digit';
+
+function describePasswordProblem(password) {
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`;
+  }
+  // bcrypt silently truncates at 72 bytes, so the backend rejects anything longer
+  // rather than hash a password whose tail is ignored.
+  if (password.length > 72) {
+    return 'Password must be 72 characters or fewer.';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must include at least one uppercase letter.';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must include at least one lowercase letter.';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must include at least one number.';
+  }
+  return null;
+}
+
 export function Auth() {
   const [mode, setMode] = useState('guest'); // 'guest' | 'login' | 'register'
   const [userName, setUserName] = useState(() => localStorage.getItem('medcheck_user_name') || '');
@@ -39,8 +67,14 @@ export function Auth() {
       const user = await loginUser(usernameInput.trim(), passwordInput.trim());
       setCurrentUser(user);
       localStorage.setItem('medcheck_user_name', user.username);
+      // Drop the plaintext password from component state as soon as it has been
+      // exchanged for a session. Holding it keeps a live credential in the React
+      // tree (visible in DevTools and in any error/state snapshot) for the rest
+      // of the page's life, long after it is needed.
+      setPasswordInput('');
       navigate('/app');
     } catch (err) {
+      setPasswordInput('');
       setErrorMsg(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
@@ -54,8 +88,9 @@ export function Auth() {
       setErrorMsg('Please enter a valid username and password.');
       return;
     }
-    if (passwordInput.length < 6) {
-      setErrorMsg('Password must be at least 6 characters long.');
+    const passwordProblem = describePasswordProblem(passwordInput);
+    if (passwordProblem) {
+      setErrorMsg(passwordProblem);
       return;
     }
     setLoading(true);
@@ -63,8 +98,10 @@ export function Auth() {
       const user = await registerUser(usernameInput.trim(), passwordInput.trim(), emailInput.trim());
       setCurrentUser(user);
       localStorage.setItem('medcheck_user_name', user.username);
+      setPasswordInput('');
       navigate('/app');
     } catch (err) {
+      setPasswordInput('');
       setErrorMsg(err.message || 'Registration failed. Username may already exist.');
     } finally {
       setLoading(false);
@@ -72,8 +109,11 @@ export function Auth() {
   };
 
   const handleLogout = () => {
+    // logoutUser also asks the backend to delete the httpOnly session cookie; the
+    // local state below is cleared synchronously so the UI never lags the intent.
     logoutUser();
     setCurrentUser(null);
+    setPasswordInput('');
     localStorage.removeItem('medcheck_user_name');
   };
 
@@ -160,13 +200,19 @@ export function Auth() {
           {mode === 'guest' && (
             <form onSubmit={handleGuestAccess} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-[var(--text-secondary)]">
+                {/* htmlFor/id pairs: a <label> that is neither wrapping nor
+                    associated by id is announced as loose text, so a screen-reader
+                    user reaching this field heard only the placeholder. */}
+                <label htmlFor="guest-name" className="text-xs font-semibold text-[var(--text-secondary)]">
                   Patient / Provider Name <span className="text-[var(--text-muted)]">(Optional)</span>
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
+                    id="guest-name"
+                    name="name"
                     type="text"
+                    autoComplete="name"
                     value={userName}
                     onChange={(e) => setUserName(e.target.value)}
                     placeholder="e.g. Mrs. Sharma or Dr. Patel"
@@ -189,11 +235,14 @@ export function Auth() {
           {mode === 'login' && (
             <form onSubmit={handleLogin} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-[var(--text-secondary)]">Username</label>
+                <label htmlFor="login-username" className="text-xs font-semibold text-[var(--text-secondary)]">Username</label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                   <input
+                    id="login-username"
+                    name="username"
                     type="text"
+                    autoComplete="username"
                     required
                     value={usernameInput}
                     onChange={(e) => setUsernameInput(e.target.value)}
@@ -204,11 +253,14 @@ export function Auth() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-[var(--text-secondary)]">Password</label>
+                <label htmlFor="login-password" className="text-xs font-semibold text-[var(--text-secondary)]">Password</label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                   <input
+                    id="login-password"
+                    name="password"
                     type="password"
+                    autoComplete="current-password"
                     required
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
@@ -232,11 +284,14 @@ export function Auth() {
           {mode === 'register' && (
             <form onSubmit={handleRegister} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-[var(--text-secondary)]">Username</label>
+                <label htmlFor="register-username" className="text-xs font-semibold text-[var(--text-secondary)]">Username</label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                   <input
+                    id="register-username"
+                    name="username"
                     type="text"
+                    autoComplete="username"
                     required
                     value={usernameInput}
                     onChange={(e) => setUsernameInput(e.target.value)}
@@ -247,13 +302,16 @@ export function Auth() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-[var(--text-secondary)]">
+                <label htmlFor="register-email" className="text-xs font-semibold text-[var(--text-secondary)]">
                   Email <span className="text-[var(--text-muted)]">(Optional)</span>
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
+                    id="register-email"
+                    name="email"
                     type="email"
+                    autoComplete="email"
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     placeholder="doctor@hospital.org"
@@ -263,18 +321,28 @@ export function Auth() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-[var(--text-secondary)]">Password</label>
+                <label htmlFor="register-password" className="text-xs font-semibold text-[var(--text-secondary)]">Password</label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                   <input
+                    id="register-password"
+                    name="new-password"
                     type="password"
+                    autoComplete="new-password"
+                    aria-describedby="register-password-hint"
                     required
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="Min 6 characters"
+                    placeholder={PASSWORD_RULE_HINT}
                     className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] focus:border-[var(--border-hover)] focus:bg-[var(--bg-surface)] rounded-[6px] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[44px] transition-colors"
                   />
                 </div>
+                {/* The rule was previously only in the placeholder, which vanishes
+                    the moment the user starts typing -- exactly when they need it.
+                    Referenced by aria-describedby on the input above. */}
+                <p id="register-password-hint" className="text-xs text-[var(--text-muted)]">
+                  {PASSWORD_RULE_HINT}
+                </p>
               </div>
 
               <button

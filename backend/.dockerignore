@@ -1,0 +1,52 @@
+# =============================================================================
+# Docker build-context exclusions for the backend image.
+#
+# This file is required, not merely nice to have: docker-compose builds this
+# image with `context: ./backend`, and Docker only reads the .dockerignore at the
+# root of the build context. The repository-root .dockerignore is therefore never
+# consulted for this image, so without this file `COPY . /app` copied the entire
+# backend directory -- including .env.local, the venv, and the local cache DB --
+# into an image layer.
+# =============================================================================
+
+# Secrets. A .env baked into a layer is readable by anyone who can pull the
+# image, and `docker history` will show it even if a later layer deletes it.
+.env
+.env.*
+!.env.example
+
+# Local virtualenv. Built against the host's Python and platform, so it is not
+# merely wasted space -- it can shadow the interpreter's own site-packages and
+# make the container run different dependency versions than requirements.txt
+# pins.
+venv/
+.venv/
+env/
+
+# Local cache database and its WAL sidecars. Baking these in ships one
+# developer's cached openFDA responses as the starting state for every
+# deployment, and the container mounts a volume at /app/data anyway.
+*.db
+*.db-wal
+*.db-shm
+local_cache.db
+
+# Python build and test artefacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Tests are not needed to serve traffic and only enlarge the attack surface.
+tests/
+
+# Editor, OS and tooling noise
+.DS_Store
+*.log
+.idea/
+.vscode/
+.claude/

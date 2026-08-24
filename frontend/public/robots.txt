@@ -1,0 +1,14 @@
+# MEDCHECK crawl policy.
+#
+# The public pages are indexable; /app is not. It is a per-session analysis
+# surface whose content depends entirely on the basket the visitor built, so an
+# indexed copy would be an empty dashboard -- a poor search result, and one that
+# invites a crawler to hammer /api/check via the auto-analysis on mount.
+
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /auth
+Disallow: /api/
+
+Sitemap: https://medcheck.app/sitemap.xml

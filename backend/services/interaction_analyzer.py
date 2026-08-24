@@ -1,10 +1,44 @@
 import json
 import logging
-from typing import Optional, Dict, Any, List
+import re
+from typing import Optional, Dict, Any, List, Pattern
 from models import InteractionItem, Severity, RuleConfidence, ParsedDrugInfo
 from services.clinical_rules import match_known_clinical_rule, expand_aliases, resolve_canonical_name
 
 logger = logging.getLogger("interaction_analyzer")
+
+# Shortest alias worth matching. Single characters are too ambiguous even with
+# word boundaries; two characters ("t4") are legitimate drug abbreviations.
+MIN_ALIAS_LENGTH = 2
+
+_ALIAS_PATTERN_CACHE: Dict[str, Pattern[str]] = {}
+
+
+def _alias_pattern(alias: str) -> Optional[Pattern[str]]:
+    """
+    Builds a word-boundary matcher for a drug alias.
+
+    Plain substring matching produces false positives on short aliases ("asa"
+    inside "nasal"), which the previous implementation avoided with a
+    `len(alias) > 3` guard. That guard silently discarded every legitimate short
+    alias in the synonym table -- "asa" for aspirin, "t4" for levothyroxine,
+    "apap" was long enough but "asa"/"t4" were not -- so a boxed warning naming
+    only the abbreviation was never detected. Anchoring on alphanumeric
+    boundaries removes the false positives without discarding short aliases.
+
+    `\b` is not used because aliases legitimately contain '/' and '.'
+    (e.g. "amoxicillin/clavulanate"), around which `\b` behaves unintuitively.
+    """
+    cleaned = (alias or "").strip().lower()
+    if len(cleaned) < MIN_ALIAS_LENGTH:
+        return None
+    cached = _ALIAS_PATTERN_CACHE.get(cleaned)
+    if cached is None:
+        cached = re.compile(
+            r"(?<![0-9a-z])" + re.escape(cleaned) + r"(?![0-9a-z])"
+        )
+        _ALIAS_PATTERN_CACHE[cleaned] = cached
+    return cached
 
 def parse_drug_label_from_dict(label_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -71,28 +105,38 @@ async def analyze_drug_pair(
     is_boxed_warning = False
 
     if label_a and label_a.get("found"):
-        text_a = label_a.get("raw_text_summary", "").lower()
+        raw_a = label_a.get("raw_text_summary", "")
+        text_a = raw_a.lower()
         boxed_a = " ".join(label_a.get("boxed_warnings", [])).lower()
         for b_alias in aliases_b:
-            if b_alias in text_a and len(b_alias) > 3:
+            pattern = _alias_pattern(b_alias)
+            if pattern is None:
+                continue
+            match = pattern.search(text_a)
+            if match:
                 found_in_a = True
-                if b_alias in boxed_a:
+                if pattern.search(boxed_a):
                     is_boxed_warning = True
-                idx = text_a.find(b_alias)
-                excerpt = label_a.get("raw_text_summary", "")[max(0, idx-100):min(len(text_a), idx+200)]
+                idx = match.start()
+                excerpt = raw_a[max(0, idx - 100):min(len(raw_a), idx + 200)]
                 break
 
     if label_b and label_b.get("found"):
-        text_b = label_b.get("raw_text_summary", "").lower()
+        raw_b = label_b.get("raw_text_summary", "")
+        text_b = raw_b.lower()
         boxed_b = " ".join(label_b.get("boxed_warnings", [])).lower()
         for a_alias in aliases_a:
-            if a_alias in text_b and len(a_alias) > 3:
+            pattern = _alias_pattern(a_alias)
+            if pattern is None:
+                continue
+            match = pattern.search(text_b)
+            if match:
                 found_in_b = True
-                if a_alias in boxed_b:
+                if pattern.search(boxed_b):
                     is_boxed_warning = True
                 if not excerpt:
-                    idx = text_b.find(a_alias)
-                    excerpt = label_b.get("raw_text_summary", "")[max(0, idx-100):min(len(text_b), idx+200)]
+                    idx = match.start()
+                    excerpt = raw_b[max(0, idx - 100):min(len(raw_b), idx + 200)]
                 break
 
     if found_in_a or found_in_b:

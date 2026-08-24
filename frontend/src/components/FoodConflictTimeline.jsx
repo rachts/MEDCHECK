@@ -2,7 +2,7 @@ import React from 'react';
 import { useMedicine } from '../context/MedicineContext';
 import { Clock, AlertTriangle } from 'lucide-react';
 
-export function FoodConflictTimeline() {
+function FoodConflictTimelineBase() {
   const { results } = useMedicine();
 
   if (!results || (!results.food_conflicts?.length && !results.daily_food_timeline?.length)) {
@@ -18,7 +18,7 @@ export function FoodConflictTimeline() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-[4px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center">
-            <Clock className="w-3.5 h-3.5" />
+            <Clock className="w-3.5 h-3.5" aria-hidden="true" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">
@@ -39,8 +39,10 @@ export function FoodConflictTimeline() {
 
       {/* Conflict Warnings */}
       {conflicts.map((c, idx) => (
-        <div key={idx} className="bg-[rgba(217,119,6,0.06)] border border-[rgba(217,119,6,0.25)] rounded-[6px] p-2.5 flex items-start gap-2">
-          <AlertTriangle className="w-3.5 h-3.5 text-[var(--severity-moderate)] shrink-0 mt-0.5" />
+        // The medicine pair plus conflict type identifies the warning; index is a
+        // tiebreaker only.
+        <div key={`${c.medicine_a}-${c.medicine_b}-${c.conflict_type}-${idx}`} className="bg-[rgba(217,119,6,0.06)] border border-[rgba(217,119,6,0.25)] rounded-[6px] p-2.5 flex items-start gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 text-[var(--severity-moderate)] shrink-0 mt-0.5" aria-hidden="true" />
           <div className="flex-1">
             <h4 className="text-sm font-semibold text-[var(--text-primary)]">Conflict: {c.medicine_a} ↔ {c.medicine_b}</h4>
             <p className="text-xs text-[var(--text-secondary)] mt-0.5">{c.conflict}</p>
@@ -79,11 +81,12 @@ export function FoodConflictTimeline() {
             }
 
             return (
-              <div key={idx} className="relative flex items-start gap-2.5 py-1">
+              <div key={`${slot.time}-${slot.action_type}-${idx}`} className="relative flex items-start gap-2.5 py-1">
                 {/* Node dot on timeline */}
-                <div 
-                  className="absolute -left-[18px] top-2.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-base)]" 
+                <div
+                  className="absolute -left-[18px] top-2.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-base)]"
                   style={{ backgroundColor: dotColor }}
+                  aria-hidden="true"
                 />
 
                 <div className="w-14 shrink-0 text-right metric text-xs text-[var(--text-primary)] font-bold pt-0.5">
@@ -113,3 +116,8 @@ export function FoodConflictTimeline() {
     </div>
   );
 }
+
+// Memoised for the same reason as SideEffectRadar: it is a props-free context
+// consumer sitting in AppInterface's centre column, and the 24-hour timeline is the
+// largest list on that screen.
+export const FoodConflictTimeline = React.memo(FoodConflictTimelineBase);

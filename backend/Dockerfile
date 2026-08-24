@@ -39,7 +39,13 @@ USER medcheck
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+# start-period must cover the slowest cold start, not the fastest. Importing the
+# app runs the SQLite schema migration, the expired-row sweep and the curated
+# knowledge-base load before uvicorn binds; on a cold volume or a throttled
+# container that exceeds 5s, and the container was then marked unhealthy and
+# restarted before it had ever finished starting. Failures inside the start
+# period do not count toward --retries, so a generous window costs nothing.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')" || exit 1
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
