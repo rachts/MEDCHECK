@@ -660,9 +660,27 @@ def get_or_build_medicine_profile(medicine_name: str, label: Optional[Dict[str, 
         raw_text = label.get("raw_text_summary", "")
         raw_text_lower = raw_text.lower()
         
-        # Parse prescription vs OTC
+        # Parse prescription vs OTC.
+        #
+        # Tri-state. `is_rx` is None when the FDA label carried no product_type
+        # and no Rx-only statement to classify on, and that is not the same as
+        # "over-the-counter". The previous `label.get("is_rx", False)` collapsed
+        # unknown into OTC, so an unclassifiable drug was affirmatively badged as
+        # available without a prescription.
         product_types = label.get("product_types", [])
-        is_prescription = label.get("is_rx", False) or any("PRESCRIPTION" in str(pt).upper() for pt in product_types)
+        is_rx_flag = label.get("is_rx")
+        if is_rx_flag is None and product_types:
+            is_rx_flag = any("PRESCRIPTION" in str(pt).upper() for pt in product_types)
+
+        if is_rx_flag is True:
+            drug_type = DrugType.PRESCRIPTION
+            default_category = "Prescription Drug"
+        elif is_rx_flag is False:
+            drug_type = DrugType.OTC
+            default_category = "Over-The-Counter Medicine"
+        else:
+            drug_type = DrugType.UNKNOWN
+            default_category = "FDA-Indexed Medicine (Rx status not stated on label)"
         
         # Dynamically extract side effects from FDA label text
         dynamic_side_effects = []
@@ -702,9 +720,12 @@ def get_or_build_medicine_profile(medicine_name: str, label: Optional[Dict[str, 
             name=medicine_name.capitalize(),
             generic_name=generic_name,
             brand_names=brand_names,
-            category=label.get("pharm_class_cs", "Prescription Drug" if is_prescription else "Over-The-Counter Medicine"),
-            drug_type=DrugType.PRESCRIPTION if is_prescription else DrugType.OTC,
-            dosage_forms=label.get("dosage_forms", ["Oral Formulation"]),
+            category=label.get("pharm_class_cs") or default_category,
+            drug_type=drug_type,
+            # `or [...]` rather than a .get default: _extract_dosage_forms returns
+            # [] when the label yielded nothing, and an empty list would otherwise
+            # be passed through as "this drug has no dosage forms".
+            dosage_forms=label.get("dosage_forms") or ["Oral Formulation"],
             description=raw_text[:300] + "..." if len(raw_text) > 300 else raw_text or "FDA-indexed pharmacology profile.",
             side_effects=dynamic_side_effects,
             food_interactions=dynamic_food,

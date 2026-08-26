@@ -36,7 +36,6 @@ export const DEMO_PRESETS = [
     name: "Sarah's Demo: Anticoagulant + Dual NSAID",
     description: 'Warfarin + Aspirin + Ibuprofen — Compounded stomach bleeding & major ulceration hazard',
     medicines: ['Warfarin', 'Aspirin', 'Ibuprofen'],
-    expectedSeverity: 'high',
     badge: 'Critical Triple Hazard'
   },
   {
@@ -44,7 +43,6 @@ export const DEMO_PRESETS = [
     name: 'Diabetes & Lifestyle: Metformin + Alcohol',
     description: 'Potentiated lactate inhibition causing life-threatening metabolic lactic acidosis',
     medicines: ['Metformin', 'Alcohol'],
-    expectedSeverity: 'high',
     badge: 'Lactic Acidosis'
   },
   {
@@ -52,7 +50,6 @@ export const DEMO_PRESETS = [
     name: 'Cardiology: Atorvastatin + Clarithromycin',
     description: 'CYP3A4 blockade elevating blood statin levels and severe rhabdomyolysis risk',
     medicines: ['Atorvastatin', 'Clarithromycin'],
-    expectedSeverity: 'high',
     badge: 'Myopathy Risk'
   },
   {
@@ -60,7 +57,6 @@ export const DEMO_PRESETS = [
     name: 'Cardioprotection Clash: Aspirin + Ibuprofen',
     description: 'Competitive COX-1 blockade neutralizing Aspirin stroke protection + doubling GI load',
     medicines: ['Aspirin', 'Ibuprofen'],
-    expectedSeverity: 'moderate',
     badge: 'Efficacy Loss'
   },
   {
@@ -68,10 +64,64 @@ export const DEMO_PRESETS = [
     name: 'Verified Safe: Paracetamol + Amoxicillin',
     description: 'Standard antibiotic and analgesic co-prescription with gentle stomach profile',
     medicines: ['Paracetamol', 'Amoxicillin'],
-    expectedSeverity: 'safe',
     badge: 'Safe Co-Prescription'
   },
 ];
+
+/**
+ * Provisional drug type for a demo-preset entry, used only until the backend's
+ * authoritative `drug_type` arrives with the analysis response.
+ *
+ * Keys mirror `backend/services/knowledge_base.py`'s curated entries so the
+ * optimistic badge cannot contradict the one the API returns a moment later.
+ * Alcohol in particular used to be grouped with potassium and the vitamins as
+ * `'supplement'` while the backend classifies it `'substance'` -- so the chip
+ * rendered ethanol as a dietary supplement, in the same colour as a multivitamin,
+ * in the one preset whose whole point is a life-threatening alcohol interaction.
+ */
+const PRESET_DRUG_TYPES = {
+  aspirin: 'otc',
+  ibuprofen: 'otc',
+  paracetamol: 'otc',
+  acetaminophen: 'otc',
+  omeprazole: 'otc',
+  aleve: 'otc',
+  potassium: 'supplement',
+  calcium: 'supplement',
+  vitamin: 'supplement',
+  alcohol: 'substance',
+  ethanol: 'substance',
+  caffeine: 'substance',
+  nicotine: 'substance',
+  tobacco: 'lifestyle_factor',
+  smoking: 'lifestyle_factor',
+};
+
+/** Everything not listed above is a prescription drug in these presets. */
+const DEFAULT_PRESET_DRUG_TYPE = 'prescription';
+
+const WAKE_TIME_KEY = 'medcheck_patient_wake_time';
+
+/**
+ * Matches `CheckRequest.patient_wake_time`'s 24-hour branch
+ * (`WAKE_TIME_24H_RE` in backend/models.py) -- the exact format
+ * `<input type="time">` produces, which is why that control is used rather than a
+ * text field. Validating here as well keeps a corrupted localStorage value from
+ * being sent and coming back as a 422.
+ */
+const WAKE_TIME_24H_RE = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+
+/** The backend's own fallback, mirrored so the UI shows what it will actually use. */
+export const DEFAULT_WAKE_TIME = '07:00';
+
+function readStoredWakeTime() {
+  try {
+    const saved = localStorage.getItem(WAKE_TIME_KEY);
+    return saved && WAKE_TIME_24H_RE.test(saved) ? saved : DEFAULT_WAKE_TIME;
+  } catch {
+    return DEFAULT_WAKE_TIME;
+  }
+}
 
 /**
  * Owns all analysis state: the basket, the last `CheckResponse`, the selected
@@ -92,6 +142,23 @@ export function MedicineProvider({ children }) {
   const [error, setError] = useState(null);
   const [inputError, setInputError] = useState(null);
   const [isDemoMode, setIsDemoMode] = useState(true);
+
+  // Anchors the backend's 24-hour administration timeline. Persisted because a
+  // patient's wake time is a stable fact about them, not a per-session choice.
+  const [patientWakeTime, setPatientWakeTimeState] = useState(readStoredWakeTime);
+
+  const setPatientWakeTime = useCallback((value) => {
+    // An invalid value is stored as the default rather than rejected outright:
+    // `<input type="time">` legitimately reports '' while the user is mid-edit,
+    // and treating that as "no preference" is better than freezing the control.
+    const next = value && WAKE_TIME_24H_RE.test(value) ? value : DEFAULT_WAKE_TIME;
+    setPatientWakeTimeState(next);
+    try {
+      localStorage.setItem(WAKE_TIME_KEY, next);
+    } catch (e) {
+      console.warn('Wake time save error:', e);
+    }
+  }, []);
   
   // Right-Panel Intelligence Profile State
   const [selectedMedicineName, setSelectedMedicineName] = useState('Ibuprofen');
@@ -233,20 +300,11 @@ export function MedicineProvider({ children }) {
   }, []);
 
   const loadPreset = useCallback((preset) => {
-    const newMeds = preset.medicines.map((name, index) => {
-      let type = 'prescription';
-      const lower = name.toLowerCase();
-      if (['aspirin', 'ibuprofen', 'paracetamol', 'acetaminophen', 'omeprazole', 'aleve'].includes(lower)) {
-        type = 'otc';
-      } else if (['alcohol', 'potassium', 'calcium', 'vitamin'].includes(lower)) {
-        type = 'supplement';
-      }
-      return {
-        id: createEntryId(),
-        name,
-        drugType: type,
-      };
-    });
+    const newMeds = preset.medicines.map((name) => ({
+      id: createEntryId(),
+      name,
+      drugType: PRESET_DRUG_TYPES[name.toLowerCase()] || DEFAULT_PRESET_DRUG_TYPE,
+    }));
     setMedicines(newMeds);
     setResults(null);
     setError(null);
@@ -288,7 +346,7 @@ export function MedicineProvider({ children }) {
 
     try {
       const medNames = medicines.map((m) => m.name);
-      const data = await checkMedicines(medNames);
+      const data = await checkMedicines(medNames, patientWakeTime);
       setResults(data);
       if (selectedMedicineName && data.profiles && data.profiles[selectedMedicineName.toLowerCase()]) {
         setSelectedProfile(data.profiles[selectedMedicineName.toLowerCase()]);
@@ -305,7 +363,7 @@ export function MedicineProvider({ children }) {
       setLoading(false);
       setLoadingStage('');
     }
-  }, [medicines, selectedMedicineName]);
+  }, [medicines, selectedMedicineName, patientWakeTime]);
 
   // Keep a ref to the current checkSafety so the mount-only effect below can call
   // the latest version without listing it as a dependency (which would re-run the
@@ -344,6 +402,8 @@ export function MedicineProvider({ children }) {
     error,
     inputError,
     isDemoMode,
+    patientWakeTime,
+    setPatientWakeTime,
     selectedMedicineName,
     selectedProfile,
     profileLoading,
@@ -366,6 +426,7 @@ export function MedicineProvider({ children }) {
     demoPresets: DEMO_PRESETS,
   }), [
     medicines, results, loading, loadingStage, error, inputError, isDemoMode,
+    patientWakeTime, setPatientWakeTime,
     selectedMedicineName, selectedProfile, profileLoading, profileError,
     doctorReportOpen, stomachModalOpen, personalNotes, savePersonalNote,
     selectMedicine, addMedicine, removeMedicine, clearBasket, loadPreset,

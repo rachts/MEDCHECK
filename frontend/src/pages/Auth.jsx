@@ -11,16 +11,47 @@ import { ShieldCheck, ArrowRight, User, Lock, Mail, AlertTriangle, LogOut, Check
 // but the two must agree, or the form accepts a password the API then rejects
 // with an opaque 422.
 const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_BYTES = 72;
 const PASSWORD_RULE_HINT = 'Min 8 chars, with upper, lower & a digit';
+
+/**
+ * UTF-8 byte length of a string.
+ *
+ * bcrypt's 72-unit limit is measured in BYTES, and so is the backend's check
+ * (`len(v.encode("utf-8")) > 72`). JavaScript's `String.length` counts UTF-16 code
+ * units, which is a different number for anything outside ASCII: a 40-character
+ * passphrase of CJK glyphs is 120 bytes, and 30 emoji are 120 bytes at
+ * `.length === 60`. The old `password.length > 72` therefore passed those
+ * client-side and the server rejected them with a message about a limit the user
+ * appeared to be well inside -- while a 72-character ASCII password was accepted
+ * by both, so the mismatch never showed up in testing.
+ *
+ * TextEncoder is available in every browser this app targets.
+ *
+ * @param {string} value
+ * @returns {number}
+ */
+function utf8ByteLength(value) {
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(value).length;
+  }
+  // Defensive only. Matches TextEncoder for the whole BMP plus surrogate pairs.
+  return unescape(encodeURIComponent(value)).length;
+}
 
 function describePasswordProblem(password) {
   if (password.length < MIN_PASSWORD_LENGTH) {
     return `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`;
   }
-  // bcrypt silently truncates at 72 bytes, so the backend rejects anything longer
+  // bcrypt silently truncates at 72 BYTES, so the backend rejects anything longer
   // rather than hash a password whose tail is ignored.
-  if (password.length > 72) {
-    return 'Password must be 72 characters or fewer.';
+  const byteLength = utf8ByteLength(password);
+  if (byteLength > MAX_PASSWORD_BYTES) {
+    return password.length <= MAX_PASSWORD_BYTES
+      // Naming the byte count is the only way this message makes sense to someone
+      // looking at a password that is visibly shorter than 72 characters.
+      ? `Password must be ${MAX_PASSWORD_BYTES} bytes or fewer. Accented, emoji and non-Latin characters count as 2-4 bytes each, so this one is ${byteLength} bytes.`
+      : `Password must be ${MAX_PASSWORD_BYTES} bytes or fewer.`;
   }
   if (!/[A-Z]/.test(password)) {
     return 'Password must include at least one uppercase letter.';

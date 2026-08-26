@@ -26,8 +26,19 @@ function MedicineChipBase({ medicine, onRemove }) {
   const { selectedMedicineName, selectMedicine, results } = useMedicine();
   const isSelected = selectedMedicineName?.toLowerCase() === medicine.name.toLowerCase();
 
-  const isOTC = medicine.drugType === 'otc';
-  const isRx = medicine.drugType === 'prescription';
+  // Badge text and classes for the six `DrugType` values. `Supp` was previously
+  // the catch-all for anything that was not OTC or Rx, which grouped a
+  // prescription-strength substance like alcohol (classed `'substance'` by the
+  // backend) under the same violet tag as a multivitamin. Distinct labels here
+  // cost nothing and keep a substance from reading as a dietary supplement.
+  const drugBadge = {
+    otc: { label: 'OTC', cls: 'tag-success', },
+    prescription: { label: 'Rx', cls: 'text-[#0284C7] bg-[#0284C7]/10 border-[#0284C7]/20', },
+    supplement: { label: 'Supp', cls: 'text-[#7C3AED] bg-[#7C3AED]/10 border-[#7C3AED]/20', },
+    substance: { label: 'Sub', cls: 'text-[#BE185D] bg-[#BE185D]/10 border-[#BE185D]/20', },
+    lifestyle_factor: { label: 'Life', cls: 'text-[#B45309] bg-[#B45309]/10 border-[#B45309]/20', },
+    unknown: { label: '—', cls: 'text-[#64748B] bg-[#64748B]/10 border-[#64748B]/20', },
+  }[medicine.drugType] || { label: '—', cls: 'text-[#64748B] bg-[#64748B]/10 border-[#64748B]/20' };
 
   // Determine individual medicine risk for left border
   let leftBorderColor = 'var(--severity-low)'; // #059669
@@ -96,10 +107,8 @@ function MedicineChipBase({ medicine, onRemove }) {
 
       <div className="flex items-center gap-2 shrink-0">
         {/* Category Tag in Inter */}
-        <span className={`tag font-sans ${
-          isOTC ? 'tag-success' : isRx ? 'text-[#0284C7] bg-[#0284C7]/10 border-[#0284C7]/20' : 'text-[#7C3AED] bg-[#7C3AED]/10 border-[#7C3AED]/20'
-        }`}>
-          {isOTC ? 'OTC' : isRx ? 'Rx' : 'Supp'}
+        <span className={`tag font-sans ${drugBadge.cls}`}>
+          {drugBadge.label}
         </span>
 
         {/* Remove Button with 44px hit target padding */}

@@ -3,7 +3,7 @@ import { useMedicine } from '../context/MedicineContext';
 import { Clock, AlertTriangle } from 'lucide-react';
 
 function FoodConflictTimelineBase() {
-  const { results } = useMedicine();
+  const { results, patientWakeTime, setPatientWakeTime, checkSafety, loading } = useMedicine();
 
   if (!results || (!results.food_conflicts?.length && !results.daily_food_timeline?.length)) {
     return null;
@@ -12,10 +12,23 @@ function FoodConflictTimelineBase() {
   const conflicts = results.food_conflicts || [];
   const timeline = results.daily_food_timeline || [];
 
+  // Every slot below is offset from the patient's wake time by the backend's
+  // timeline engine. Until this control existed the value was never sent, so the
+  // schedule was always anchored to the server-side 07:00 default -- a night-shift
+  // patient was told to take a fasting dose at 7 AM, six hours into their sleep.
+  const handleWakeTimeChange = (e) => {
+    const next = e.target.value;
+    setPatientWakeTime(next);
+    // Re-analyse so the visible schedule matches the control. Skipped while a
+    // request is in flight; the change is persisted either way and applies to the
+    // next analysis.
+    if (next && !loading) checkSafety();
+  };
+
   return (
     <div className="card flex flex-col gap-3.5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-[4px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center">
             <Clock className="w-3.5 h-3.5" aria-hidden="true" />
@@ -30,11 +43,32 @@ function FoodConflictTimelineBase() {
           </div>
         </div>
 
-        {conflicts.length > 0 && (
-          <div className="badge badge-moderate">
-            {conflicts.length} TIMING CONFLICT{conflicts.length > 1 ? 'S' : ''}
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <label
+            htmlFor="patient-wake-time"
+            className="text-xs text-[var(--text-muted)] font-medium"
+          >
+            I wake at
+          </label>
+          <input
+            id="patient-wake-time"
+            type="time"
+            value={patientWakeTime}
+            onChange={handleWakeTimeChange}
+            disabled={loading}
+            // `type="time"` emits exactly the 'HH:MM' the backend's
+            // WAKE_TIME_24H_RE accepts, so no parsing or reformatting is needed
+            // between this control and the API.
+            className="bg-[var(--bg-input)] border border-[var(--border-default)] focus:border-[var(--border-hover)] rounded-[6px] px-2 py-1 text-xs metric text-[var(--text-primary)] outline-none min-h-[32px] disabled:opacity-50 transition-colors"
+            aria-label="Your usual wake-up time, used to anchor the medication schedule"
+          />
+
+          {conflicts.length > 0 && (
+            <div className="badge badge-moderate">
+              {conflicts.length} TIMING CONFLICT{conflicts.length > 1 ? 'S' : ''}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Conflict Warnings */}

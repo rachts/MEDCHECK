@@ -156,3 +156,97 @@ def test_authorization_header_still_takes_precedence():
         headers={"Authorization": f"Bearer {token}"}
     )
     assert resp.status_code == 200
+
+
+# ==============================================================================
+# Password length is measured in BYTES, not characters (audit item 3)
+#
+# bcrypt's 72-unit limit is a byte limit, and bcrypt >= 4.0 raises rather than
+# truncating. The frontend used to check `password.length > 72` -- UTF-16 code
+# units -- so a multi-byte password passed the form and was rejected by the API.
+# These tests pin the byte semantics on the side that is authoritative.
+# ==============================================================================
+
+def test_password_byte_limit_constants_agree():
+    """
+    The policy bound in models.py and the algorithmic bound in services/auth.py
+    are separate constants by design (one is changeable, one is not). If they ever
+    drift, the validator would accept a password the hasher then truncates -- the
+    exact silent-truncation failure the byte check exists to prevent.
+    """
+    from models import MAX_PASSWORD_BYTES, MAX_PASSWORD_CHARS
+    from services.auth import BCRYPT_MAX_PASSWORD_BYTES
+
+    assert MAX_PASSWORD_BYTES == BCRYPT_MAX_PASSWORD_BYTES
+    # A UTF-8 string of N bytes is at most N characters, so the character ceiling
+    # can never be looser than the byte ceiling.
+    assert MAX_PASSWORD_CHARS <= MAX_PASSWORD_BYTES
+
+
+def test_registration_rejects_multibyte_password_over_the_byte_limit():
+    """
+    33 characters, 93 bytes. Comfortably inside any character-based limit and well
+    outside bcrypt's, so this is precisely the input the old character check let
+    through. It must be rejected with a 422, not truncated and hashed.
+    """
+    over_limit = "Aa1" + ("漢" * 30)
+    assert len(over_limit) <= 72          # would pass a character check
+    assert len(over_limit.encode("utf-8")) > 72   # must fail the byte check
+
+    resp = client.post("/api/auth/register", json={
+        "username": f"dr_multi_{uuid.uuid4().hex[:6]}",
+        "password": over_limit,
+    })
+    assert resp.status_code == 422
+
+
+def test_registration_accepts_a_password_at_exactly_the_byte_limit():
+    """72 bytes is inside the limit; the boundary must not be off by one."""
+    uname = f"dr_edge_{uuid.uuid4().hex[:6]}"
+    exact = "Aa1" + ("x" * 69)
+    assert len(exact.encode("utf-8")) == 72
+
+    reg_resp = client.post("/api/auth/register", json={
+        "username": uname,
+        "password": exact,
+    })
+    assert reg_resp.status_code == 200
+
+    # And it must still verify on the way back in -- hashing and verification have
+    # to encode and clamp the password identically.
+    login_resp = client.post("/api/auth/login", json={
+        "username": uname,
+        "password": exact,
+    })
+    assert login_resp.status_code == 200
+
+
+def test_hash_and_verify_round_trip_on_multibyte_passwords():
+    """
+    Below the limit, a multi-byte password must round-trip unchanged. This is the
+    regression guard for the clamp helper: if hashing and verification ever slice
+    at different points, this login stops working.
+    """
+    from services.auth import get_password_hash, verify_password
+
+    password = "Contraseña1éèü\U0001f600"
+    assert len(password.encode("utf-8")) <= 72
+
+    hashed = get_password_hash(password)
+    assert verify_password(password, hashed) is True
+    assert verify_password(password + "x", hashed) is False
+
+
+def test_oversized_password_at_the_hasher_truncates_instead_of_raising():
+    """
+    The clamp inside the hasher is a last-ditch guard for a caller that bypassed
+    UserCreate. bcrypt >= 4.0 raises on input over 72 bytes, so without the clamp
+    this would be a 500 rather than a degraded-but-working hash.
+    """
+    from services.auth import get_password_hash, verify_password
+
+    over_limit = "Aa1" + ("漢" * 40)   # 123 bytes
+    assert len(over_limit.encode("utf-8")) > 72
+
+    hashed = get_password_hash(over_limit)
+    assert verify_password(over_limit, hashed) is True

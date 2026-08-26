@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import logging
 import anyio
+from contextlib import closing
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -12,25 +13,38 @@ from config import settings
 
 logger = logging.getLogger("audit_logger")
 
+# Every connection below is wrapped in `contextlib.closing`.
+#
+# The previous shape was `conn = connect(); ...; conn.close()` with the close as
+# the last statement *inside* a try whose except only logged. Any failure before
+# it -- a locked database, a failed commit, a disk-full write -- skipped the
+# close and leaked the handle. Because these functions run on every clinical
+# check, a database that is briefly locked leaks one file descriptor per
+# request until the process hits its ulimit and stops serving.
+#
+# Note that `with sqlite3.connect(...)` would NOT fix this: sqlite3's own
+# context manager is a *transaction* manager (it commits or rolls back) and
+# deliberately leaves the connection open. `closing()` is what actually closes.
+
+
 def _init_audit_table():
     try:
         os.makedirs(os.path.dirname(settings.SQLITE_DB_PATH), exist_ok=True)
-        conn = sqlite3.connect(settings.SQLITE_DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT,
-                medicines_json TEXT,
-                interaction_count INTEGER,
-                gi_score INTEGER,
-                ip_hash TEXT,
-                response_time_ms REAL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(settings.SQLITE_DB_PATH)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT,
+                    medicines_json TEXT,
+                    interaction_count INTEGER,
+                    gi_score INTEGER,
+                    ip_hash TEXT,
+                    response_time_ms REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
     except Exception as e:
         logger.error(f"Error initializing audit_logs table: {e}")
 
@@ -68,21 +82,20 @@ def _sync_record_audit_log(
     response_time_ms: float
 ):
     try:
-        conn = sqlite3.connect(settings.SQLITE_DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO audit_logs (user_id, medicines_json, interaction_count, gi_score, ip_hash, response_time_ms)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            user_id or "anonymous",
-            json.dumps(sorted([m.lower().strip() for m in medicines])),
-            interaction_count,
-            gi_score,
-            ip_hash,
-            response_time_ms
-        ))
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(settings.SQLITE_DB_PATH)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO audit_logs (user_id, medicines_json, interaction_count, gi_score, ip_hash, response_time_ms)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                user_id or "anonymous",
+                json.dumps(sorted([m.lower().strip() for m in medicines])),
+                interaction_count,
+                gi_score,
+                ip_hash,
+                response_time_ms
+            ))
+            conn.commit()
     except Exception as e:
         logger.warning(f"Failed to record audit log: {e}")
 

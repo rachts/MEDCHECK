@@ -7,8 +7,19 @@ python-dotenv==1.0.1
 supabase==2.8.1
 pytest==8.3.3
 pytest-asyncio==0.24.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+# PyJWT replaces python-jose[cryptography]==3.3.0. python-jose is unmaintained
+# and still carries CVE-2024-33663 (algorithm confusion) and CVE-2024-33664
+# (JWE decompression bomb). The `crypto` extra is kept so JWT_ALGORITHM can be
+# switched from the HS256 default to an RS*/ES* algorithm without a dependency
+# change.
+PyJWT[crypto]==2.13.0
+# bcrypt is used directly (`bcrypt.hashpw` / `bcrypt.checkpw` in services/auth.py).
+#
+# `passlib[bcrypt]==1.7.4` used to sit here and was never imported anywhere. It is
+# not merely dead weight: passlib has had no release since 2020, and 1.7.4 reads
+# `bcrypt.__about__.__version__` at import time -- an attribute removed in bcrypt
+# 4.1 -- so anything that did start importing it would break against the bcrypt
+# version this project actually installs. Removed rather than pinned around.
 bcrypt==4.2.0
 slowapi==0.1.9
 python-json-logger==2.0.7

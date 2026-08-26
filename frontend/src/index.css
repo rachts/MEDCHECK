@@ -65,36 +65,6 @@
     --radius-xl: 12px;
   }
 
-  [data-theme="dark"], .dark {
-    --bg-base:        #0B0F19;
-    --bg-surface:     #111827;
-    --bg-elevated:    #1E293B;
-    --bg-input:       #1E293B;
-
-    --border-default: #1E293B;
-    --border-hover:   #334155;
-    --border-alert:   #7F1D1D;
-
-    --text-primary:   #F8FAFC;
-    --text-secondary: #94A3B8;
-    --text-muted:     #64748B;
-    --text-inverse:   #0B0F19;
-
-    --accent:         #38BDF8;
-    --accent-hover:   #0EA5E9;
-    --accent-muted:   rgba(56, 189, 248, 0.1);
-
-    --alert-danger-bg:      rgba(220, 38, 38, 0.15);
-    --alert-danger-border:  rgba(220, 38, 38, 0.35);
-    --alert-danger-text:    #FCA5A5;
-    --alert-warning-bg:     rgba(217, 119, 6, 0.15);
-    --alert-warning-border: rgba(217, 119, 6, 0.35);
-    --alert-warning-text:   #FCD34D;
-    --alert-success-bg:     rgba(5, 150, 105, 0.15);
-    --alert-success-border: rgba(5, 150, 105, 0.35);
-    --alert-success-text:   #6EE7B7;
-  }
-
   body {
     background-color: var(--bg-base);
     color: var(--text-secondary);
@@ -240,6 +210,30 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
+}
+
+/*
+ * Bare card background + border, with no padding, radius or shadow of its own.
+ *
+ * This class was referenced by ErrorBoundary.jsx and SkeletonCard.jsx (three call
+ * sites) but only ever *defined* inside the `@media print` block at the bottom of
+ * this file. On screen it therefore resolved to nothing: the error boundary's
+ * fallback and every loading skeleton rendered with a transparent background,
+ * showing the page behind them through the "card". It was invisible in review
+ * precisely because printing looked correct.
+ *
+ * Deliberately minimal:
+ *   - No padding or border-radius: all three call sites supply their own Tailwind
+ *     utilities (`p-8 rounded-xl`, `p-5 rounded-xl`), and duplicating them here
+ *     would make the class fight its own consumers.
+ *   - No box-shadow: ErrorBoundary applies `shadow-xl`, and a shadow declared here
+ *     would compete with it on specificity depending on layer order.
+ *   - `--bg-surface`, matching `.card`, so a surface and a card sit at the same
+ *     elevation.
+ */
+.card-surface {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
 }
 
 /* 2. Severity Badges */
@@ -436,9 +430,6 @@
   .landing-subtitle {
     font-size: 17px;
   }
-}
-[data-theme="dark"] .landing-subtitle, .dark .landing-subtitle {
-  color: #CBD5E1 !important;
 }
 
 /* Mobile Sticky Button */

@@ -4,18 +4,20 @@
   excluded here for the same reason robots.txt disallows them: /app renders nothing
   without a session-specific basket, and /auth is a credential form.
 
-  The https://medcheck.app host is a placeholder. Both this file and the Sitemap
-  line in robots.txt must be updated to the real origin at deploy time, or search
-  engines will be pointed at a domain that is not yours.
+  %VITE_SITE_URL% is substituted at build time from the VITE_SITE_URL environment
+  variable by the medcheck-template-public-files plugin in vite.config.js. Files in
+  public/ are copied verbatim by Vite with no transform, so that plugin exists
+  specifically to template this file and robots.txt; editing the origin here by
+  hand is not needed and would drift from index.html.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://medcheck.app/</loc>
+    <loc>%VITE_SITE_URL%/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://medcheck.app/explorer</loc>
+    <loc>%VITE_SITE_URL%/explorer</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>

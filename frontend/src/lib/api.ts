@@ -53,6 +53,18 @@ interface ValidationErrorItem {
 }
 interface ApiErrorBody {
   detail?: string | ValidationErrorItem[];
+  /**
+   * Per-field messages from the backend's RequestValidationError handler
+   * (`main.py:validation_exception_handler`), formatted as "field: message".
+   *
+   * This field was previously absent from the interface, so every 422 from the
+   * API surfaced only its companion `detail` -- the deliberately generic "Input
+   * validation failed. Please check the provided parameters." The actionable
+   * part ("medicines.0: Invalid characters detected...") was parsed and
+   * discarded, leaving the user a message that named neither the field nor the
+   * problem.
+   */
+  errors?: string[];
 }
 
 export function getStoredToken(): string | null {
@@ -83,10 +95,22 @@ export function setStoredUser(user: StoredUser | null): void {
 /**
  * Reads a backend error body and reduces it to a single human-readable string.
  * Accepts `unknown` because a failed response may not be JSON at all.
+ *
+ * `errors` is checked before `detail` on purpose. When the backend emits both,
+ * `detail` is the generic envelope and `errors` holds the per-field specifics,
+ * so preferring `detail` would always throw away the only useful half.
  */
 function extractErrorMessage(body: unknown, fallback: string): string {
   if (!body || typeof body !== 'object') return fallback;
-  const detail = (body as ApiErrorBody).detail;
+  const { detail, errors } = body as ApiErrorBody;
+
+  if (Array.isArray(errors)) {
+    const fieldMessages = errors
+      .filter((e): e is string => typeof e === 'string' && e.trim().length > 0)
+      .map((e) => e.trim());
+    if (fieldMessages.length) return fieldMessages.join(' • ');
+  }
+
   if (typeof detail === 'string' && detail.trim()) return detail;
   if (Array.isArray(detail)) {
     const parts = detail
@@ -209,9 +233,16 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
  * Check interactions & comprehensive clinical intelligence for a basket of
  * medicines. Falls back to the last cached response for the same basket when the
  * network is unreachable.
+ *
+ * `patientWakeTime` anchors the backend's 24-hour administration timeline. The
+ * backend has accepted it since the endpoint was written, but no caller ever
+ * sent it, so every patient received a timeline anchored to the hardcoded
+ * 07:00 AM default regardless of when they actually wake. Formats accepted by
+ * `CheckRequest.validate_wake_time`: '07:00 AM' (12-hour) or '07:00' (24-hour).
  */
 export async function checkMedicines(
   medicines: (string | { name: string })[],
+  patientWakeTime?: string | null,
 ): Promise<CheckResponse> {
   if (!medicines || medicines.length < 1) {
     throw new Error('Please enter at least one medicine to analyze.');
@@ -222,12 +253,25 @@ export async function checkMedicines(
     .filter(Boolean)
     .map((m) => m.trim().toLowerCase());
 
-  const cacheKey = `${OFFLINE_CACHE_KEY}_${cleaned.slice().sort().join('::')}`;
+  const wakeTime = (patientWakeTime || '').trim();
+
+  // The wake time is part of the cache key: two analyses of the same basket at
+  // different wake times produce different timelines, so sharing one cache entry
+  // would serve a stale schedule.
+  const cacheKey = `${OFFLINE_CACHE_KEY}_${cleaned.slice().sort().join('::')}${
+    wakeTime ? `@${wakeTime}` : ''
+  }`;
 
   try {
     const response = await authenticatedFetch(`${API_BASE}/api/check`, {
       method: 'POST',
-      body: JSON.stringify({ medicines: cleaned }),
+      body: JSON.stringify({
+        medicines: cleaned,
+        // Omitted entirely when blank. Sending `null` is equivalent here (the
+        // field is Optional), but omitting keeps the payload minimal and matches
+        // what the endpoint documents as "not supplied".
+        ...(wakeTime ? { patient_wake_time: wakeTime } : {}),
+      }),
     });
 
     if (!response.ok) {

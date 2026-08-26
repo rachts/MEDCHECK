@@ -4,10 +4,24 @@ import uuid
 import logging
 import bcrypt
 import anyio
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
-from jose import JWTError, jwt
+# PyJWT, not python-jose.
+#
+# python-jose has had no release addressing its open advisories and is
+# effectively unmaintained: CVE-2024-33663 (algorithm confusion -- a token
+# signed with an asymmetric public key could be accepted as an HMAC secret) and
+# CVE-2024-33664 (a JWE decompression bomb causing memory exhaustion) both
+# remain. PyJWT is the actively maintained implementation and is already the
+# de-facto standard for FastAPI.
+#
+# The call surface is identical (`jwt.encode` / `jwt.decode` with the same
+# keyword arguments), so this swap is source-compatible; only the exception
+# type changes, from `jose.JWTError` to `jwt.PyJWTError`.
+import jwt
+from jwt import PyJWTError
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -23,6 +37,16 @@ security = HTTPBearer(auto_error=False)
 # the credential anywhere JavaScript -- and therefore any injected script -- can
 # read it. Non-browser callers keep using the Authorization header unchanged.
 SESSION_COOKIE_NAME = "medcheck_session"
+
+# bcrypt's hard algorithmic input limit, in BYTES.
+#
+# Deliberately a separate constant from `models.MAX_PASSWORD_BYTES`, even though
+# both are 72: this one is a property of the algorithm and cannot be changed,
+# while that one is the API's policy and could in principle be lowered. Defining
+# it here also keeps the dependency direction right -- `models.py` imports only
+# stdlib and pydantic, and should not have to import a service to know its own
+# validation bound. `test_auth.py` asserts the two stay equal.
+BCRYPT_MAX_PASSWORD_BYTES = 72
 
 
 def _cookie_is_secure() -> bool:
@@ -86,29 +110,63 @@ def _init_users_table():
     """Ensure users table exists in SQLite database."""
     try:
         os.makedirs(os.path.dirname(settings.SQLITE_DB_PATH), exist_ok=True)
-        conn = _get_sqlite_auth_conn()
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                email TEXT UNIQUE,
-                hashed_password TEXT NOT NULL,
-                is_guest INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
-        conn.close()
+        with closing(_get_sqlite_auth_conn()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    email TEXT UNIQUE,
+                    hashed_password TEXT NOT NULL,
+                    is_guest INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
     except Exception as e:
         logger.error(f"Error initializing users table: {e}")
 
 _init_users_table()
 
+def _bcrypt_password_bytes(password: str) -> bytes:
+    """
+    UTF-8 encode a password and clamp it to bcrypt's 72-byte input limit.
+
+    The clamp is load-bearing, not decorative: bcrypt >= 4.0 raises
+    ``ValueError: password cannot be longer than 72 bytes`` instead of truncating
+    silently, so removing it would turn an over-long password into a 500 rather
+    than a clean rejection.
+
+    It is nonetheless the last line of defence, and it should never fire.
+    ``UserCreate`` rejects anything over ``MAX_PASSWORD_BYTES`` at the API
+    boundary -- measured in bytes, matching this function -- so a truncation here
+    means a caller reached the hasher without going through that model. That is
+    worth a log line, because the failure it produces is otherwise invisible: the
+    user's 80-byte password is accepted, only its first 72 bytes are ever hashed,
+    and every later login "works" while quietly ignoring the tail.
+
+    Both hashing and verification route through here, so the two always agree on
+    exactly which bytes make up the password. A byte slice can land mid-character
+    in a multi-byte sequence; that is harmless because bcrypt takes raw bytes and
+    both sides slice identically, but it is another reason the two paths must
+    never diverge.
+    """
+    encoded = password.encode("utf-8")
+    if len(encoded) > BCRYPT_MAX_PASSWORD_BYTES:
+        logger.warning(
+            "Password exceeded bcrypt's %d-byte limit (%d bytes) and was truncated "
+            "before hashing. Validation should have rejected this upstream.",
+            BCRYPT_MAX_PASSWORD_BYTES,
+            len(encoded),
+        )
+        return encoded[:BCRYPT_MAX_PASSWORD_BYTES]
+    return encoded
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         return bcrypt.checkpw(
-            plain_password.encode("utf-8")[:72],
+            _bcrypt_password_bytes(plain_password),
             hashed_password.encode("utf-8")
         )
     except Exception as e:
@@ -117,7 +175,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password.encode("utf-8")[:72], salt)
+    hashed = bcrypt.hashpw(_bcrypt_password_bytes(password), salt)
     return hashed.decode("utf-8")
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
@@ -213,7 +271,16 @@ async def get_current_user(
         raise credentials_exception
 
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        # `algorithms` is an allow-list, and `require` makes the two claims this
+        # service depends on mandatory rather than optional. Without the
+        # requirement a token carrying no `exp` would decode successfully and
+        # never expire, because there is nothing for PyJWT to compare against.
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET,
+            algorithms=[settings.JWT_ALGORITHM],
+            options={"require": ["exp", "sub"]},
+        )
         username: Optional[str] = payload.get("sub")
         user_id: Optional[str] = payload.get("uid")
         if username is None:
@@ -223,5 +290,5 @@ async def get_current_user(
             "username": username,
             "is_guest": payload.get("is_guest", False)
         }
-    except JWTError:
+    except PyJWTError:
         raise credentials_exception

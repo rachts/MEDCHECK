@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useMedicine } from '../context/MedicineContext';
-import { 
-  ShieldCheck, 
-  Sparkles, 
-  Search, 
-  FileText, 
-  User, 
+import {
+  ShieldCheck,
+  Sparkles,
+  Search,
+  FileText,
+  User,
   ChevronDown,
   Menu,
   X

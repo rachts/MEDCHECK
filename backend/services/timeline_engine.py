@@ -1,37 +1,86 @@
 from typing import List, Dict, Any, Tuple, Optional
+import logging
 from datetime import datetime, timedelta
 from models import (
-    MedicineProfileResponse, 
-    FoodConflictDetail, 
+    MedicineProfileResponse,
+    FoodConflictDetail,
     TimelineSlot
 )
 from services.clinical_rules import expand_aliases
 
-def _offset_time_str(base_time_str: str, hour_offset: float) -> str:
-    try:
-        # Parse base time e.g. "07:00" or "07:00 AM"
-        clean = base_time_str.strip()
-        if " " in clean:
-            t = datetime.strptime(clean, "%I:%M %p")
-        elif ":" in clean:
-            t = datetime.strptime(clean, "%H:%M")
-        else:
-            t = datetime.strptime("07:00", "%H:%M")
+logger = logging.getLogger("timeline_engine")
 
-        adjusted = t + timedelta(hours=hour_offset)
-        return adjusted.strftime("%I:%M %p").lstrip("0")
-    except Exception:
-        return "07:00 AM"
+DEFAULT_WAKE_TIME = "07:00 AM"
+
+
+def _parse_wake_time(base_time_str: str) -> Optional[datetime]:
+    """
+    Parses a wake time in either supported format, returning None if it cannot.
+
+    Separated from offset arithmetic on purpose. Parsing used to happen inside
+    the per-slot offset helper, whose bare `except: return "07:00 AM"` ran once
+    per slot -- so an unparseable wake time did not fall back to a 7 AM-anchored
+    schedule, it collapsed every slot to the literal string "07:00 AM". The
+    timeline then presented fasting, breakfast, lunch, dinner and bedtime as all
+    occurring at 7:00 AM, as a clinical dosing schedule, with nothing logged.
+
+    Parsing once means the fallback is all-or-nothing and observable.
+    """
+    clean = (base_time_str or "").strip()
+    if not clean:
+        return None
+    for fmt in ("%I:%M %p", "%H:%M"):
+        try:
+            return datetime.strptime(clean, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _resolve_wake_time(patient_wake_time: str) -> datetime:
+    """
+    Resolves the timeline anchor, logging when the requested value is unusable.
+
+    The API layer validates patient_wake_time against WAKE_TIME_12H_RE /
+    WAKE_TIME_24H_RE before it reaches this module, so a fallback here means
+    either a direct in-process caller or a drift between that regex and these
+    formats. Both are worth a warning rather than a silent substitution.
+    """
+    parsed = _parse_wake_time(patient_wake_time)
+    if parsed is not None:
+        return parsed
+    logger.warning(
+        f"Unparseable patient_wake_time {patient_wake_time!r}; anchoring the "
+        f"timeline to the {DEFAULT_WAKE_TIME} default. Expected '07:00 AM' "
+        f"(12-hour) or '07:00' (24-hour)."
+    )
+    # The module default is a literal that both formats accept, so this cannot
+    # itself fail; asserting that keeps the return type non-Optional.
+    fallback = _parse_wake_time(DEFAULT_WAKE_TIME)
+    assert fallback is not None
+    return fallback
+
+
+def _offset_time_str(base_time: datetime, hour_offset: float) -> str:
+    """Formats `base_time` shifted by `hour_offset` as e.g. '7:00 AM'."""
+    adjusted = base_time + timedelta(hours=hour_offset)
+    return adjusted.strftime("%I:%M %p").lstrip("0")
+
 
 def generate_food_conflicts_and_timeline(
-    medicines: List[str], 
+    medicines: List[str],
     profiles: Dict[str, MedicineProfileResponse],
-    patient_wake_time: str = "07:00 AM"
+    patient_wake_time: str = DEFAULT_WAKE_TIME
 ) -> Tuple[List[FoodConflictDetail], List[TimelineSlot]]:
     """
     Analyzes dietary instructions across all active medicines to detect timing/food conflicts
     and generates a patient-tailored 24-hour daily dosing schedule starting from their wake time.
     """
+    # Resolved once, up front. Every slot below is offset from this single
+    # anchor, so the schedule stays internally consistent even when the
+    # requested wake time has to be rejected.
+    wake_anchor = _resolve_wake_time(patient_wake_time)
+
     conflicts: List[FoodConflictDetail] = []
     timeline: List[TimelineSlot] = []
 
@@ -79,11 +128,11 @@ def generate_food_conflicts_and_timeline(
             ))
 
     # Dynamic Time Offsets from Patient Wake Time
-    time_fast = _offset_time_str(patient_wake_time, 0.0)      # e.g. 7:00 AM (Fast)
-    time_breakfast = _offset_time_str(patient_wake_time, 1.0) # e.g. 8:00 AM (Breakfast)
-    time_lunch = _offset_time_str(patient_wake_time, 6.0)     # e.g. 1:00 PM (Lunch)
-    time_dinner = _offset_time_str(patient_wake_time, 12.0)   # e.g. 7:00 PM (Dinner)
-    time_bedtime = _offset_time_str(patient_wake_time, 15.0)  # e.g. 10:00 PM (Bedtime)
+    time_fast = _offset_time_str(wake_anchor, 0.0)      # e.g. 7:00 AM (Fast)
+    time_breakfast = _offset_time_str(wake_anchor, 1.0) # e.g. 8:00 AM (Breakfast)
+    time_lunch = _offset_time_str(wake_anchor, 6.0)     # e.g. 1:00 PM (Lunch)
+    time_dinner = _offset_time_str(wake_anchor, 12.0)   # e.g. 7:00 PM (Dinner)
+    time_bedtime = _offset_time_str(wake_anchor, 15.0)  # e.g. 10:00 PM (Bedtime)
 
     # 1. Empty Stomach Window
     if has_empty_stomach_meds:

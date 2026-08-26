@@ -166,7 +166,17 @@ export function MedicineBasket() {
                 className="p-2.5 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-transparent hover:border-[var(--border-hover)] transition-colors cursor-pointer flex items-center justify-between gap-2 min-h-[48px]"
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleSelectSearchResult(item)}
+                // Space as well as Enter, and preventDefault on both. `role="button"`
+                // tells assistive tech this behaves like a native button, and a native
+                // button activates on Space -- so a screen-reader user following that
+                // contract found the row inert and, worse, Space scrolled the dropdown
+                // out from under them. preventDefault suppresses that scroll.
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSelectSearchResult(item);
+                  }
+                }}
               >
                 <div className="flex items-center gap-2.5">
                   <div className="w-6 h-6 rounded-[4px] bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-primary)] shrink-0">

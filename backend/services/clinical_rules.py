@@ -1,9 +1,65 @@
 import logging
+from datetime import date, datetime, timezone
 from typing import Dict, Any, Tuple, Optional, Set
 from models import Severity, RuleConfidence, InteractionItem
 from services.knowledge_base import COMMON_BRAND_MAPPINGS, SYNONYM_SETS
 
 logger = logging.getLogger("clinical_rules")
+
+# ==============================================================================
+# RULE TABLE REVIEW PROVENANCE
+#
+# The date every rule below was last editorially reviewed against its cited
+# source. It is deliberately a single hardcoded constant and deliberately NOT
+# derived from the clock:
+#
+#   * Per-rule string literals (there were 17 identical copies, plus a fallback
+#     default) drift the moment one rule is edited without the others. A rule
+#     claiming a review date it never had is worse than no date at all.
+#   * A dynamic `date.today()` would be actively false. It would assert that the
+#     interaction table was clinically re-verified today, on every deployment,
+#     forever -- turning a provenance field into a rubber stamp.
+#
+# So: when a rule changes, update this constant in the same commit. The
+# staleness check below makes an un-updated constant visible at startup rather
+# than leaving the claim silently ageing.
+# ==============================================================================
+RULE_TABLE_LAST_REVIEWED = "2026-08-23"
+
+# How long a clinical rule table may go unreviewed before startup says so.
+RULE_REVIEW_INTERVAL_DAYS = 180
+
+
+def rule_table_review_age_days(today: Optional[date] = None) -> Optional[int]:
+    """Days since the rule table was last reviewed, or None if unparseable."""
+    try:
+        reviewed = datetime.strptime(RULE_TABLE_LAST_REVIEWED, "%Y-%m-%d").date()
+    except ValueError:
+        logger.error(
+            f"RULE_TABLE_LAST_REVIEWED ({RULE_TABLE_LAST_REVIEWED!r}) is not an "
+            f"ISO date; clinical rule provenance cannot be checked."
+        )
+        return None
+    return ((today or datetime.now(timezone.utc).date()) - reviewed).days
+
+
+def _warn_if_rule_table_stale() -> None:
+    age = rule_table_review_age_days()
+    if age is None:
+        return
+    if age > RULE_REVIEW_INTERVAL_DAYS:
+        logger.warning(
+            f"Clinical interaction rules were last reviewed {RULE_TABLE_LAST_REVIEWED} "
+            f"({age} days ago), beyond the {RULE_REVIEW_INTERVAL_DAYS}-day review "
+            f"interval. Re-verify {len(KNOWN_CLINICAL_RULES)} rules against their "
+            f"cited sources and update RULE_TABLE_LAST_REVIEWED."
+        )
+    elif age < 0:
+        logger.warning(
+            f"RULE_TABLE_LAST_REVIEWED ({RULE_TABLE_LAST_REVIEWED}) is in the future; "
+            f"the recorded review date is wrong."
+        )
+
 
 def resolve_canonical_name(name: str) -> str:
     cleaned = name.lower().strip()
@@ -31,7 +87,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Requires strict physician oversight, precise INR monitoring, and potential PPI gastro-protection.",
         "evidence_source": "FDA Black Box Warning & CHEST Antithrombotic Guidelines",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("warfarin", "ibuprofen"): {
         "severity": Severity.HIGH,
@@ -43,7 +99,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Substitute Ibuprofen with Paracetamol (under 2g/day) or consult physician for alternative analgesics.",
         "evidence_source": "FDA Black Box Warning & Lexicomp Drug Interactions",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("aspirin", "ibuprofen"): {
         "severity": Severity.MODERATE,
@@ -55,7 +111,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Dose Timing Rule: Take immediate-release Ibuprofen at least 8 hours before or at least 30 minutes after low-dose Aspirin.",
         "evidence_source": "FDA Drug Safety Communication & Circulation Journal",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("paracetamol", "alcohol"): {
         "severity": Severity.MODERATE,
@@ -67,7 +123,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Limit total daily Paracetamol to 2,000mg or less in patients who consume alcohol.",
         "evidence_source": "FDA Acetaminophen Warning & Hepatology Guidelines",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("ibuprofen", "alcohol"): {
         "severity": Severity.MODERATE,
@@ -79,7 +135,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Take Ibuprofen with food and avoid concurrent alcohol consumption.",
         "evidence_source": "Lexicomp & British National Formulary",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("aspirin", "alcohol"): {
         "severity": Severity.MODERATE,
@@ -91,7 +147,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Take Aspirin with food and water.",
         "evidence_source": "FDA OTC Labeling Requirements",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("atorvastatin", "alcohol"): {
         "severity": Severity.MODERATE,
@@ -103,7 +159,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Monitor routine liver function tests (ALT/AST).",
         "evidence_source": "AHA/ACC Cholesterol Clinical Guidelines",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("metformin", "alcohol"): {
         "severity": Severity.HIGH,
@@ -115,7 +171,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Warn patients regarding fatal lactic acidosis symptoms.",
         "evidence_source": "FDA Black Box Warning (Metformin Hydrochloride)",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("lisinopril", "ibuprofen"): {
         "severity": Severity.MODERATE,
@@ -127,7 +183,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Monitor blood pressure and serum creatinine/potassium regularly.",
         "evidence_source": "Kidney Disease Improving Global Outcomes (KDIGO) Guidelines",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("paracetamol", "amoxicillin"): {
         "severity": Severity.NONE,
@@ -139,7 +195,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Safe to co-administer as directed.",
         "evidence_source": "Clinical Pharmacology Standard Reference",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     # --- Additional Standard Gold-Standard Clinical Rules ---
     ("omeprazole", "clopidogrel"): {
@@ -152,7 +208,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Switch PPI to Pantoprazole (minimal CYP2C19 inhibition) or use an H2-receptor antagonist (Famotidine).",
         "evidence_source": "FDA Drug Safety Warning & ACC/AHA Clopidogrel Guidelines",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("metoprolol", "amlodipine"): {
         "severity": Severity.MODERATE,
@@ -164,7 +220,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Monitor resting heart rate and blood pressure regularly when initiating or adjusting doses.",
         "evidence_source": "AHA Hypertension Management Guidelines",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("levothyroxine", "omeprazole"): {
         "severity": Severity.MODERATE,
@@ -176,7 +232,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Space administration: Take Levothyroxine 4 hours prior to Omeprazole, or consider liquid/soft-gel levothyroxine formulations (Tirosint).",
         "evidence_source": "American Thyroid Association (ATA) Guidelines",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("paracetamol", "warfarin"): {
         "severity": Severity.MODERATE,
@@ -188,7 +244,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Paracetamol remains the preferred mild analgesic over NSAIDs, but limit intake to <=2,000mg/day and check INR weekly if used regularly.",
         "evidence_source": "CHEST Anticoagulation Guidelines & Pharmacotherapy Review",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("lisinopril", "potassium"): {
         "severity": Severity.HIGH,
@@ -200,7 +256,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Check serum potassium and creatinine within 1-2 weeks of concurrent therapy.",
         "evidence_source": "KDIGO Clinical Practice Guideline for Hypertension in CKD",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("ciprofloxacin", "theophylline"): {
         "severity": Severity.HIGH,
@@ -212,7 +268,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Avoid combination if possible; reduce theophylline dose by 50% and monitor serum theophylline concentrations closely.",
         "evidence_source": "FDA Boxed Warning & Chest Pulmonary Pharmacology",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
     ("atorvastatin", "clarithromycin"): {
         "severity": Severity.HIGH,
@@ -224,7 +280,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "action_guidance": "Temporarily suspend Atorvastatin therapy during the course of Clarithromycin, or switch to an azithromycin antibiotic (minimal CYP3A4 inhibition).",
         "evidence_source": "FDA Drug Safety Communication & Circulation Statin Safety Panel",
         "confidence": RuleConfidence.ESTABLISHED,
-        "last_reviewed": "2026-08-23"
+        "last_reviewed": RULE_TABLE_LAST_REVIEWED
     }
 }
 
@@ -246,6 +302,12 @@ def match_known_clinical_rule(drug_a: str, drug_b: str) -> Optional[InteractionI
                 action_guidance=rule.get("action_guidance"),
                 evidence_source=rule.get("evidence_source"),
                 confidence=rule.get("confidence", RuleConfidence.ESTABLISHED),
-                last_reviewed=rule.get("last_reviewed", "2026-08-23")
+                last_reviewed=rule.get("last_reviewed", RULE_TABLE_LAST_REVIEWED)
             )
     return None
+
+
+# Evaluated at import time so a rule table that has aged past its review
+# interval announces itself in the startup log, rather than continuing to serve
+# a provenance date nobody has revisited.
+_warn_if_rule_table_stale()

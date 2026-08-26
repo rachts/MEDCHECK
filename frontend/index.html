@@ -16,13 +16,16 @@
     <meta name="apple-mobile-web-app-title" content="MEDCHECK" />
 
     <!--
-      canonical, og:url and twitter URLs point at https://medcheck.app. That host is
-      a placeholder and MUST be replaced with the real origin before launch: a
-      canonical tag naming a domain you do not control tells search engines to
-      credit that domain instead of yours, and Open Graph previews will 404.
-      The same placeholder appears in public/sitemap.xml and public/robots.txt.
+      %VITE_SITE_URL% is substituted at build time by Vite from the VITE_SITE_URL
+      environment variable (see vite.config.js, which also templates
+      public/robots.txt and public/sitemap.xml from the same value and warns on a
+      production build that leaves it unset).
+
+      This replaced a hardcoded %VITE_SITE_URL% -- a placeholder domain nobody
+      here controls. A canonical tag naming a foreign origin tells search engines to
+      credit that origin rather than yours, and the og:image 404s.
     -->
-    <link rel="canonical" href="https://medcheck.app/" />
+    <link rel="canonical" href="%VITE_SITE_URL%/" />
     <meta name="robots" content="index, follow" />
 
     <!-- Open Graph (Facebook, LinkedIn, WhatsApp, iMessage) -->
@@ -30,8 +33,8 @@
     <meta property="og:site_name" content="MEDCHECK" />
     <meta property="og:title" content="MEDCHECK — Medicine Safety &amp; Interaction Intelligence" />
     <meta property="og:description" content="Check drug-drug interactions, compounded side effects, food and alcohol timing, and stomach risk for your full medicine list." />
-    <meta property="og:url" content="https://medcheck.app/" />
-    <meta property="og:image" content="https://medcheck.app/favicon.svg" />
+    <meta property="og:url" content="%VITE_SITE_URL%/" />
+    <meta property="og:image" content="%VITE_SITE_URL%/favicon.svg" />
     <meta property="og:locale" content="en_US" />
 
     <!-- Twitter / X. summary rather than summary_large_image: the only artwork
@@ -40,7 +43,7 @@
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="MEDCHECK — Medicine Safety &amp; Interaction Intelligence" />
     <meta name="twitter:description" content="Check drug-drug interactions, compounded side effects, food and alcohol timing, and stomach risk for your full medicine list." />
-    <meta name="twitter:image" content="https://medcheck.app/favicon.svg" />
+    <meta name="twitter:image" content="%VITE_SITE_URL%/favicon.svg" />
 
     <!-- Google Fonts: Cormorant Garamond (Editorial Authority), Inter (Clean Body), JetBrains Mono (Metrics) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

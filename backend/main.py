@@ -323,10 +323,10 @@ async def health_check(request: Request):
     db_status = "ok"
     try:
         import sqlite3
-        conn = sqlite3.connect(settings.SQLITE_DB_PATH, timeout=2.0)
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        conn.close()
+        from contextlib import closing
+        with closing(sqlite3.connect(settings.SQLITE_DB_PATH, timeout=2.0)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
     except Exception as e:
         db_status = f"unhealthy: {e}"
 
@@ -359,15 +359,28 @@ async def fetch_and_cache_single_drug(drug_name: str) -> DrugLabelResult:
             generic_name=cached_detail.get("generic_name", cleaned_name),
             brand_names=cached_detail.get("brand_names", []),
             raw_text_summary=cached_detail.get("raw_text_summary", "") or "",
+            # Classification round-trips through the cache's `classification`
+            # column. A row written before that column existed yields no keys at
+            # all, so these fall back to the model defaults -- notably
+            # `is_rx=None`, meaning "unknown", never "over-the-counter".
+            product_types=cached_detail.get("product_types", []),
+            is_rx=cached_detail.get("is_rx"),
+            pharm_class_cs=cached_detail.get("pharm_class_cs"),
+            dosage_forms=cached_detail.get("dosage_forms", []),
             found=True,
             source="cache"
         )
 
-    # 2. Fetch live OpenFDA label
+    # 2. Fetch live OpenFDA label.
+    #
+    # `fetch_drug_label` returns the output of `extract_label_info`, not a raw
+    # OpenFDA document -- the local name below is `extracted_label` rather than
+    # the previous `raw_label` because that mismatch is what made the field loss
+    # here hard to see.
     try:
-        raw_label = await fetch_drug_label(cleaned_name)
-        if raw_label:
-            parsed = parse_drug_label_from_dict(raw_label)
+        extracted_label = await fetch_drug_label(cleaned_name)
+        if extracted_label:
+            parsed = parse_drug_label_from_dict(extracted_label)
             await save_drug_detail_to_cache(
                 generic_name=parsed.get("generic_name", cleaned_name),
                 brand_names=parsed.get("brand_names", []),
@@ -375,13 +388,21 @@ async def fetch_and_cache_single_drug(drug_name: str) -> DrugLabelResult:
                 food_warnings=parsed.get("food_warnings", []),
                 drug_interactions=parsed.get("drug_interactions", []),
                 severity=parsed.get("severity", "moderate"),
-                raw_text=raw_label.get("raw_text_summary")
+                raw_text=extracted_label.get("raw_text_summary"),
+                product_types=extracted_label.get("product_types", []),
+                is_rx=extracted_label.get("is_rx"),
+                pharm_class_cs=extracted_label.get("pharm_class_cs"),
+                dosage_forms=extracted_label.get("dosage_forms", [])
             )
             return DrugLabelResult(
-                generic_name=raw_label.get("generic_name", cleaned_name),
-                brand_names=raw_label.get("brand_names", []),
-                substance_names=raw_label.get("substance_names", []),
-                raw_text_summary=raw_label.get("raw_text_summary", ""),
+                generic_name=extracted_label.get("generic_name", cleaned_name),
+                brand_names=extracted_label.get("brand_names", []),
+                substance_names=extracted_label.get("substance_names", []),
+                raw_text_summary=extracted_label.get("raw_text_summary", ""),
+                product_types=extracted_label.get("product_types", []),
+                is_rx=extracted_label.get("is_rx"),
+                pharm_class_cs=extracted_label.get("pharm_class_cs"),
+                dosage_forms=extracted_label.get("dosage_forms", []),
                 found=True,
                 source="openfda"
             )

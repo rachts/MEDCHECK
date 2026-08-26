@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Pattern
 from models import InteractionItem, Severity, RuleConfidence, ParsedDrugInfo
 from services.clinical_rules import match_known_clinical_rule, expand_aliases, resolve_canonical_name
@@ -11,7 +12,27 @@ logger = logging.getLogger("interaction_analyzer")
 # word boundaries; two characters ("t4") are legitimate drug abbreviations.
 MIN_ALIAS_LENGTH = 2
 
+# Bounds on the drug-interaction sentences carried out of an FDA label. The
+# source sections routinely run to several thousand characters; these are
+# display/cache values, not the archival text (raw_text keeps that).
+MAX_INTERACTION_ENTRIES = 12
+MAX_INTERACTION_ENTRY_CHARS = 400
+
 _ALIAS_PATTERN_CACHE: Dict[str, Pattern[str]] = {}
+
+
+def _label_review_date() -> str:
+    """
+    Provenance stamp for a finding derived from a live FDA label.
+
+    Unlike the curated rule table -- which carries a fixed editorial review date
+    -- this path reads label text fetched seconds ago, so the date the label was
+    cross-referenced *is* today. This is the one place where a clock-derived
+    value is the honest one; the field used to be hardcoded to the rule table's
+    date, which credited these heuristic findings with a clinical review they
+    never received.
+    """
+    return datetime.now(timezone.utc).date().isoformat()
 
 
 def _alias_pattern(alias: str) -> Optional[Pattern[str]]:
@@ -40,6 +61,44 @@ def _alias_pattern(alias: str) -> Optional[Pattern[str]]:
         _ALIAS_PATTERN_CACHE[cleaned] = cached
     return cached
 
+def _extract_interaction_statements(sections: List[str]) -> List[str]:
+    """
+    Reduces the FDA drug-interactions sections to individual, quotable sentences.
+
+    The label text arrives as a handful of very long blobs. Storing them verbatim
+    would put thousands of characters into a List[str] meant for display, so each
+    section is split on sentence boundaries and only sentences that actually name
+    something are kept -- section headers ("7 DRUG INTERACTIONS"), cross-
+    references and enumeration fragments are dropped.
+    """
+    statements: List[str] = []
+    seen = set()
+
+    for section in sections:
+        if not section:
+            continue
+        for sentence in re.split(r"(?<=[.!?])\s+", str(section)):
+            cleaned = " ".join(sentence.split())
+            if len(cleaned) < 40:
+                # Too short to be a clinical statement: headers, numbering,
+                # "See section 7.1", stray list markers.
+                continue
+            if not re.search(r"[a-z]", cleaned):
+                # All-caps: a section heading rather than prose.
+                continue
+            if len(cleaned) > MAX_INTERACTION_ENTRY_CHARS:
+                cleaned = cleaned[:MAX_INTERACTION_ENTRY_CHARS].rsplit(" ", 1)[0] + "..."
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            statements.append(cleaned)
+            if len(statements) >= MAX_INTERACTION_ENTRIES:
+                return statements
+
+    return statements
+
+
 def parse_drug_label_from_dict(label_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Parses OpenFDA drug label dictionary into structured pharmacology fields deterministically.
@@ -50,7 +109,15 @@ def parse_drug_label_from_dict(label_dict: Dict[str, Any]) -> Dict[str, Any]:
 
     side_effects = []
     food_warnings = []
-    drug_interactions = []
+
+    # Populated from the label. This was previously initialised to [] and
+    # returned unchanged, so the drug_interactions column of every cached
+    # drug_details row was written as an empty array even though
+    # extract_label_info had supplied the FDA's drug-interactions sections in the
+    # input dict.
+    drug_interactions = _extract_interaction_statements(
+        label_dict.get("drug_interactions", []) or []
+    )
 
     text_lower = raw_text.lower()
     if "bleeding" in text_lower or "hemorrhage" in text_lower:
@@ -150,7 +217,7 @@ async def analyze_drug_pair(
             action_guidance="Review dosage schedule and precautions with your healthcare provider or pharmacist.",
             evidence_source="OpenFDA Drug Labeling Section" if not is_boxed_warning else "FDA Boxed Warning Section",
             confidence=RuleConfidence.ESTABLISHED if is_boxed_warning else RuleConfidence.THEORETICAL,
-            last_reviewed="2026-08-23"
+            last_reviewed=_label_review_date()
         )
 
     return None

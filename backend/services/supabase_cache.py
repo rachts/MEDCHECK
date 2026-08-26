@@ -1,6 +1,7 @@
 import os
 import json
 import sqlite3
+from contextlib import closing
 import logging
 import uuid
 import anyio
@@ -117,108 +118,121 @@ def _sync_init_sqlite():
     """Initializes local SQLite tables synchronously with WAL mode and TTL."""
     try:
         os.makedirs(os.path.dirname(settings.SQLITE_DB_PATH), exist_ok=True)
-        conn = _get_sqlite_conn()
-        cursor = conn.cursor()
+        with closing(_get_sqlite_conn()) as conn:
+            cursor = conn.cursor()
         
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS interaction_pairs (
-                id TEXT PRIMARY KEY,
-                drug_a TEXT,
-                drug_b TEXT,
-                canonical_pair TEXT UNIQUE,
-                severity TEXT,
-                explanation TEXT,
-                mechanism TEXT,
-                clinical_impact TEXT,
-                stomach_impact TEXT,
-                food_consideration TEXT,
-                action_guidance TEXT,
-                evidence_source TEXT,
-                confidence TEXT,
-                last_reviewed TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                expires_at TIMESTAMP,
-                expires_at_epoch INTEGER
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS interaction_pairs (
+                    id TEXT PRIMARY KEY,
+                    drug_a TEXT,
+                    drug_b TEXT,
+                    canonical_pair TEXT UNIQUE,
+                    severity TEXT,
+                    explanation TEXT,
+                    mechanism TEXT,
+                    clinical_impact TEXT,
+                    stomach_impact TEXT,
+                    food_consideration TEXT,
+                    action_guidance TEXT,
+                    evidence_source TEXT,
+                    confidence TEXT,
+                    last_reviewed TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    expires_at_epoch INTEGER
+                )
+            """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS drug_details (
-                generic_name TEXT PRIMARY KEY,
-                brand_names TEXT,
-                side_effects TEXT,
-                food_warnings TEXT,
-                drug_interactions TEXT,
-                severity TEXT,
-                raw_text TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                expires_at TIMESTAMP,
-                expires_at_epoch INTEGER
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS drug_details (
+                    generic_name TEXT PRIMARY KEY,
+                    brand_names TEXT,
+                    side_effects TEXT,
+                    food_warnings TEXT,
+                    drug_interactions TEXT,
+                    severity TEXT,
+                    raw_text TEXT,
+                    classification TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    expires_at_epoch INTEGER
+                )
+            """)
 
-        # Static migration checks
-        cursor.execute("PRAGMA table_info(interaction_pairs)")
-        existing_cols = {row[1] for row in cursor.fetchall()}
+            # Static migration checks
+            cursor.execute("PRAGMA table_info(interaction_pairs)")
+            existing_cols = {row[1] for row in cursor.fetchall()}
 
-        static_migrations = [
-            ("mechanism", "ALTER TABLE interaction_pairs ADD COLUMN mechanism TEXT"),
-            ("clinical_impact", "ALTER TABLE interaction_pairs ADD COLUMN clinical_impact TEXT"),
-            ("stomach_impact", "ALTER TABLE interaction_pairs ADD COLUMN stomach_impact TEXT"),
-            ("food_consideration", "ALTER TABLE interaction_pairs ADD COLUMN food_consideration TEXT"),
-            ("action_guidance", "ALTER TABLE interaction_pairs ADD COLUMN action_guidance TEXT"),
-            ("evidence_source", "ALTER TABLE interaction_pairs ADD COLUMN evidence_source TEXT"),
-            ("confidence", "ALTER TABLE interaction_pairs ADD COLUMN confidence TEXT"),
-            ("last_reviewed", "ALTER TABLE interaction_pairs ADD COLUMN last_reviewed TEXT"),
-            ("expires_at", "ALTER TABLE interaction_pairs ADD COLUMN expires_at TIMESTAMP"),
-            ("expires_at_epoch", "ALTER TABLE interaction_pairs ADD COLUMN expires_at_epoch INTEGER")
-        ]
+            static_migrations = [
+                ("mechanism", "ALTER TABLE interaction_pairs ADD COLUMN mechanism TEXT"),
+                ("clinical_impact", "ALTER TABLE interaction_pairs ADD COLUMN clinical_impact TEXT"),
+                ("stomach_impact", "ALTER TABLE interaction_pairs ADD COLUMN stomach_impact TEXT"),
+                ("food_consideration", "ALTER TABLE interaction_pairs ADD COLUMN food_consideration TEXT"),
+                ("action_guidance", "ALTER TABLE interaction_pairs ADD COLUMN action_guidance TEXT"),
+                ("evidence_source", "ALTER TABLE interaction_pairs ADD COLUMN evidence_source TEXT"),
+                ("confidence", "ALTER TABLE interaction_pairs ADD COLUMN confidence TEXT"),
+                ("last_reviewed", "ALTER TABLE interaction_pairs ADD COLUMN last_reviewed TEXT"),
+                ("expires_at", "ALTER TABLE interaction_pairs ADD COLUMN expires_at TIMESTAMP"),
+                ("expires_at_epoch", "ALTER TABLE interaction_pairs ADD COLUMN expires_at_epoch INTEGER")
+            ]
 
-        for col_name, ddl_stmt in static_migrations:
-            if col_name not in existing_cols:
+            for col_name, ddl_stmt in static_migrations:
+                if col_name not in existing_cols:
+                    try:
+                        cursor.execute(ddl_stmt)
+                    except Exception:
+                        pass
+
+            cursor.execute("PRAGMA table_info(drug_details)")
+            existing_drug_cols = {row[1] for row in cursor.fetchall()}
+            if "expires_at" not in existing_drug_cols:
                 try:
-                    cursor.execute(ddl_stmt)
+                    cursor.execute("ALTER TABLE drug_details ADD COLUMN expires_at TIMESTAMP")
+                except Exception:
+                    pass
+            if "expires_at_epoch" not in existing_drug_cols:
+                try:
+                    cursor.execute("ALTER TABLE drug_details ADD COLUMN expires_at_epoch INTEGER")
+                except Exception:
+                    pass
+            # Prescription/OTC status, therapeutic class and dosage forms, stored
+            # as one JSON blob rather than four columns. A cache hit previously
+            # returned only names and text, so a drug fetched once correctly as
+            # prescription-only came back from cache unclassified and was
+            # re-rendered as over-the-counter -- the same clinical mislabelling
+            # the DrugLabelResult widening fixes, reintroduced by the cache for
+            # the entire 30-day TTL. One JSON column keeps that fix durable
+            # without a four-column migration on every deployment.
+            if "classification" not in existing_drug_cols:
+                try:
+                    cursor.execute("ALTER TABLE drug_details ADD COLUMN classification TEXT")
                 except Exception:
                     pass
 
-        cursor.execute("PRAGMA table_info(drug_details)")
-        existing_drug_cols = {row[1] for row in cursor.fetchall()}
-        if "expires_at" not in existing_drug_cols:
-            try:
-                cursor.execute("ALTER TABLE drug_details ADD COLUMN expires_at TIMESTAMP")
-            except Exception:
-                pass
-        if "expires_at_epoch" not in existing_drug_cols:
-            try:
-                cursor.execute("ALTER TABLE drug_details ADD COLUMN expires_at_epoch INTEGER")
-            except Exception:
-                pass
+            # Backfill the epoch column for rows written before it existed. strftime
+            # returns NULL for anything it cannot parse, and a NULL epoch reads as
+            # expired (see _sync_get_* below), so an unparseable legacy row is
+            # discarded and re-fetched rather than served forever.
+            for table in ("interaction_pairs", "drug_details"):
+                try:
+                    cursor.execute(
+                        f"UPDATE {table} SET expires_at_epoch = CAST(strftime('%s', expires_at) AS INTEGER) "
+                        f"WHERE expires_at_epoch IS NULL AND expires_at IS NOT NULL"
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not backfill expires_at_epoch on {table}: {e}")
 
-        # Backfill the epoch column for rows written before it existed. strftime
-        # returns NULL for anything it cannot parse, and a NULL epoch reads as
-        # expired (see _sync_get_* below), so an unparseable legacy row is
-        # discarded and re-fetched rather than served forever.
-        for table in ("interaction_pairs", "drug_details"):
-            try:
-                cursor.execute(
-                    f"UPDATE {table} SET expires_at_epoch = CAST(strftime('%s', expires_at) AS INTEGER) "
-                    f"WHERE expires_at_epoch IS NULL AND expires_at IS NOT NULL"
-                )
-            except Exception as e:
-                logger.warning(f"Could not backfill expires_at_epoch on {table}: {e}")
+            # Clean unusable rows on startup. Comparing integers avoids relying on the
+            # lexicographic ordering of ISO strings, which only happens to be correct
+            # while every writer emits an identically formatted UTC timestamp.
+            # A NULL epoch is purged too: it means either a pre-TTL legacy row or an
+            # expires_at that strftime could not parse, and both read as expired
+            # below, so leaving them would only accumulate dead rows.
+            now_epoch = _now_epoch()
+            cursor.execute("DELETE FROM interaction_pairs WHERE expires_at_epoch IS NULL OR expires_at_epoch <= ?", (now_epoch,))
+            cursor.execute("DELETE FROM drug_details WHERE expires_at_epoch IS NULL OR expires_at_epoch <= ?", (now_epoch,))
 
-        # Clean unusable rows on startup. Comparing integers avoids relying on the
-        # lexicographic ordering of ISO strings, which only happens to be correct
-        # while every writer emits an identically formatted UTC timestamp.
-        # A NULL epoch is purged too: it means either a pre-TTL legacy row or an
-        # expires_at that strftime could not parse, and both read as expired
-        # below, so leaving them would only accumulate dead rows.
-        now_epoch = _now_epoch()
-        cursor.execute("DELETE FROM interaction_pairs WHERE expires_at_epoch IS NULL OR expires_at_epoch <= ?", (now_epoch,))
-        cursor.execute("DELETE FROM drug_details WHERE expires_at_epoch IS NULL OR expires_at_epoch <= ?", (now_epoch,))
-
-        conn.commit()
-        conn.close()
+            conn.commit()
     except Exception as e:
         logger.error(f"Error initializing local SQLite cache: {e}")
 
@@ -230,22 +244,21 @@ def get_canonical_pair(drug_a: str, drug_b: str) -> str:
 
 def _sync_get_interaction(canonical: str) -> Optional[tuple]:
     try:
-        conn = _get_sqlite_conn()
-        cursor = conn.cursor()
-        # Integer comparison. The previous predicate compared ISO-8601 strings,
-        # which is only correct while every row was written with the identical
-        # UTC offset and fractional-second format; a row written with a local
-        # offset (or by an external tool) would sort wrongly and be served long
-        # after expiry. A NULL epoch fails `> ?` and is therefore treated as
-        # expired, which is the safe direction for a clinical cache.
-        cursor.execute("""
-            SELECT severity, explanation, mechanism, clinical_impact, stomach_impact,
-                   food_consideration, action_guidance, evidence_source, confidence, last_reviewed, expires_at
-            FROM interaction_pairs
-            WHERE canonical_pair = ? AND expires_at_epoch > ?
-        """, (canonical, _now_epoch()))
-        row = cursor.fetchone()
-        conn.close()
+        with closing(_get_sqlite_conn()) as conn:
+            cursor = conn.cursor()
+            # Integer comparison. The previous predicate compared ISO-8601 strings,
+            # which is only correct while every row was written with the identical
+            # UTC offset and fractional-second format; a row written with a local
+            # offset (or by an external tool) would sort wrongly and be served long
+            # after expiry. A NULL epoch fails `> ?` and is therefore treated as
+            # expired, which is the safe direction for a clinical cache.
+            cursor.execute("""
+                SELECT severity, explanation, mechanism, clinical_impact, stomach_impact,
+                       food_consideration, action_guidance, evidence_source, confidence, last_reviewed, expires_at
+                FROM interaction_pairs
+                WHERE canonical_pair = ? AND expires_at_epoch > ?
+            """, (canonical, _now_epoch()))
+            row = cursor.fetchone()
         return row
     except Exception as e:
         logger.warning(f"SQLite interaction lookup error: {e}")
@@ -264,68 +277,116 @@ def _sync_save_interaction(
     action_guidance: Optional[str] = None,
     evidence_source: Optional[str] = None,
     confidence: Optional[str] = "established",
-    last_reviewed: Optional[str] = "2026-08-23",
+    # None, not a fabricated date. A caller that has no provenance for a
+    # finding must persist NULL; stamping the curated rule table's review
+    # date onto it would claim a clinical review that never happened.
+    last_reviewed: Optional[str] = None,
     ttl_days: int = INTERACTION_TTL_DAYS
 ) -> None:
     try:
         expires_at, expires_at_epoch = _expiry_fields(ttl_days)
-        conn = _get_sqlite_conn()
-        cursor = conn.cursor()
-        cursor.execute("BEGIN IMMEDIATE")
-        cursor.execute("""
-            INSERT INTO interaction_pairs (
-                id, drug_a, drug_b, canonical_pair, severity, explanation,
-                mechanism, clinical_impact, stomach_impact, food_consideration, action_guidance,
-                evidence_source, confidence, last_reviewed, expires_at, expires_at_epoch
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(canonical_pair) DO UPDATE SET
-                severity=excluded.severity,
-                explanation=excluded.explanation,
-                mechanism=excluded.mechanism,
-                clinical_impact=excluded.clinical_impact,
-                stomach_impact=excluded.stomach_impact,
-                food_consideration=excluded.food_consideration,
-                action_guidance=excluded.action_guidance,
-                evidence_source=excluded.evidence_source,
-                confidence=excluded.confidence,
-                last_reviewed=excluded.last_reviewed,
-                expires_at=excluded.expires_at,
-                expires_at_epoch=excluded.expires_at_epoch
-        """, (
-            str(uuid.uuid4()),
-            drug_a.lower().strip(),
-            drug_b.lower().strip(),
-            canonical,
-            severity,
-            explanation,
-            mechanism,
-            clinical_impact,
-            stomach_impact,
-            food_consideration,
-            action_guidance,
-            evidence_source,
-            confidence,
-            last_reviewed,
-            expires_at,
-            expires_at_epoch
-        ))
-        conn.commit()
-        conn.close()
+        with closing(_get_sqlite_conn()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute("""
+                INSERT INTO interaction_pairs (
+                    id, drug_a, drug_b, canonical_pair, severity, explanation,
+                    mechanism, clinical_impact, stomach_impact, food_consideration, action_guidance,
+                    evidence_source, confidence, last_reviewed, expires_at, expires_at_epoch
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(canonical_pair) DO UPDATE SET
+                    severity=excluded.severity,
+                    explanation=excluded.explanation,
+                    mechanism=excluded.mechanism,
+                    clinical_impact=excluded.clinical_impact,
+                    stomach_impact=excluded.stomach_impact,
+                    food_consideration=excluded.food_consideration,
+                    action_guidance=excluded.action_guidance,
+                    evidence_source=excluded.evidence_source,
+                    confidence=excluded.confidence,
+                    last_reviewed=excluded.last_reviewed,
+                    expires_at=excluded.expires_at,
+                    expires_at_epoch=excluded.expires_at_epoch
+            """, (
+                str(uuid.uuid4()),
+                drug_a.lower().strip(),
+                drug_b.lower().strip(),
+                canonical,
+                severity,
+                explanation,
+                mechanism,
+                clinical_impact,
+                stomach_impact,
+                food_consideration,
+                action_guidance,
+                evidence_source,
+                confidence,
+                last_reviewed,
+                expires_at,
+                expires_at_epoch
+            ))
+            conn.commit()
     except Exception as e:
         logger.warning(f"Failed to cache interaction in SQLite: {e}")
 
+# Classification keys persisted as one JSON blob. Kept as an explicit tuple so
+# the encode and decode sides cannot drift apart.
+_CLASSIFICATION_KEYS = ("product_types", "is_rx", "pharm_class_cs", "dosage_forms")
+
+
+def _encode_classification(detail: Dict[str, Any]) -> Optional[str]:
+    """
+    Serialises the classification keys from a drug-detail dict, or returns None
+    when the caller supplied none of them.
+
+    None rather than "{}" matters: it distinguishes a row written before this
+    column existed from one written by a code path that genuinely had nothing to
+    classify, and keeps the column NULL for the former.
+    """
+    present = {k: detail[k] for k in _CLASSIFICATION_KEYS if detail.get(k) not in (None, [], "")}
+    if not present:
+        return None
+    try:
+        return json.dumps(present)
+    except (TypeError, ValueError):
+        return None
+
+
+def _decode_classification(blob: Any) -> Dict[str, Any]:
+    """
+    Reads the classification blob back, tolerating NULL (pre-migration rows),
+    an already-decoded dict (Supabase jsonb), and malformed text.
+
+    Returns {} on anything unusable, so the caller's own defaults apply. It must
+    never return `{"is_rx": False}` for a row that simply predates the column --
+    that would assert "over-the-counter" on no evidence, which is the exact
+    mislabelling this blob exists to prevent.
+    """
+    if not blob:
+        return {}
+    if isinstance(blob, dict):
+        decoded = blob
+    else:
+        try:
+            decoded = json.loads(blob)
+        except (TypeError, ValueError):
+            return {}
+        if not isinstance(decoded, dict):
+            return {}
+    return {k: decoded[k] for k in _CLASSIFICATION_KEYS if k in decoded}
+
+
 def _sync_get_drug_detail(name: str) -> Optional[tuple]:
     try:
-        conn = _get_sqlite_conn()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT brand_names, side_effects, food_warnings, drug_interactions, severity, raw_text
-            FROM drug_details
-            WHERE generic_name = ? AND expires_at_epoch > ?
-        """, (name, _now_epoch()))
-        row = cursor.fetchone()
-        conn.close()
+        with closing(_get_sqlite_conn()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT brand_names, side_effects, food_warnings, drug_interactions, severity, raw_text, classification
+                FROM drug_details
+                WHERE generic_name = ? AND expires_at_epoch > ?
+            """, (name, _now_epoch()))
+            row = cursor.fetchone()
         return row
     except Exception as e:
         logger.warning(f"SQLite drug details lookup error: {e}")
@@ -339,47 +400,49 @@ def _sync_save_drug_detail(
     drug_interactions_json: str,
     severity: str,
     raw_text: Optional[str],
+    classification_json: Optional[str] = None,
     ttl_days: int = DRUG_DETAIL_TTL_DAYS
 ) -> None:
     try:
         expires_at, expires_at_epoch = _expiry_fields(ttl_days)
-        conn = _get_sqlite_conn()
-        cursor = conn.cursor()
-        cursor.execute("BEGIN IMMEDIATE")
-        cursor.execute("""
-            INSERT INTO drug_details (generic_name, brand_names, side_effects, food_warnings, drug_interactions, severity, raw_text, expires_at, expires_at_epoch)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(generic_name) DO UPDATE SET
-                brand_names=excluded.brand_names,
-                side_effects=excluded.side_effects,
-                food_warnings=excluded.food_warnings,
-                drug_interactions=excluded.drug_interactions,
-                severity=excluded.severity,
-                raw_text=excluded.raw_text,
-                expires_at=excluded.expires_at,
-                expires_at_epoch=excluded.expires_at_epoch
-        """, (
-            name,
-            brand_names_json,
-            side_effects_json,
-            food_warnings_json,
-            drug_interactions_json,
-            severity,
-            raw_text,
-            expires_at,
-            expires_at_epoch
-        ))
-        conn.commit()
-        conn.close()
+        with closing(_get_sqlite_conn()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute("""
+                INSERT INTO drug_details (generic_name, brand_names, side_effects, food_warnings, drug_interactions, severity, raw_text, classification, expires_at, expires_at_epoch)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(generic_name) DO UPDATE SET
+                    brand_names=excluded.brand_names,
+                    side_effects=excluded.side_effects,
+                    food_warnings=excluded.food_warnings,
+                    drug_interactions=excluded.drug_interactions,
+                    severity=excluded.severity,
+                    raw_text=excluded.raw_text,
+                    classification=excluded.classification,
+                    expires_at=excluded.expires_at,
+                    expires_at_epoch=excluded.expires_at_epoch
+            """, (
+                name,
+                brand_names_json,
+                side_effects_json,
+                food_warnings_json,
+                drug_interactions_json,
+                severity,
+                raw_text,
+                classification_json,
+                expires_at,
+                expires_at_epoch
+            ))
+            conn.commit()
     except Exception as e:
         logger.warning(f"Failed to cache drug details in SQLite: {e}")
 
 # Async public methods
 
-# Remembers a table whose remote schema has no expires_at column, so the
+# Remembers a (table, column) pair whose remote schema lacks that column, so the
 # unsupported field is dropped up front rather than costing a failed round-trip
 # on every subsequent write.
-_SUPABASE_TTL_UNSUPPORTED: set = set()
+_SUPABASE_COLUMN_UNSUPPORTED: set = set()
 
 
 def _supabase_upsert_with_ttl(
@@ -387,7 +450,8 @@ def _supabase_upsert_with_ttl(
     table: str,
     payload: Dict[str, Any],
     on_conflict: str,
-    ttl_days: int
+    ttl_days: int,
+    optional_columns: Optional[Dict[str, Any]] = None
 ) -> None:
     """
     Upserts a cache row, stamping expires_at so the remote copy can expire.
@@ -396,34 +460,68 @@ def _supabase_upsert_with_ttl(
     the remote cache never expired: entries written once were served indefinitely.
 
     The remote schema is not managed from this process, so a table that predates
-    the column would reject the write and silently disable remote caching
-    altogether. The write is therefore retried once without the field, and the
-    table is remembered only when the error actually names the column -- a
-    network or auth failure must not be misread as a schema gap.
-    """
-    include_ttl = table not in _SUPABASE_TTL_UNSUPPORTED
-    body = payload
-    if include_ttl:
-        expires_at, _ = _expiry_fields(ttl_days)
-        body = {**payload, "expires_at": expires_at}
+    a column would reject the write and silently disable remote caching
+    altogether. Each such column is therefore attempted once, dropped on retry,
+    and remembered only when the error actually names it -- a network or auth
+    failure must not be misread as a schema gap.
 
-    try:
-        supabase.table(table).upsert(body, on_conflict=on_conflict).execute()
-        return
-    except Exception as e:
-        if not include_ttl:
-            raise
-        message = str(e)
-        if "expires_at" in message:
-            _SUPABASE_TTL_UNSUPPORTED.add(table)
-            logger.warning(
-                f"Supabase table '{table}' has no 'expires_at' column, so remote cache "
-                f"entries cannot carry an expiry. Add 'expires_at timestamptz' to the "
-                f"table; until then, TTL is enforced from 'created_at' on read."
-            )
-        else:
-            logger.warning(f"Supabase upsert into '{table}' failed ({message}); retrying without expires_at.")
-        supabase.table(table).upsert(payload, on_conflict=on_conflict).execute()
+    `optional_columns` extends the same tolerance to any other field this process
+    would like to persist but cannot guarantee exists remotely (currently the
+    drug classification blob). Callers pass data, not schema.
+    """
+    expires_at, _ = _expiry_fields(ttl_days)
+    candidates: Dict[str, Any] = {"expires_at": expires_at}
+    if optional_columns:
+        candidates.update(optional_columns)
+
+    def build() -> Dict[str, Any]:
+        return {
+            **payload,
+            **{
+                col: val for col, val in candidates.items()
+                if (table, col) not in _SUPABASE_COLUMN_UNSUPPORTED
+            }
+        }
+
+    # One retry per column the remote schema turns out to be missing. Bounded by
+    # the number of optional columns, so this cannot spin.
+    for _ in range(len(candidates) + 1):
+        body = build()
+        try:
+            supabase.table(table).upsert(body, on_conflict=on_conflict).execute()
+            return
+        except Exception as e:
+            message = str(e)
+            named = [
+                col for col in candidates
+                if col in message and (table, col) not in _SUPABASE_COLUMN_UNSUPPORTED
+            ]
+            if not named:
+                # Not a schema gap we can work around: drop every optional field
+                # and make one last attempt with the base payload only.
+                if body == payload:
+                    raise
+                logger.warning(
+                    f"Supabase upsert into '{table}' failed ({message}); "
+                    f"retrying with the base payload only."
+                )
+                supabase.table(table).upsert(payload, on_conflict=on_conflict).execute()
+                return
+            for col in named:
+                _SUPABASE_COLUMN_UNSUPPORTED.add((table, col))
+                if col == "expires_at":
+                    logger.warning(
+                        f"Supabase table '{table}' has no 'expires_at' column, so remote cache "
+                        f"entries cannot carry an expiry. Add 'expires_at timestamptz' to the "
+                        f"table; until then, TTL is enforced from 'created_at' on read."
+                    )
+                else:
+                    logger.warning(
+                        f"Supabase table '{table}' has no '{col}' column; dropping that field. "
+                        f"Add it to persist the value remotely."
+                    )
+
+    supabase.table(table).upsert(payload, on_conflict=on_conflict).execute()
 
 
 async def get_cached_interaction(drug_a: str, drug_b: str) -> Optional[InteractionItem]:
@@ -455,7 +553,11 @@ async def get_cached_interaction(drug_a: str, drug_b: str) -> Optional[Interacti
                         action_guidance=item.get("action_guidance"),
                         evidence_source=item.get("evidence_source"),
                         confidence=RuleConfidence(item.get("confidence", "established")),
-                        last_reviewed=item.get("last_reviewed", "2026-08-23")
+                        # No fabricated fallback. A cached row that predates the
+                        # last_reviewed column has unknown provenance, and
+                        # substituting the rule table's date would have asserted a
+                        # clinical review for a row nobody reviewed.
+                        last_reviewed=item.get("last_reviewed")
                     )
         except Exception as e:
             logger.warning(f"Supabase interaction cache lookup error: {e}")
@@ -475,7 +577,7 @@ async def get_cached_interaction(drug_a: str, drug_b: str) -> Optional[Interacti
             action_guidance=row[6] if len(row) > 6 else None,
             evidence_source=row[7] if len(row) > 7 else None,
             confidence=RuleConfidence(row[8]) if len(row) > 8 and row[8] in [c.value for c in RuleConfidence] else RuleConfidence.ESTABLISHED,
-            last_reviewed=row[9] if len(row) > 9 and row[9] else "2026-08-23"
+            last_reviewed=row[9] if len(row) > 9 and row[9] else None
         )
 
     return None
@@ -492,7 +594,7 @@ async def save_interaction_to_cache(
     action_guidance: Optional[str] = None,
     evidence_source: Optional[str] = None,
     confidence: Optional[str] = "established",
-    last_reviewed: Optional[str] = "2026-08-23"
+    last_reviewed: Optional[str] = None
 ) -> None:
     canonical = get_canonical_pair(drug_a, drug_b)
     supabase = get_supabase_client()
@@ -512,7 +614,7 @@ async def save_interaction_to_cache(
                 "action_guidance": action_guidance or None,
                 "evidence_source": evidence_source or None,
                 "confidence": confidence or "established",
-                "last_reviewed": last_reviewed or "2026-08-23"
+                "last_reviewed": last_reviewed
             }
             _supabase_upsert_with_ttl(
                 supabase,
@@ -562,7 +664,8 @@ async def get_cached_drug_details(generic_name: str) -> Optional[Dict[str, Any]]
                         "food_warnings": item["food_warnings"] if isinstance(item["food_warnings"], list) else json.loads(item.get("food_warnings") or "[]"),
                         "drug_interactions": item["drug_interactions"] if isinstance(item["drug_interactions"], list) else json.loads(item.get("drug_interactions") or "[]"),
                         "severity": item.get("severity", "moderate"),
-                        "raw_text_summary": item.get("raw_text")
+                        "raw_text_summary": item.get("raw_text"),
+                        **_decode_classification(item.get("classification"))
                     }
         except Exception as e:
             logger.warning(f"Supabase drug details lookup error: {e}")
@@ -576,7 +679,8 @@ async def get_cached_drug_details(generic_name: str) -> Optional[Dict[str, Any]]
             "food_warnings": json.loads(row[2] or "[]"),
             "drug_interactions": json.loads(row[3] or "[]"),
             "severity": row[4] or "moderate",
-            "raw_text_summary": row[5]
+            "raw_text_summary": row[5],
+            **_decode_classification(row[6])
         }
 
     return None
@@ -600,6 +704,7 @@ async def save_drug_details_to_cache(
         drug_interactions = d.get("drug_interactions", [])
         severity = d.get("severity", "moderate")
         raw_text = d.get("raw_text") or d.get("raw_text_summary")
+        classification_source: Dict[str, Any] = d
     else:
         name = (generic_name_or_dict or kwargs.get("generic_name") or "").lower().strip()
         brand_names = brand_names or kwargs.get("brand_names") or []
@@ -608,9 +713,12 @@ async def save_drug_details_to_cache(
         drug_interactions = drug_interactions or kwargs.get("drug_interactions") or []
         severity = severity or kwargs.get("severity") or "moderate"
         raw_text = raw_text or kwargs.get("raw_text")
+        classification_source = kwargs
 
     if not name:
         return
+
+    classification_json = _encode_classification(classification_source)
 
     supabase = get_supabase_client()
     if supabase:
@@ -628,7 +736,12 @@ async def save_drug_details_to_cache(
                     "raw_text": raw_text
                 },
                 on_conflict="generic_name",
-                ttl_days=DRUG_DETAIL_TTL_DAYS
+                ttl_days=DRUG_DETAIL_TTL_DAYS,
+                # Optional: a Supabase project whose drug_details table predates
+                # this column keeps working, minus remote classification caching.
+                optional_columns=(
+                    {"classification": classification_json} if classification_json else None
+                )
             )
         except Exception as e:
             logger.warning(f"Failed to cache drug details in Supabase: {e}")
@@ -641,7 +754,8 @@ async def save_drug_details_to_cache(
         json.dumps(food_warnings),
         json.dumps(drug_interactions),
         severity,
-        raw_text
+        raw_text,
+        classification_json
     )
 
 get_cached_drug_detail = get_cached_drug_details

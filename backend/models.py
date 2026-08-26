@@ -19,9 +19,27 @@ WAKE_TIME_12H_RE = re.compile(r"^(0?[1-9]|1[0-2]):[0-5][0-9]\s?[APap][Mm]$")
 WAKE_TIME_24H_RE = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
 
 MIN_PASSWORD_LENGTH = 8
-# bcrypt silently truncates beyond 72 bytes, so refuse longer inputs outright
-# rather than accepting a password whose tail is ignored.
-MAX_PASSWORD_LENGTH = 72
+
+# bcrypt silently truncates beyond 72 BYTES, so refuse longer inputs outright
+# rather than accepting a password whose tail is ignored. The unit is in the name
+# because it is the whole subtlety here: this was `MAX_PASSWORD_LENGTH`, used both
+# as Pydantic's `max_length` (which counts CHARACTERS) and inside a validator that
+# counts `len(v.encode("utf-8"))`. Two different measurements behind one name is
+# how the frontend ended up enforcing `password.length > 72` -- a character check
+# against a byte limit, which let multi-byte passwords through the form only for
+# the API to reject them.
+#
+# Mirrors `services.auth.BCRYPT_MAX_PASSWORD_BYTES`, which is the algorithm's hard
+# limit; kept separate so this module imports nothing but stdlib and pydantic.
+# `test_auth.py` asserts the two stay equal.
+MAX_PASSWORD_BYTES = 72
+
+# A UTF-8 string of N bytes is at most N characters (every character costs at
+# least one byte), so the byte ceiling doubles as the character ceiling. Keeping it
+# as an explicit `max_length` bounds the string before the encode() in the
+# validator has to touch it; it can never reject a password the byte check would
+# have allowed.
+MAX_PASSWORD_CHARS = MAX_PASSWORD_BYTES
 
 # ==============================================================================
 # ENUMS
@@ -67,11 +85,12 @@ class UserCreate(BaseModel):
     password: str = Field(
         ...,
         min_length=MIN_PASSWORD_LENGTH,
-        max_length=MAX_PASSWORD_LENGTH,
+        max_length=MAX_PASSWORD_CHARS,
         description=(
             f"Minimum {MIN_PASSWORD_LENGTH} characters, including at least one "
             f"uppercase letter, one lowercase letter and one digit. "
-            f"Maximum {MAX_PASSWORD_LENGTH} bytes (bcrypt limit)."
+            f"Maximum {MAX_PASSWORD_BYTES} bytes (bcrypt limit) -- note bytes, not "
+            f"characters: accented, emoji and non-Latin characters cost 2-4 each."
         )
     )
     email: Optional[str] = None
@@ -79,9 +98,11 @@ class UserCreate(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password_complexity(cls, v: str) -> str:
-        if len(v.encode("utf-8")) > MAX_PASSWORD_LENGTH:
+        # The authoritative length check, in the same unit bcrypt uses.
+        if len(v.encode("utf-8")) > MAX_PASSWORD_BYTES:
             raise ValueError(
-                f"Password must not exceed {MAX_PASSWORD_LENGTH} bytes."
+                f"Password must not exceed {MAX_PASSWORD_BYTES} bytes. "
+                f"Accented, emoji and non-Latin characters count as 2-4 bytes each."
             )
         missing = []
         if not any(c.isupper() for c in v):
@@ -216,7 +237,17 @@ class InteractionItem(BaseModel):
     action_guidance: Optional[str] = None
     evidence_source: Optional[str] = None
     confidence: Optional[RuleConfidence] = RuleConfidence.ESTABLISHED
-    last_reviewed: Optional[str] = "2026-08-23"
+    # No schema-level default date. This field previously defaulted to a literal
+    # "2026-08-23", which meant any InteractionItem constructed without an
+    # explicit value silently asserted a clinical review that never happened --
+    # including rows read back from a cache written before the column existed.
+    # Provenance has to come from whatever produced the finding: the curated rule
+    # table stamps RULE_TABLE_LAST_REVIEWED, the live FDA-label analyzer stamps
+    # the date it read the label, and an unknown source correctly stays None.
+    last_reviewed: Optional[str] = Field(
+        None,
+        description="ISO date the source of this finding was last reviewed; null if the source did not record one",
+    )
 
 class SideEffectDetail(BaseModel):
     effect: str
@@ -307,9 +338,38 @@ class ParsedDrugInfo(BaseModel):
     raw_text: Optional[str] = None
 
 class DrugLabelResult(BaseModel):
+    """
+    Internal DTO carrying one resolved drug label between the OpenFDA/cache layer
+    and the profile builder. Never serialised to a client.
+
+    The classification fields below (product_types / is_rx / pharm_class_cs /
+    dosage_forms) were absent. Because Pydantic silently discards keys it has not
+    declared, `DrugLabelResult(**extracted_label)` dropped everything
+    extract_label_info had determined about the drug, and the profile builder
+    downstream -- reading `label.get("is_rx", False)` and
+    `label.get("dosage_forms", ["Oral Formulation"])` -- had no choice but to
+    fall back to its defaults. Every drug resolved from OpenFDA was therefore
+    presented as over-the-counter, in a generic category, in an oral
+    formulation, including drugs that are prescription-only.
+
+    `is_rx` is Optional[bool] on purpose: None means "the label carried nothing
+    to classify on" and must not be read as "over-the-counter".
+    """
     generic_name: str
     brand_names: List[str] = []
+
+    # Retained deliberately. This is the documented fallback source for
+    # generic_name in extract_label_info when a label carries no generic_name,
+    # and it is the FDA's own list of active substances -- worth keeping on the
+    # DTO alongside the names it can substitute for. This model is internal, so
+    # the field costs nothing in the public API contract.
     substance_names: List[str] = []
+
+    product_types: List[str] = []
+    is_rx: Optional[bool] = None
+    pharm_class_cs: Optional[str] = None
+    dosage_forms: List[str] = []
+
     raw_text_summary: str = ""
     found: bool = False
     source: Literal["cache", "openfda", "fallback", "curated"] = "fallback"

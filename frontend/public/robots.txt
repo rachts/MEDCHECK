@@ -11,4 +11,4 @@ Disallow: /app
 Disallow: /auth
 Disallow: /api/
 
-Sitemap: https://medcheck.app/sitemap.xml
+Sitemap: %VITE_SITE_URL%/sitemap.xml
