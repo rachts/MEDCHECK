@@ -317,7 +317,10 @@ async def log_client_error(request: Request, payload: ClientErrorReport):
 # ==============================================================================
 
 @app.get("/api/health")
-@limiter.limit("60/minute")
+@app.head("/api/health")
+@app.get("/health")
+@app.head("/health")
+@limiter.limit("120/minute")
 async def health_check(request: Request):
     """Health check endpoint reporting database connectivity and clinical KB version."""
     db_status = "ok"

@@ -209,12 +209,23 @@ def test_search_medicine_database():
 # =============================================================================
 
 def test_api_health_endpoint():
-    """Test public health check endpoint."""
+    """Test public health check endpoint with GET, HEAD, and /health alias."""
+    # Test GET /api/health
     response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] in ("ok", "degraded")
     assert "clinical_kb_version" in data
+
+    # Test HEAD /api/health (used by uptime monitors & curl -I)
+    head_resp = client.head("/api/health")
+    assert head_resp.status_code == 200
+
+    # Test /health alias
+    alias_resp = client.get("/health")
+    assert alias_resp.status_code == 200
+    alias_head = client.head("/health")
+    assert alias_head.status_code == 200
 
 def test_api_medicine_profile_endpoint():
     """Test GET /api/medicine/{name}/profile with Bearer auth."""
