@@ -46,7 +46,6 @@ services:
   - type: web
     name: medcheck-frontend
     runtime: static
-    region: oregon
     plan: free
     branch: main
     rootDir: frontend
