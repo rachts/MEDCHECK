@@ -1,41 +1,77 @@
 # ==============================================================================
 # MEDCHECK — .gitignore
+# Clinical-Grade Repository Hygiene
+# ==============================================================================
 #
-# Rule for editing this file: ANCHOR EVERY DIRECTORY PATTERN.
+# RULE: Every directory pattern must be anchored with a leading `/` or a full
+# path. A bare `foo/` matches at *any* depth and can silently exclude source
+# directories (e.g., `lib/` once destroyed `frontend/src/lib/`). Only patterns
+# that genuinely recur at every tree level (`__pycache__/`, `node_modules/`) or
+# dot-prefixed directories (which cannot collide with source names) are left
+# unanchored.
 #
-# A bare `foo/` matches a directory named `foo` at *any* depth, including inside
-# the source tree. That is how a copy-pasted Python-packaging block came to carry
-# `lib/`, which silently excluded `frontend/src/lib/` -- the directory holding
-# `api.ts`, the only module that talks to the backend. Four components import it,
-# so `npm run build` failed on every fresh clone and in CI, while working
-# perfectly on the machine where the file already existed on disk.
-#
-# So: plain-word directories get a leading `/` or a full path. Only patterns that
-# genuinely recur at every level of a tree (`__pycache__/`, `node_modules/`) or
-# that are dot-prefixed (and therefore cannot collide with a source directory)
-# are left unanchored.
+# This file is designed for:
+#   • Local development (any OS, any IDE)
+#   • Docker / Docker Compose workflows
+#   • Free-tier deployment (Render, Fly.io, Vercel, Railway, Netlify)
+#   • Hackathon judging (clean repo, zero secrets, zero build artifacts)
 # ==============================================================================
 
-# ------------------------------------------------------------------------------
-# Secrets & environment
-#
-# `.env.*` is deliberately broad. The previous list enumerated .local,
-# .production, .development and .docker, which meant a `.env.staging` or
-# `.env.test` would have been committed. Catch everything, then re-admit the
-# checked-in templates.
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# 1. SECRETS & ENVIRONMENT
+# ==============================================================================
+# `.env.*` is deliberately broad. Enumerating .local, .production, .development,
+# .docker, .staging, .test means a `.env.ci` or `.env.hackathon` would leak.
+# Catch everything, then re-admit the checked-in templates.
 .env
 .env.*
 !.env.example
 !.env.*.example
+
+# Frontend-local env files (Vite inlines these at build time; they must never
+# hold secrets, but local overrides still should not be committed)
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+frontend/.env.development
+frontend/.env.production
+frontend/.env.test
+frontend/.env.staging
+
+# Backend-local env files
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Direnv / shell environment loaders
 .envrc
+.direnv/
+
+# Secret key material (never commit cryptographic material)
 secrets/
 *.pem
 *.key
+*.p12
+*.pfx
+*.crt
+*.cer
+.htpasswd
+.netrc
+.pypirc
+.npmrc
+.git-credentials
+.gitconfig.local
 
-# ------------------------------------------------------------------------------
-# Local databases (SQLite cache, plus its WAL-mode sidecar files)
-# ------------------------------------------------------------------------------
+# Cloud provider local credentials (sometimes copied into project root by mistake)
+.aws/
+.gcp/
+.gcloud/
+.azure/
+
+# ==============================================================================
+# 2. LOCAL DATABASES & CACHE
+# ==============================================================================
+# SQLite (primary local cache) and its WAL-mode sidecar files
 *.db
 *.db-shm
 *.db-wal
@@ -43,23 +79,46 @@ secrets/
 *.sqlite
 *.sqlite3
 
-# ------------------------------------------------------------------------------
-# Python
-#
-# The setuptools/wheel distribution block that used to live here has been
-# removed: MEDCHECK is an application, not a published package, so `sdist/`,
-# `wheels/`, `*.egg-info/`, `lib/` and friends can never be produced here. One of
-# them was actively destroying the frontend (see the header).
-# ------------------------------------------------------------------------------
+# Backend data directories (created at runtime)
+backend/data/
+backend/audit_logs/
+
+# ==============================================================================
+# 3. PYTHON
+# ==============================================================================
+# Bytecode & compiled extensions
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.egg
+*.egg-info/
+.eggs/
 
-# Virtual environments
+# Virtual environments (any common name)
 .venv/
 venv/
+env/
+ENV/
+venv.bak/
+env.bak/
 backend/venv/
+backend/env/
+backend/ENV/
+
+# Python packaging / build artifacts (application repos sometimes run `pip install -e .`)
+build/
+dist/
+sdist/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+MANIFEST
+.installed.cfg
+develop-eggs/
+parts/
+bin/
+var/
 
 # Tooling caches (dot-prefixed, safe to leave unanchored)
 .mypy_cache/
@@ -68,35 +127,45 @@ backend/venv/
 .pytype/
 .pyre/
 .dmypy.json
+.hypothesis/
+.benchmarks/
 
-# Coverage
+# Coverage & test artifacts
 .coverage
 .coverage.*
 coverage.xml
 htmlcov/
 *.cover
+*.py,cover
 .tox/
 .nox/
+pytest.xml
+junit.xml
 
-# ------------------------------------------------------------------------------
-# Frontend
-#
-# `package-lock.json` is intentionally NOT ignored -- it is what makes `npm ci`
-# in CI reproducible.
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# 4. FRONTEND / NODE.JS
+# ==============================================================================
+# Dependencies
 node_modules/
+.pnpm-store/
+.yarn/
+.pnp.*
+
+# Build outputs (Vite)
 frontend/dist/
 frontend/dist-ssr/
-frontend/coverage/
 frontend/.vite/
+
+# Test & quality artifacts
+frontend/coverage/
 frontend/.turbo/
 frontend/playwright-report/
 frontend/test-results/
 frontend/storybook-static/
-.eslintcache
+frontend/.eslintcache
 *.tsbuildinfo
 
-# npm/yarn/pnpm diagnostics
+# npm / yarn / pnpm diagnostics (keep lockfiles committed for reproducibility)
 .npm
 npm-debug.log*
 yarn-debug.log*
@@ -104,70 +173,197 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# ------------------------------------------------------------------------------
-# Deployment & container local state
-#
-# `frontend/vercel.json` is committed; `.vercel/` is the CLI's per-machine link
-# to a project and must not be.
-# ------------------------------------------------------------------------------
-.vercel/
+# ==============================================================================
+# 5. DEPLOYMENT & INFRASTRUCTURE
+# ==============================================================================
+# Docker local overrides (production compose stays committed; overrides are per-machine)
 docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yml
 
-# ------------------------------------------------------------------------------
-# Logs & audit trails
-# ------------------------------------------------------------------------------
+# Platform-specific CLI state directories (must never be committed)
+.vercel/
+.netlify/
+.fly/
+.railway/
+.render/
+.heroku/
+.serverless/
+.amplify/
+.firebase/
+.supabase/
+
+# Terraform / IaC local state (if ever added)
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Pulumi / SST (if ever added)
+.pulumi/
+.sst/
+
+# ==============================================================================
+# 6. LOGS & AUDIT TRAILS
+# ==============================================================================
 *.log
 /logs/
-backend/audit_logs/
+log/
+logs/
 
-# ------------------------------------------------------------------------------
-# Editor, tooling & OS cruft
-# ------------------------------------------------------------------------------
-.claude/
+# ==============================================================================
+# 7. EDITOR, TOOLING & OS CRUFT
+# ==============================================================================
+# VS Code & derivatives
 .vscode/
+.vscode-test/
+.history/
+.ionide/
+
+# JetBrains
 .idea/
-.zed/
 *.iml
+*.ipr
+*.iws
+
+# Zed, Cursor, Fleet, Nova, Atom, Brackets, Geany
+.zed/
+.cursor/
+.cursorrules
+.cursorignore
+.fleet/
+.nova/
+.atom/
+.brackets/
+.geany/
+
+# Sublime Text
 *.sublime-project
 *.sublime-workspace
-*.code-workspace
+
+# Vim / Neovim
 *.swp
 *.swo
+*~
+
+# Emacs
+\#*\#
+.\#*
+
+# Eclipse
+.project
+.classpath
+.settings/
+.factorypath
+.metadata/
+
+# Kate
+.kate-swp/
+
+# macOS
 .DS_Store
 ._*
 .Spotlight-V100
 .Trashes
+.fseventsd
+.TemporaryItems
+.apdisk
+
+# Windows
 Thumbs.db
 ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
-# Merge/patch leftovers
+# Linux
+.directory
+.fuse_hidden*
+.nfs*
+.Trash-*
+
+# ==============================================================================
+# 8. MERGE / PATCH LEFTOVERS
+# ==============================================================================
 *.orig
 *.rej
 
-# ------------------------------------------------------------------------------
-# Scratch space
-#
-# Archives are never source. Note that blanket document ignores (`*.pdf`,
-# `*.docx`) are deliberately absent -- a clinical project has legitimate reasons
-# to commit a reference label or a printed brief, and an extension-wide rule
-# drops such a file silently.
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# 9. SCRATCH SPACE & ARCHIVES
+# ==============================================================================
 /tmp/
 /temp/
 *.tmp
 *.bak
+*.backup
 *.zip
 *.tar.gz
+*.tar
+*.rar
+*.7z
+*.bz2
+*.xz
 
-# AI / agent scratch output
+# ==============================================================================
+# 10. AI / AGENT SCRATCH OUTPUT
+# ==============================================================================
 prompts/
 *.prompt
 ai-generated/
+.aider*
+.claudeignore
 
-# ------------------------------------------------------------------------------
-# Internal planning docs (PRD, architecture notes, design-system specs, phase
-# roadmap). Excluded as working notes rather than shipped documentation -- the
-# public-facing docs are README.md, CONTRIBUTING.md and CHANGELOG_CLINICAL.md.
-# Delete this line to start tracking them.
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# 11. INTERNAL PLANNING DOCS
+# ==============================================================================
+# Working notes, PRDs, architecture specs, design-system drafts, phase roadmaps.
+# Public-facing docs (README.md, CONTRIBUTING.md, CHANGELOG_CLINICAL.md, LICENSE)
+# are committed; these are excluded as working drafts.
 /docs/
+
+# ==============================================================================
+# 12. MOBILE / PWA BUILD ARTIFACTS
+# ==============================================================================
+# Service worker (if generated at build time rather than hand-written)
+frontend/public/sw.js
+
+# Gradle / Android
+.gradle/
+local.properties
+*.apk
+*.aab
+
+# iOS / Xcode
+*.ipa
+*.xcarchive
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# CocoaPods
+Pods/
+
+# Flutter / Dart
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+
+# ==============================================================================
+# 13. CI/CD & TEST ARTIFACTS
+# ==============================================================================
+# Local CI runner caches
+.github/workflows/*.yml~  # backup files only; actual workflows ARE committed
+
+# ==============================================================================
+# 14. HACKATHON & DEMO ARTIFACTS (optional — uncomment if needed)
+# ==============================================================================
+# Large binaries that bloat the repo should live in Git LFS or cloud storage.
+# Uncomment the lines below if your hackathon pitch deck / demo video lands here.
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.pdf
+pitch-deck/
+demo-videos/
+screenshots/
