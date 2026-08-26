@@ -1,0 +1,77 @@
+# ==============================================================================
+# MEDCHECK Render Blueprint Specification (Infrastructure-as-Code)
+# Production-ready configuration for 100% FREE deployment on Render.com
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. FastAPI Clinical Intelligence Backend
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: medcheck-api
+    runtime: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AUDIT_IP_SALT
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: http://localhost:5173,https://medcheck.vercel.app
+      - key: GUEST_TOKEN_EXPIRE_MINUTES
+        value: 120
+      - key: FORCE_HTTPS
+        value: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+
+  # ----------------------------------------------------------------------------
+  # 2. React + Vite Frontend (Render Static Site)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: medcheck-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-XSS-Protection
+        value: 1; mode=block
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: medcheck-api
+          property: host

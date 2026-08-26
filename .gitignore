@@ -322,9 +322,6 @@ ai-generated/
 # ==============================================================================
 # 12. MOBILE / PWA BUILD ARTIFACTS
 # ==============================================================================
-# Service worker (if generated at build time rather than hand-written)
-frontend/public/sw.js
-
 # Gradle / Android
 .gradle/
 local.properties
