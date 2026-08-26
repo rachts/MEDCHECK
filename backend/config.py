@@ -95,7 +95,15 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> List[str]:
-        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+        cleaned = []
+        for o in self.ALLOWED_ORIGINS.split(","):
+            val = o.strip()
+            if val:
+                # Automatically strip trailing slashes (e.g. "https://app.vercel.app/" -> "https://app.vercel.app")
+                if val.startswith(("http://", "https://")):
+                    val = val.rstrip("/")
+                cleaned.append(val)
+        return cleaned
 
 settings = Settings()
 
