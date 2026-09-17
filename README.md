@@ -1,19 +1,30 @@
 # MEDCHECK
 
-MEDCHECK is an AI-powered medicine safety and clinical intelligence platform. Designed with institutional clinical authority, it evaluates multidimensional pharmacology across drug-drug interactions, side effect compounding, food administration timings, and gastrointestinal mucosal stress.
+MEDCHECK is a clinical safety intelligence platform designed to evaluate multidimensional pharmacology across drug-drug interactions, side effect compounding, food administration timings, and gastrointestinal mucosal stress. It combines a deterministic, evidence-cited rule engine with live OpenFDA label data and safe fallback modes.
 
 ---
 
 ## 🎯 Features
 
-- **Drug Interaction Matrix**: Pairwise pharmacokinetic and pharmacodynamic analysis with high-contrast, severity-coded clinical cards backed by **17 curated gold-standard interaction rules** and OpenFDA label cross-referencing.
+- **Drug Interaction Matrix**: Pairwise pharmacokinetic and pharmacodynamic analysis with high-contrast, severity-coded clinical cards backed by a **foundational set of 17 high-risk, evidence-cited interaction rules** (citing FDA Black Box, CHEST, and KDIGO guidelines) with live OpenFDA label cross-referencing.
 - **Side Effect Radar**: Frequency-ranked adverse reaction profiles (`>10%`, `1-10%`, `0.1-1%`, `<0.1%`) with multi-drug compounding risk detection (Bleeding, Sedation, Hypotension, Hyperkalemia, Hepatic strain).
 - **Food Conflict Timeline**: Dynamic 24-hour chronological daily dosing schedule surfacing meal buffers, dairy spacing, and grapefruit/alcohol contraindications with configurable patient wake times.
-- **Stomach Guardian™ Score**: Composite gastrointestinal mucosal load metric (0–100) factoring in NSAID gastric load (+25 multi-NSAID), anticoagulant bleeding hazards (+30), and PPI protective mitigation (-20).
+- **Stomach Guardian Score**: Heuristic gastrointestinal mucosal stress metric (0–100) factoring in NSAID gastric load (+25 multi-NSAID penalty), anticoagulant bleeding hazards (+30 synergy), and PPI protective mitigation (-20 credit). *(Educational heuristic based on established pharmacological mechanisms, not a clinically validated diagnostic device.)*
 - **Contextual Medicine Profile**: 5-tab deep dive with prescribing indications, equivalent brand names, and personal administration notes.
 - **Doctor's Safety Summary**: Instant clipboard export (Markdown) and printable clinical brief formatted for primary care provider visits.
-- **Deterministic Rule Engine**: Zero-hallucination guardrail validating AI outputs against evidence-annotated pharmacology rules and OpenFDA drug labels.
+- **Deterministic Rule Engine**: Evidence-cited deterministic evaluation for known high-risk medication pairs with defensive fallback handling and constrained AI label extraction.
 - **Clinical Authentication**: Instant anonymous Guest sessions alongside registered Doctor/Pharmacist user accounts.
+
+---
+
+## 🌍 Formulary & Brand Coverage
+
+MEDCHECK is currently optimized for **generic active pharmaceutical ingredients** (e.g. Paracetamol, Warfarin, Aspirin, Ibuprofen, Atorvastatin, Metformin, Pantoprazole) and **80+ curated international & Indian brand aliases** (`Dolo 650`, `Crocin`, `Pan 40`, `Ecosprin`, `Combiflam`, `Azithral`, `Volini`, `Gemer`, `Shelcal`, `Meftal Spas`, etc.) with automated dosage suffix normalization (`Dolo 650mg` → `paracetamol`).
+
+- **Deterministic Core**: Evaluates evidence-cited high-risk rules and curated drug profiles without hallucination.
+- **Live Dynamic Fallback**: Queries the US OpenFDA drug label database for generic monographs.
+- **Safe Unknown Fallback**: Refuses to fake a safe profile for unverified compounds, returning an explicit cautionary banner and zero-score safety notice.
+- **Roadmap**: Full integration with Indian national/state formularies (CDSCO/Jan Aushadhi) and multi-ingredient fixed-dose combinations (FDCs).
 
 ---
 
@@ -24,8 +35,8 @@ MEDCHECK is an AI-powered medicine safety and clinical intelligence platform. De
 - **Backend**: FastAPI, Pydantic v2, SlowAPI Rate Limiter, AnyIO Async SQLite, HTTPX
 - **Security & Auth**: JWT (HS256) + direct `bcrypt` hashing, delivered to browsers in an `httpOnly` `SameSite=Lax` session cookie (the `Authorization: Bearer` header is still accepted for non-browser callers)
 - **Database & Cache**: Local SQLite in WAL mode with TTL expiration + optional Supabase PostgreSQL sync
-- **Clinical Data**: OpenFDA Drug Label API + Curated Deterministic Pharmacology Rules (17 pairs)
-- **AI Processing**: Mistral AI (Optional circuit-breaker fallback for unstructured FDA label extraction)
+- **Clinical Data**: OpenFDA Drug Label API + Curated Deterministic Pharmacology Rules (17 foundational pairs)
+- **AI Processing**: Mistral AI (Optional auxiliary fallback for unstructured FDA label extraction; core clinical logic is 100% deterministic)
 - **Containerization**: Multi-stage Docker & Docker Compose
 
 ---

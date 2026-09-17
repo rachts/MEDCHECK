@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Dict, List, Any, Optional
 from models import (
     MedicineProfileResponse,
@@ -10,67 +11,211 @@ from models import (
     RiskTier
 )
 
-CLINICAL_KB_VERSION = "2026.08.23-1"
+CLINICAL_KB_VERSION = "2026.09.18-1"
 
 # ==============================================================================
 # BRAND TO GENERIC RESOLUTION MAPPINGS
+# Includes Core US, UK, and Ubiquitous Indian Formulary Brand Equivalents
 # ==============================================================================
 COMMON_BRAND_MAPPINGS: Dict[str, str] = {
+    # --- Paracetamol / Acetaminophen (US / UK / India) ---
     "advil": "ibuprofen",
     "motrin": "ibuprofen",
+    "nurofen": "ibuprofen",
+    "brufen": "ibuprofen",
+    "combiflam": "ibuprofen",
+    "ibugesic": "ibuprofen",
     "tylenol": "paracetamol",
     "panadol": "paracetamol",
     "calpol": "paracetamol",
+    "calpol 650": "paracetamol",
+    "dolo": "paracetamol",
+    "dolo 650": "paracetamol",
+    "dolo-650": "paracetamol",
+    "crocin": "paracetamol",
+    "crocin 650": "paracetamol",
+    "crocin advance": "paracetamol",
+    "pacimol": "paracetamol",
+    "pyregesic": "paracetamol",
+    "fepex": "paracetamol",
+
+    # --- Aspirin / Salicylates ---
     "bayer": "aspirin",
     "disprin": "aspirin",
     "ecotrin": "aspirin",
+    "ecosprin": "aspirin",
+    "ecosprin 75": "aspirin",
+    "ecosprin 150": "aspirin",
+    "asprin": "aspirin",
+    "loprin": "aspirin",
+    "delisprin": "aspirin",
+
+    # --- Anticoagulants & Antiplatelets ---
     "coumadin": "warfarin",
     "jantoven": "warfarin",
     "plavix": "clopidogrel",
+    "clopilet": "clopidogrel",
+    "eliquis": "apixaban",
+    "xarelto": "rivaroxaban",
+    "pradaxa": "dabigatran",
+
+    # --- Statins & Cardiovascular ---
     "lipitor": "atorvastatin",
-    "glucophage": "metformin",
+    "atorva": "atorvastatin",
+    "atorlip": "atorvastatin",
+    "storvas": "atorvastatin",
+    "tonact": "atorvastatin",
+    "crestor": "rosuvastatin",
+    "rosuvas": "rosuvastatin",
+    "rozavel": "rosuvastatin",
+    "zocor": "simvastatin",
     "zestril": "lisinopril",
     "prinivil": "lisinopril",
     "norvasc": "amlodipine",
-    "synthroid": "levothyroxine",
+    "stamlo": "amlodipine",
+    "amlong": "amlodipine",
+    "amlovas": "amlodipine",
+    "amloz": "amlodipine",
+    "telma": "telmisartan",
+    "telma 40": "telmisartan",
+    "telma h": "telmisartan",
+    "telmikind": "telmisartan",
+    "telsartan": "telmisartan",
+    "lopressor": "metoprolol",
+    "toprol": "metoprolol",
+    "tenormin": "atenolol",
+    "lasix": "furosemide",
+
+    # --- Diabetes ---
+    "glucophage": "metformin",
+    "glycomet": "metformin",
+    "glycomet gp": "metformin",
+    "gemer": "metformin",
+    "gluformin": "metformin",
+    "okamet": "metformin",
+
+    # --- Proton Pump Inhibitors & Acid Reducers ---
     "prilosec": "omeprazole",
-    "amoxil": "amoxicillin",
-    "augmentin": "amoxicillin/clavulanate",
-    "cipro": "ciprofloxacin",
-    "zithromax": "azithromycin",
-    "z-pak": "azithromycin",
+    "omez": "omeprazole",
+    "omez 20": "omeprazole",
+    "omez-20": "omeprazole",
+    "ocid": "omeprazole",
+    "omecip": "omeprazole",
+    "pan": "pantoprazole",
+    "pan 40": "pantoprazole",
+    "pan-40": "pantoprazole",
+    "pan d": "pantoprazole",
+    "pantop": "pantoprazole",
+    "pantop 40": "pantoprazole",
+    "pantocid": "pantoprazole",
+    "pantocid 40": "pantoprazole",
+    "pantodac": "pantoprazole",
+    "nexium": "esomeprazole",
+    "pepcid": "famotidine",
+    "zantac": "famotidine",
+    "rabium": "rabeprazole",
+
+    # --- Other NSAIDs & Analgesics ---
     "aleve": "naproxen",
     "naprosyn": "naproxen",
     "voltaren": "diclofenac",
     "cataflam": "diclofenac",
+    "volini": "diclofenac",
+    "moov": "diclofenac",
+    "voveran": "diclofenac",
+    "dynapar": "diclofenac",
+    "nac": "diclofenac",
     "celebrex": "celecoxib",
+    "meftal": "mefenamic acid",
+    "meftal spas": "mefenamic acid",
+    "meftal-spas": "mefenamic acid",
+    "mefkind": "mefenamic acid",
+
+    # --- Antibiotics ---
+    "amoxil": "amoxicillin",
+    "mox": "amoxicillin",
+    "novamox": "amoxicillin",
+    "almox": "amoxicillin",
+    "augmentin": "amoxicillin/clavulanate",
+    "augmentin 625": "amoxicillin/clavulanate",
+    "moxikind-cv": "amoxicillin/clavulanate",
+    "clamox": "amoxicillin/clavulanate",
+    "cipro": "ciprofloxacin",
+    "ciplox": "ciprofloxacin",
+    "cifran": "ciprofloxacin",
+    "zithromax": "azithromycin",
+    "z-pak": "azithromycin",
+    "azithral": "azithromycin",
+    "azithral 500": "azithromycin",
+    "azee": "azithromycin",
+    "zady": "azithromycin",
+
+    # --- Antihistamines & Allergy ---
+    "benadryl": "diphenhydramine",
+    "zyrtec": "cetirizine",
+    "cetzine": "cetirizine",
+    "okacet": "cetirizine",
+    "alercet": "cetirizine",
+    "claritin": "loratadine",
+    "allegra": "fexofenadine",
+    "allegra 120": "fexofenadine",
+    "allegra 180": "fexofenadine",
+    "fexova": "fexofenadine",
+    "avil": "pheniramine",
+    "avil 25": "pheniramine",
+
+    # --- Central Nervous System / Psych ---
     "xanax": "alprazolam",
     "valium": "diazepam",
     "prozac": "fluoxetine",
     "zoloft": "sertraline",
     "lexapro": "escitalopram",
-    "viagra": "sildenafil",
-    "cialis": "tadalafil",
-    "benadryl": "diphenhydramine",
-    "zyrtec": "cetirizine",
-    "claritin": "loratadine",
-    "allegra": "fexofenadine",
-    "lasix": "furosemide",
-    "lopressor": "metoprolol",
-    "toprol": "metoprolol",
-    "tenormin": "atenolol",
     "neurontin": "gabapentin",
     "lyrica": "pregabalin",
+
+    # --- Supplements & Antacids ---
+    "synthroid": "levothyroxine",
+    "viagra": "sildenafil",
+    "cialis": "tadalafil",
     "zofran": "ondansetron",
-    "pepcid": "famotidine",
-    "zantac": "famotidine",
-    "nexium": "esomeprazole",
-    "crestor": "rosuvastatin",
-    "zocor": "simvastatin",
-    "eliquis": "apixaban",
-    "xarelto": "rivaroxaban",
-    "pradaxa": "dabigatran"
+    "shelcal": "calcium/vitamin d3",
+    "shelcal 500": "calcium/vitamin d3",
+    "cipcal": "calcium/vitamin d3",
+    "gelusil": "aluminum hydroxide/magnesium hydroxide",
+    "digene": "aluminum hydroxide/magnesium hydroxide",
+    "mucaine": "aluminum hydroxide/magnesium hydroxide"
 }
+
+def normalize_drug_query(name: str) -> str:
+    """
+    Normalizes medication queries to canonical generic keys by resolving brand names,
+    synonyms, and stripping strength / dosage / formulation suffixes.
+    Examples:
+      - 'Dolo 650' -> 'paracetamol'
+      - 'Pan 40' -> 'pantoprazole'
+      - 'Ecosprin 75' -> 'aspirin'
+      - 'Combiflam' -> 'ibuprofen'
+      - 'Azithral 500' -> 'azithromycin'
+    """
+    cleaned = (name or "").lower().strip()
+    if not cleaned:
+        return cleaned
+
+    # 1. Exact match in brand mappings
+    if cleaned in COMMON_BRAND_MAPPINGS:
+        return COMMON_BRAND_MAPPINGS[cleaned]
+
+    # 2. Strip numeric dosage/strength suffix (e.g. '650', '40mg', '500 mg', '-75')
+    base = re.sub(r'[\s\-_]+\d+(\.\d+)?\s*(mg|mcg|g|ml)?$', '', cleaned)
+    if base in COMMON_BRAND_MAPPINGS:
+        return COMMON_BRAND_MAPPINGS[base]
+
+    # 3. Strip common clinical formulation modifiers (advance, spas, plus, forte, dt, sr, cr, er, cv, h, d)
+    sub_base = re.sub(r'[\s\-_]+(advance|spas|plus|forte|dt|cr|sr|er|cv|h|d)$', '', base)
+    if sub_base in COMMON_BRAND_MAPPINGS:
+        return COMMON_BRAND_MAPPINGS[sub_base]
+
+    return cleaned
 
 # ==============================================================================
 # PHARMACOLOGICAL SYNONYM SETS
@@ -106,7 +251,7 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
     "ibuprofen": {
         "name": "Ibuprofen",
         "generic_name": "ibuprofen",
-        "brand_names": ["Advil", "Motrin", "Nurofen"],
+        "brand_names": ["Advil", "Motrin", "Nurofen", "Combiflam", "Brufen"],
         "category": "NSAID (Non-Steroidal Anti-Inflammatory Drug)",
         "drug_type": "otc",
         "dosage_forms": ["Oral Tablet 200mg/400mg", "Oral Capsule", "Liquid Gel"],
@@ -156,7 +301,7 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
     "aspirin": {
         "name": "Aspirin",
         "generic_name": "aspirin",
-        "brand_names": ["Bayer", "Ecotrin", "Disprin", "Bufferin"],
+        "brand_names": ["Bayer", "Ecotrin", "Disprin", "Bufferin", "Ecosprin", "Loprin"],
         "category": "Salicylate NSAID & Antiplatelet Agent",
         "drug_type": "otc",
         "dosage_forms": ["Baby Aspirin 81mg (Enteric Coated)", "Adult Tablet 325mg/500mg"],
@@ -253,7 +398,7 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
     "paracetamol": {
         "name": "Paracetamol (Acetaminophen)",
         "generic_name": "paracetamol",
-        "brand_names": ["Tylenol", "Panadol", "Calpol", "Mapap"],
+        "brand_names": ["Tylenol", "Panadol", "Calpol", "Dolo 650", "Dolo", "Crocin", "Pacimol", "Mapap"],
         "category": "Central Analgesic & Antipyretic",
         "drug_type": "otc",
         "dosage_forms": ["Oral Tablet 325mg/500mg/650mg ER", "Liquid Suspension"],
@@ -293,7 +438,7 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
     "amoxicillin/clavulanate": {
         "name": "Amoxicillin / Clavulanate",
         "generic_name": "amoxicillin/clavulanate",
-        "brand_names": ["Augmentin", "Clavam", "Co-amoxiclav"],
+        "brand_names": ["Augmentin", "Augmentin 625", "Clavam", "Moxikind-CV", "Co-amoxiclav"],
         "category": "Broad-Spectrum Beta-Lactam + Beta-Lactamase Inhibitor Antibiotic",
         "drug_type": "prescription",
         "dosage_forms": ["Oral Tablet 500/125mg", "875/125mg", "Oral Suspension"],
@@ -414,7 +559,7 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
     "metformin": {
         "name": "Metformin",
         "generic_name": "metformin",
-        "brand_names": ["Glucophage", "Fortamet", "Glumetza", "Riomet"],
+        "brand_names": ["Glucophage", "Glycomet", "Gemer", "Fortamet", "Glumetza"],
         "category": "Biguanide Oral Antidiabetic",
         "drug_type": "prescription",
         "dosage_forms": ["Oral Tablet 500mg/850mg/1000mg", "Extended Release (ER)"],
@@ -502,7 +647,7 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
     "omeprazole": {
         "name": "Omeprazole",
         "generic_name": "omeprazole",
-        "brand_names": ["Prilosec", "Losec", "Zegerid"],
+        "brand_names": ["Prilosec", "Omez", "Ocid", "Losec", "Zegerid"],
         "category": "Proton Pump Inhibitor (PPI)",
         "drug_type": "otc",
         "dosage_forms": ["Delayed-Release Capsule 20mg/40mg"],
@@ -624,12 +769,111 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
         "lifestyle_warnings": [
             "Confirm absence of penicillin allergies before starting therapy."
         ]
+    },
+    "pantoprazole": {
+        "name": "Pantoprazole",
+        "generic_name": "pantoprazole",
+        "brand_names": ["Protonix", "Pan 40", "Pantop", "Pantocid", "Pantodac"],
+        "category": "Proton Pump Inhibitor (Gastric Acid Reducer)",
+        "drug_type": "prescription",
+        "dosage_forms": ["Delayed-Release Tablet 20mg/40mg", "IV Formulation"],
+        "description": "Proton pump inhibitor (PPI) that suppresses gastric acid secretion by irreversibly inhibiting the H+/K+ ATPase enzyme system in gastric parietal cells. Exhibits minimal CYP2C19 inhibition compared to omeprazole.",
+        "side_effects": [
+            {"effect": "Headache", "frequency": "common", "frequency_percentage": "1-10%", "severity": "mild", "category": "Neurological"},
+            {"effect": "Diarrhea & Abdominal Discomfort", "frequency": "common", "frequency_percentage": "1-10%", "severity": "mild", "category": "Gastrointestinal"},
+            {"effect": "Nausea & Flatulence", "frequency": "common", "frequency_percentage": "1-10%", "severity": "mild", "category": "Gastrointestinal"},
+            {"effect": "Hypomagnesemia (Long-Term Use)", "frequency": "rare", "frequency_percentage": "<0.1%", "severity": "moderate", "category": "Metabolic"},
+            {"effect": "Clostridium difficile Infection Risk", "frequency": "rare", "frequency_percentage": "<0.1%", "severity": "severe", "category": "Gastrointestinal"}
+        ],
+        "food_interactions": [
+            {
+                "type": "take_before_meals",
+                "title": "Administer 30–60 Minutes Before Breakfast",
+                "description": "Taking pantoprazole prior to a meal maximizes peak plasma concentration when gastric proton pumps are stimulated by food intake.",
+                "severity": "recommended",
+                "icon": "utensils"
+            },
+            {
+                "type": "avoid_alcohol",
+                "title": "Avoid Excessive Alcohol",
+                "description": "Alcohol stimulates gastric acid secretion, directly countering the mucosal protective and healing benefits of PPI therapy.",
+                "severity": "moderate",
+                "icon": "wine"
+            }
+        ],
+        "gi_profile": {
+            "stomach_health_score": 10,
+            "risk_tier": "gentle",
+            "nausea_risk": "low",
+            "ulcer_risk": "low",
+            "bleeding_risk": "none",
+            "reflux_aggravation": False,
+            "constipation_diarrhea": "none",
+            "recommendations": [
+                "Take with water 30-60 minutes before the first meal of the day.",
+                "Swallow tablet whole; do not split, chew, or crush delayed-release tablets.",
+                "Provides protective mucosal cushioning against NSAID-induced ulcers."
+            ]
+        },
+        "lifestyle_warnings": [
+            "Do not crush or chew delayed-release tablets.",
+            "Long-term daily use (>1 year) may warrant monitoring of serum magnesium and vitamin B12."
+        ]
+    },
+    "diclofenac": {
+        "name": "Diclofenac",
+        "generic_name": "diclofenac",
+        "brand_names": ["Voltaren", "Cataflam", "Voveran", "Volini", "Dynapar"],
+        "category": "NSAID (Potent Cyclooxygenase Inhibitor)",
+        "drug_type": "prescription",
+        "dosage_forms": ["Oral Delayed-Release Tablet 50mg", "SR Tablet 75mg/100mg", "Topical Gel 1%"],
+        "description": "Potent nonsteroidal anti-inflammatory drug (NSAID) with pronounced analgesic and anti-inflammatory properties via non-selective COX-1 and COX-2 inhibition. Carries gastrointestinal ulceration and cardiovascular thrombotic risk.",
+        "side_effects": [
+            {"effect": "Dyspepsia & Epigastric Pain", "frequency": "very_common", "frequency_percentage": ">10%", "severity": "mild", "category": "Gastrointestinal"},
+            {"effect": "Nausea & Abdominal Cramping", "frequency": "common", "frequency_percentage": "1-10%", "severity": "mild", "category": "Gastrointestinal"},
+            {"effect": "Fluid Retention & Blood Pressure Elevation", "frequency": "uncommon", "frequency_percentage": "0.1-1%", "severity": "moderate", "category": "Cardiovascular"},
+            {"effect": "Peptic Ulceration & GI Bleeding", "frequency": "rare", "frequency_percentage": "<0.1%", "severity": "severe", "category": "Gastrointestinal"}
+        ],
+        "food_interactions": [
+            {
+                "type": "take_with_food",
+                "title": "Always Administer With Meals or Milk",
+                "description": "Food buffers gastric acidity and prevents direct contact mucosal irritation.",
+                "severity": "recommended",
+                "icon": "utensils"
+            },
+            {
+                "type": "avoid_alcohol",
+                "title": "Avoid or Strictly Limit Alcohol",
+                "description": "Concurrent alcohol consumption sharply escalates gastric mucosal erosion and upper gastrointestinal hemorrhage risk.",
+                "severity": "critical",
+                "icon": "wine"
+            }
+        ],
+        "gi_profile": {
+            "stomach_health_score": 80,
+            "risk_tier": "high",
+            "nausea_risk": "moderate",
+            "ulcer_risk": "high",
+            "bleeding_risk": "high",
+            "reflux_aggravation": True,
+            "constipation_diarrhea": "diarrhea",
+            "recommendations": [
+                "Take immediately after food.",
+                "Avoid co-administration with other NSAIDs (Ibuprofen, Aspirin).",
+                "Consider co-prescription of gastroprotective PPI (Pantoprazole, Omeprazole)."
+            ]
+        },
+        "lifestyle_warnings": [
+            "Maintain adequate hydration to safeguard renal perfusion.",
+            "Inform physician if you have a history of peptic ulcer disease, heart disease, or renal impairment."
+        ]
     }
 }
 
 def get_or_build_medicine_profile(medicine_name: str, label: Optional[Dict[str, Any]] = None) -> MedicineProfileResponse:
-    cleaned = medicine_name.lower().strip()
-    canonical = COMMON_BRAND_MAPPINGS.get(cleaned, cleaned)
+    cleaned = (medicine_name or "").lower().strip()
+    canonical = normalize_drug_query(cleaned)
 
     # 1. Curated Gold-Standard Knowledge Base
     if canonical in CURATED_MEDICINE_PROFILES:

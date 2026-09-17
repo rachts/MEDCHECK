@@ -193,7 +193,7 @@ export function DrugExplorer() {
             Explore Before You Commit
           </h1>
           <p className="text-body text-[var(--text-secondary)]">
-            Inspect reported adverse reactions, food &amp; alcohol guidelines, and Stomach Guardian mucosal safety scores before adding to your regimen.
+            Inspect reported adverse reactions, food &amp; alcohol guidelines, and Stomach Guardian mucosal safety indicators before adding to your regimen.
           </p>
 
           {/* Search bar */}

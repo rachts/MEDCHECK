@@ -90,10 +90,10 @@ export function StomachGuardianModal() {
                 id="stomach-modal-title"
                 className="font-serif text-[22px] font-bold text-[var(--text-primary)] leading-tight"
               >
-                Stomach Guardian™ Score Breakdown
+                Stomach Guardian Score Breakdown
               </h2>
               <p id="stomach-modal-subtitle" className="text-xs text-[var(--text-muted)] font-sans">
-                Composite Gastrointestinal &amp; Mucosal Stress Assessment
+                Heuristic Gastrointestinal &amp; Mucosal Stress Indicator
               </p>
             </div>
           </div>
@@ -110,6 +110,14 @@ export function StomachGuardianModal() {
 
         {/* Modal Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-[var(--bg-surface)]">
+          {/* Clinical Heuristic Indicator Banner */}
+          <div className="p-3 bg-[rgba(2,132,199,0.06)] border border-[rgba(2,132,199,0.2)] rounded-[6px] text-xs text-[var(--text-secondary)] leading-relaxed flex items-start gap-2">
+            <Info className="w-4 h-4 text-[var(--severity-info)] mt-0.5 shrink-0" aria-hidden="true" />
+            <p>
+              <strong className="font-semibold text-[var(--text-primary)]">Educational Heuristic:</strong> This 0–100 score approximates cumulative mucosal stress based on established pharmacological mechanisms (e.g. dual COX-1 inhibition, anticoagulant synergy, and PPI mitigation). It is designed to guide pharmacist consultation, not replace diagnostic evaluation.
+            </p>
+          </div>
+
           {/* Main Score Hero Card */}
           <div className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-[8px] p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>

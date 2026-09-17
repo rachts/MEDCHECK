@@ -51,7 +51,7 @@ export function DoctorReportModal() {
     reportMd += `**Active Regimen (${medicines.length}):** ${medicines.map(m => m.name).join(', ')}\n\n`;
 
     reportMd += `## 1. COMPOSITE RISK METRICS\n`;
-    reportMd += `- Stomach Guardian Score: ${giScore}/100 (${results?.composite_gi_tier || 'gentle'})\n`;
+    reportMd += `- Stomach Guardian Score (GI Stress Heuristic): ${giScore}/100 (${results?.composite_gi_tier || 'gentle'})\n`;
     reportMd += `- Identified Interactions: ${interactions.length}\n`;
     reportMd += `- Food & Timing Conflicts: ${foodConflicts.length}\n\n`;
 

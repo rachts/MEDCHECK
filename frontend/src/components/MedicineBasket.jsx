@@ -13,7 +13,8 @@ import {
   AlertTriangle,
   ArrowRight,
   Pill,
-  Archive
+  Archive,
+  Info
 } from 'lucide-react';
 
 export function MedicineBasket() {
@@ -33,6 +34,8 @@ export function MedicineBasket() {
   const [inputVal, setInputVal] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const dropdownRef = useRef(null);
 
   const debouncedQuery = useDebounce(inputVal, 250);
@@ -41,16 +44,30 @@ export function MedicineBasket() {
     if (!debouncedQuery.trim()) {
       setSearchResults([]);
       setShowDropdown(false);
+      setSearchError(false);
+      setIsSearching(false);
       return;
     }
 
     let isMounted = true;
-    searchMedicines(debouncedQuery).then((data) => {
-      if (isMounted) {
-        setSearchResults(data);
-        setShowDropdown(data.length > 0);
-      }
-    });
+    setIsSearching(true);
+    setSearchError(false);
+    searchMedicines(debouncedQuery)
+      .then((data) => {
+        if (isMounted) {
+          setSearchResults(data);
+          setShowDropdown(true);
+          setIsSearching(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setSearchResults([]);
+          setSearchError(true);
+          setIsSearching(false);
+          setShowDropdown(true);
+        }
+      });
 
     return () => {
       isMounted = false;
@@ -153,61 +170,72 @@ export function MedicineBasket() {
         </form>
 
         {/* Dropdown */}
-        {showDropdown && searchResults.length > 0 && (
+        {showDropdown && debouncedQuery.trim().length > 0 && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[8px] p-1 shadow-lg z-50 flex flex-col gap-1 max-h-[280px] overflow-y-auto">
-            {searchResults.map((item, idx) => (
-              <div
-                // Identity is the medicine, not the row position. Search results are
-                // replaced wholesale as the query changes, so an index key made
-                // React reuse the previous query's row for a different drug -- the
-                // row the user's pointer was already over.
-                key={`${item.generic_name}-${item.name}-${idx}`}
-                onClick={() => handleSelectSearchResult(item)}
-                className="p-2.5 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-transparent hover:border-[var(--border-hover)] transition-colors cursor-pointer flex items-center justify-between gap-2 min-h-[48px]"
-                role="button"
-                tabIndex={0}
-                // Space as well as Enter, and preventDefault on both. `role="button"`
-                // tells assistive tech this behaves like a native button, and a native
-                // button activates on Space -- so a screen-reader user following that
-                // contract found the row inert and, worse, Space scrolled the dropdown
-                // out from under them. preventDefault suppresses that scroll.
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleSelectSearchResult(item);
-                  }
-                }}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-6 h-6 rounded-[4px] bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-primary)] shrink-0">
-                    <Pill className="w-3.5 h-3.5" aria-hidden="true" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-serif text-[16px] font-bold text-[var(--text-primary)]">{item.name}</span>
-                      {item.brand_context ? (
-                        <span className="text-xs text-slate-500 font-sans">({item.brand_context})</span>
-                      ) : (
-                        <span className="tag">{item.drug_type}</span>
-                      )}
+            {searchResults.length > 0 ? (
+              searchResults.map((item, idx) => (
+                <div
+                  key={`${item.generic_name}-${item.name}-${idx}`}
+                  onClick={() => handleSelectSearchResult(item)}
+                  className="p-2.5 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-transparent hover:border-[var(--border-hover)] transition-colors cursor-pointer flex items-center justify-between gap-2 min-h-[48px]"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSelectSearchResult(item);
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-[4px] bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-primary)] shrink-0">
+                      <Pill className="w-3.5 h-3.5" aria-hidden="true" />
                     </div>
-                    <p className="text-xs text-[var(--text-muted)] line-clamp-1 font-sans">
-                      {item.category}
-                    </p>
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-serif text-[16px] font-bold text-[var(--text-primary)]">{item.name}</span>
+                        {item.brand_context ? (
+                          <span className="text-xs text-slate-500 font-sans">({item.brand_context})</span>
+                        ) : (
+                          <span className="tag">{item.drug_type}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)] line-clamp-1 font-sans">
+                        {item.category}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <span className={`tag shrink-0 ${
-                  item.stomach_risk_badge === 'Critical'
-                    ? 'tag-danger'
-                    : item.stomach_risk_badge === 'Moderate'
-                    ? 'tag-warning'
-                    : 'tag-success'
-                }`}>
-                  {item.stomach_risk_badge} GI
-                </span>
+                  <span className={`tag shrink-0 ${
+                    item.stomach_risk_badge === 'Critical'
+                      ? 'tag-danger'
+                      : item.stomach_risk_badge === 'Moderate'
+                      ? 'tag-warning'
+                      : 'tag-success'
+                  }`}>
+                    {item.stomach_risk_badge} GI
+                  </span>
+                </div>
+              ))
+            ) : searchError ? (
+              <div className="p-3 text-xs text-[var(--alert-danger-text)] bg-[var(--alert-danger-bg)] rounded-[6px] space-y-1">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+                  Search service unavailable
+                </p>
+                <p>Press <strong>Add</strong> or Enter to check "{inputVal}" directly against fallback clinical tables.</p>
               </div>
-            ))}
+            ) : !isSearching ? (
+              <div className="p-3 text-xs text-[var(--text-secondary)] space-y-1.5 bg-[var(--bg-surface)]">
+                <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
+                  <Info className="w-3.5 h-3.5 text-[var(--severity-info)] shrink-0" aria-hidden="true" />
+                  <span>No direct match in active catalog</span>
+                </div>
+                <p className="text-[var(--text-muted)] leading-relaxed">
+                  Tip: Try searching by active generic compound (e.g. <em>Paracetamol</em>, <em>Pantoprazole</em>) or press <strong>Enter</strong> to evaluate "{debouncedQuery}" via fallback databases.
+                </p>
+              </div>
+            ) : null}
           </div>
         )}
       </div>
@@ -288,7 +316,7 @@ export function MedicineBasket() {
             className="bg-[var(--bg-elevated)] border border-[var(--border-default)] hover:border-[var(--border-hover)] rounded-[8px] p-3 flex flex-col gap-2 transition-colors cursor-pointer"
             role="button"
             tabIndex={0}
-            aria-label={`Stomach Guardian Score: ${giScore} out of 100, Tier: ${giTier}. Open the full breakdown.`}
+            aria-label={`Stomach Guardian GI Risk Heuristic: ${giScore} out of 100, Tier: ${giTier}. Open the full breakdown.`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -296,6 +324,7 @@ export function MedicineBasket() {
                 <span className="font-serif text-[16px] font-bold text-[var(--text-primary)]">
                   Stomach Guardian
                 </span>
+                <span className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-surface)] px-1.5 py-0.5 rounded border border-[var(--border-default)]">Heuristic</span>
               </div>
 
               <div className="flex items-center gap-1.5">

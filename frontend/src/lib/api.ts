@@ -330,11 +330,14 @@ export async function searchMedicines(query: string): Promise<MedicineSearchResu
   const clean = encodeURIComponent((query || '').trim().toLowerCase());
   try {
     const response = await authenticatedFetch(`${API_BASE}/api/medicines/search?q=${clean}`);
-    if (!response.ok) return [];
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(`Search request failed with status ${response.status}: ${errorText || response.statusText}`);
+    }
     return (await response.json()) as MedicineSearchResult[];
   } catch (err: unknown) {
     console.warn('Medicine search error:', err);
-    return [];
+    throw err;
   }
 }
 

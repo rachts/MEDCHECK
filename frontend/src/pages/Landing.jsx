@@ -46,9 +46,15 @@ export function Landing() {
         </h1>
 
         {/* Subtitle with clean, consistent Inter typography and comfortable line-height */}
-        <p className="landing-subtitle max-w-2xl font-sans text-base sm:text-lg font-normal leading-relaxed mb-8">
-          A clinical intelligence platform analyzing drug-drug interactions, side effect amplification, food & alcohol administration schedules, and the proprietary <strong className="font-semibold text-[var(--text-primary)]">Stomach Guardian™</strong> mucosal stress score.
+        <p className="landing-subtitle max-w-2xl font-sans text-base sm:text-lg font-normal leading-relaxed mb-4">
+          A clinical intelligence platform analyzing drug-drug interactions, side effect amplification, food & alcohol administration schedules, and the <strong className="font-semibold text-[var(--text-primary)]">Stomach Guardian</strong> heuristic mucosal stress score.
         </p>
+
+        {/* Formulary Scope Notice Pill */}
+        <div className="mb-8 inline-flex items-center gap-2 px-3.5 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-full text-xs text-[var(--text-secondary)] font-sans shadow-sm">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+          <span>Optimized for generic active ingredients & select international/Indian brand aliases</span>
+        </div>
 
         {/* CTA Button Group */}
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full justify-center max-w-md mb-12">
@@ -157,10 +163,10 @@ export function Landing() {
               <Flame className="w-5 h-5" />
             </div>
             <h3 className="font-serif text-[20px] font-bold text-[var(--text-primary)]">
-              Food & Stomach Guardian™
+              Food & Stomach Guardian
             </h3>
             <p className="text-body text-[var(--text-secondary)] leading-relaxed">
-              GI upset is the #1 reason patients discontinue medications. Stomach Guardian rates ulcer load and builds an actionable 24-hour meal schedule.
+              GI upset is the #1 reason patients discontinue medications. Stomach Guardian estimates mucosal risk and suggests an actionable 24-hour meal schedule.
             </p>
           </div>
         </div>

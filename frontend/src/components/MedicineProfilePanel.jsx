@@ -17,7 +17,8 @@ import {
   ChevronUp,
   AlertTriangle,
   HelpCircle,
-  X
+  X,
+  Flag
 } from 'lucide-react';
 
 import { SkeletonProfile } from './SkeletonCard';
@@ -172,6 +173,7 @@ function MedicineProfilePanelBase({ onCloseMobile }) {
 
   const isRx = profile.drug_type === 'prescription';
   const isOTC = profile.drug_type === 'otc';
+  const [reportedMissing, setReportedMissing] = useState(false);
 
   const TABS = [
     { id: 'overview', label: 'Overview', icon: Info },
@@ -234,18 +236,47 @@ function MedicineProfilePanelBase({ onCloseMobile }) {
         </div>
       </div>
 
-      {/* Unverified-data caveat. Rendered above the tabs so it is seen before any
-          of the numbers it qualifies. */}
+      {/* Elevated Unverified Compound Cautionary Safety Card */}
       {isUnverified && (
-        <div className="alert-warning flex items-start gap-2.5" role="status">
-          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
-          <div className="space-y-1">
-            <p className="text-sm font-bold leading-tight">Unverified compound — data is incomplete</p>
-            <p className="text-xs leading-relaxed">
-              {profile.disclaimer ||
-                'This medicine was not found in the curated knowledge base or the FDA label index. Empty side-effect and food-interaction lists below mean "not known here", not "none exist".'}
-            </p>
+        <div
+          className="p-4 bg-[var(--alert-danger-bg)] border-2 border-[var(--severity-high)] rounded-[8px] flex flex-col sm:flex-row items-start justify-between gap-3 shadow-sm"
+          role="alert"
+        >
+          <div className="flex items-start gap-2.5">
+            <div className="w-7 h-7 rounded-[4px] bg-[var(--severity-high)]/10 text-[var(--severity-high)] flex items-center justify-center shrink-0 mt-0.5">
+              <AlertTriangle className="w-4 h-4 text-[var(--severity-high)]" aria-hidden="true" />
+            </div>
+            <div className="space-y-1">
+              <p className="font-serif text-[16px] font-bold text-[var(--severity-high)] leading-tight">
+                ⚠️ Unverified Compound — Incomplete Clinical Data
+              </p>
+              <p className="text-xs text-[var(--alert-danger-text)] font-medium leading-relaxed">
+                {profile.disclaimer ||
+                  'Limited clinical pharmacology data available in active databases for this query. MEDCHECK explicitly refuses to generate speculative profiles or assign a safe GI score.'}
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] leading-normal pt-0.5">
+                Empty side-effect and food-interaction lists below signify <strong>unverified pharmacology</strong>, NOT an absence of medical risk. Always verify with a physician or licensed pharmacist before co-administering.
+              </p>
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setReportedMissing(true)}
+            className="shrink-0 px-2.5 py-1.5 rounded-[4px] border border-[var(--severity-high)]/30 bg-[var(--bg-surface)] text-[var(--severity-high)] text-xs font-semibold hover:bg-[var(--severity-high)]/10 transition-colors cursor-pointer flex items-center gap-1.5 self-end sm:self-start"
+          >
+            {reportedMissing ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-[var(--severity-low)]" aria-hidden="true" />
+                <span className="text-[var(--severity-low)]">Logged for Review</span>
+              </>
+            ) : (
+              <>
+                <Flag className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Report Missing Compound</span>
+              </>
+            )}
+          </button>
         </div>
       )}
 

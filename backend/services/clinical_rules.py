@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Dict, Any, Tuple, Optional, Set
 from models import Severity, RuleConfidence, InteractionItem
-from services.knowledge_base import COMMON_BRAND_MAPPINGS, SYNONYM_SETS
+from services.knowledge_base import COMMON_BRAND_MAPPINGS, SYNONYM_SETS, normalize_drug_query
 
 logger = logging.getLogger("clinical_rules")
 
@@ -62,8 +62,7 @@ def _warn_if_rule_table_stale() -> None:
 
 
 def resolve_canonical_name(name: str) -> str:
-    cleaned = name.lower().strip()
-    return COMMON_BRAND_MAPPINGS.get(cleaned, cleaned)
+    return normalize_drug_query(name)
 
 def expand_aliases(drug_name: str) -> Set[str]:
     canonical = resolve_canonical_name(drug_name)

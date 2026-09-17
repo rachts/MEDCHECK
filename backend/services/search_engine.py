@@ -1,6 +1,6 @@
 from typing import List, Tuple
 from models import MedicineSearchResult
-from services.knowledge_base import CURATED_MEDICINE_PROFILES, COMMON_BRAND_MAPPINGS
+from services.knowledge_base import CURATED_MEDICINE_PROFILES, COMMON_BRAND_MAPPINGS, normalize_drug_query
 
 # Machine-readable therapeutic-class slugs derived from the free-text `category`
 # prose. The client needs stable identifiers to filter on: matching the prose
@@ -45,7 +45,8 @@ def search_medicine_database(query: str) -> List[MedicineSearchResult]:
     """
     Search indexed medication catalog and brand aliases, returning rich preview results.
     """
-    q = query.lower().strip()
+    q = (query or "").lower().strip()
+    norm_q = normalize_drug_query(q)
     results: List[MedicineSearchResult] = []
     seen = set()
 
@@ -54,19 +55,22 @@ def search_medicine_database(query: str) -> List[MedicineSearchResult]:
         brand_names = profile.get("brand_names", [])
         category = profile.get("category", "General")
         gi_score = profile.get("gi_profile", {}).get("stomach_health_score", 20)
-        gi_tier = profile.get("gi_profile", {}).get("risk_tier", "gentle")
         drug_type = profile.get("drug_type", "otc")
         side_effects = [s.get("effect") for s in profile.get("side_effects", [])[:3]]
         food_count = len(profile.get("food_interactions", []))
 
-        # Check generic name match
+        # Check generic name match or normalized key match
         matched_brand = None
         is_match = False
         if not q or q in generic_key or q in name.lower() or q in category.lower():
             is_match = True
+        elif norm_q and norm_q == generic_key:
+            is_match = True
+            matched_brand = query.strip().capitalize()
         else:
             for b in brand_names:
-                if q in b.lower():
+                b_lower = b.lower()
+                if q in b_lower or b_lower in q:
                     is_match = True
                     matched_brand = b
                     break
@@ -94,23 +98,28 @@ def search_medicine_database(query: str) -> List[MedicineSearchResult]:
     for brand, generic in COMMON_BRAND_MAPPINGS.items():
         if generic in seen:
             continue
-        if q and (q in brand or q in generic):
+        if q and (q in brand or q in generic or brand in q or norm_q == generic):
             seen.add(generic)
-            # A brand-only row has no curated category prose of its own, so the
-            # curated profile for its generic is consulted when one exists.
             curated = CURATED_MEDICINE_PROFILES.get(generic, {})
             brand_category = curated.get("category", "Pharmacological Agent")
+            gi_score = curated.get("gi_profile", {}).get("stomach_health_score", 35)
+            badge = "Critical" if gi_score > 60 else "Moderate" if gi_score > 30 else "Gentle"
+            drug_type = curated.get("drug_type", "prescription" if generic in ["warfarin", "lisinopril", "atorvastatin", "metformin", "amoxicillin", "pantoprazole", "telmisartan"] else "otc")
+            side_effects = [s.get("effect") for s in curated.get("side_effects", [])[:3]] or ["Consult pharmacist for adverse profile"]
+            food_count = len(curated.get("food_interactions", [])) or 1
+
             results.append(MedicineSearchResult(
                 name=brand.capitalize(),
                 generic_name=generic,
                 category="Pharmacological Agent",
                 category_tags=derive_category_tags(brand_category, generic),
-                drug_type="prescription" if generic in ["warfarin", "lisinopril", "atorvastatin", "metformin", "amoxicillin"] else "otc",
-                stomach_risk_badge="Moderate",
-                stomach_score=35,
-                top_side_effects=["Consult pharmacist for adverse profile"],
-                food_warning_count=1,
+                drug_type=drug_type,
+                stomach_risk_badge=badge,
+                stomach_score=gi_score,
+                top_side_effects=side_effects,
+                food_warning_count=food_count,
                 brand_context=f"Brand: {brand.capitalize()} (Generic: {generic.capitalize()})"
             ))
 
     return results
+
