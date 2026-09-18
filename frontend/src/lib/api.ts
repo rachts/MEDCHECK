@@ -28,7 +28,9 @@ import type {
   UserAuthSession,
 } from '../types/api';
 
-const API_BASE: string = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE: string =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? 'https://medcheck-api-fptv.onrender.com' : 'http://localhost:8000');
 
 // Non-sensitive display profile (username, guest flag) may stay in localStorage:
 // it is not a credential and losing it only costs a name in the navbar. The JWT

@@ -1,7 +1,9 @@
 import React from 'react';
 import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? 'https://medcheck-api-fptv.onrender.com' : 'http://localhost:8000');
 
 // Must stay at or below the bounds ClientErrorReport enforces in backend/models.py
 // (error: max_length=500, stack: max_length=4000). A React componentStack from a
