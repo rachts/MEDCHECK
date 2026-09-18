@@ -186,6 +186,53 @@ COMMON_BRAND_MAPPINGS: Dict[str, str] = {
     "mucaine": "aluminum hydroxide/magnesium hydroxide"
 }
 
+# ==============================================================================
+# FIXED-DOSE COMBINATION (FDC) BRAND MAPPINGS
+# Maps multi-ingredient combination drugs to constituent generics
+# ==============================================================================
+FDC_BRAND_MAPPINGS: Dict[str, List[str]] = {
+    "combiflam": ["ibuprofen", "paracetamol"],
+    "meftal spas": ["mefenamic acid", "dicyclomine"],
+    "meftal-spas": ["mefenamic acid", "dicyclomine"],
+    "pan d": ["pantoprazole", "domperidone"],
+    "pan-d": ["pantoprazole", "domperidone"],
+    "gemer": ["glimepiride", "metformin"],
+    "glycomet gp": ["glimepiride", "metformin"],
+    "glycomet-gp": ["glimepiride", "metformin"],
+    "telma h": ["telmisartan", "hydrochlorothiazide"],
+    "telma-h": ["telmisartan", "hydrochlorothiazide"],
+    "augmentin": ["amoxicillin", "clavulanate"],
+    "augmentin 625": ["amoxicillin", "clavulanate"],
+}
+
+def get_fdc_info(name: str) -> Optional[Dict[str, Any]]:
+    """
+    Detects if a medication is a Fixed-Dose Combination (FDC) product
+    and returns its constituent ingredients and primary coverage warning.
+    """
+    cleaned = (name or "").lower().strip()
+    key = None
+    if cleaned in FDC_BRAND_MAPPINGS:
+        key = cleaned
+    else:
+        base = re.sub(r'[\s\-_]+\d+(\.\d+)?\s*(mg|mcg|g|ml)?$', '', cleaned)
+        if base in FDC_BRAND_MAPPINGS:
+            key = base
+        else:
+            sub_base = re.sub(r'[\s\-_]+(advance|spas|plus|forte|dt|cr|sr|er|cv|h|d)$', '', base)
+            if sub_base in FDC_BRAND_MAPPINGS:
+                key = sub_base
+
+    if key:
+        ingredients = FDC_BRAND_MAPPINGS[key]
+        return {
+            "is_fdc": True,
+            "ingredients": ingredients,
+            "primary_ingredient": ingredients[0],
+            "fdc_warning": "Combination product — analysis covers primary ingredient only."
+        }
+    return None
+
 def normalize_drug_query(name: str) -> str:
     """
     Normalizes medication queries to canonical generic keys by resolving brand names,
@@ -875,7 +922,13 @@ def get_or_build_medicine_profile(medicine_name: str, label: Optional[Dict[str, 
     cleaned = (medicine_name or "").lower().strip()
     canonical = normalize_drug_query(cleaned)
 
-    # 1. Curated Gold-Standard Knowledge Base
+    # Detect Fixed-Dose Combination status
+    fdc_info = get_fdc_info(medicine_name) or get_fdc_info(cleaned) or get_fdc_info(canonical)
+    is_fdc = bool(fdc_info)
+    fdc_warning = fdc_info["fdc_warning"] if fdc_info else None
+    fdc_ingredients = fdc_info["ingredients"] if fdc_info else []
+
+    # 1. Curated Hand-Curated Knowledge Base
     if canonical in CURATED_MEDICINE_PROFILES:
         p = CURATED_MEDICINE_PROFILES[canonical]
         side_effects_objs = [SideEffectDetail(**se) for se in p.get("side_effects", [])]
@@ -894,7 +947,10 @@ def get_or_build_medicine_profile(medicine_name: str, label: Optional[Dict[str, 
             food_interactions=food_objs,
             gi_profile=gi_obj,
             lifestyle_warnings=p.get("lifestyle_warnings", []),
-            data_source="curated_kb"
+            data_source="curated_kb",
+            is_fdc=is_fdc,
+            fdc_warning=fdc_warning,
+            fdc_ingredients=fdc_ingredients
         )
 
     # 2. OpenFDA Live Data Found
@@ -982,7 +1038,10 @@ def get_or_build_medicine_profile(medicine_name: str, label: Optional[Dict[str, 
                 recommendations=["Follow prescribing leaflet and consult pharmacist for personalized administration advice."]
             ),
             lifestyle_warnings=["Adhere to standard storage and dosage schedule guidelines."],
-            data_source="openfda_live"
+            data_source="openfda_live",
+            is_fdc=is_fdc,
+            fdc_warning=fdc_warning,
+            fdc_ingredients=fdc_ingredients
         )
 
     # 3. Structured Fallback for Unknown / Unverified Drugs (Never fake safe profiles!)
@@ -1006,5 +1065,8 @@ def get_or_build_medicine_profile(medicine_name: str, label: Optional[Dict[str, 
         ),
         lifestyle_warnings=["Limited clinical safety data available."],
         data_source="unknown_fallback",
-        disclaimer="Limited clinical pharmacology data available for this query. Consult a doctor or pharmacist."
+        disclaimer="Limited clinical pharmacology data available for this query. Consult a doctor or pharmacist.",
+        is_fdc=is_fdc,
+        fdc_warning=fdc_warning,
+        fdc_ingredients=fdc_ingredients
     )

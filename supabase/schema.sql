@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- MEDCHECK Supabase Database Schema
--- Production-ready schema for caching OpenFDA drug details, interaction pairs,
+-- Production-styled architecture schema for caching OpenFDA drug details, interaction pairs,
 -- and clinical evidence metadata with TTL support and idempotent RLS policies.
 -- ==============================================================================
 

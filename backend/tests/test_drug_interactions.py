@@ -259,3 +259,33 @@ def test_api_check_sarah_scenario():
     assert data["composite_gi_tier"] == "high"
     assert len(data["aggregated_side_effects"]) >= 1
     assert len(data["profiles"]) == 3
+
+def test_zero_evidence_safe_flag_and_coverage():
+    """Verify that a basket containing unverified drugs returns analysis_coverage == 'partial', safe == False, and an incomplete analysis warning."""
+    response = client.post(
+        "/api/check",
+        json={"medicines": ["Paracetamol", "FakeCompoundX999"]},
+        headers=get_auth_headers()
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["analysis_coverage"] == "partial"
+    assert data["safe"] is False
+    assert data["verified_medicines_count"] == 1
+    assert data["total_medicines_count"] == 2
+    assert "Analysis is incomplete" in data["summary"]
+    assert "cannot guarantee safety" in data["summary"]
+
+def test_fully_verified_safe_basket():
+    """Verify that two verified non-interacting drugs yield analysis_coverage == 'full' and safe == True."""
+    response = client.post(
+        "/api/check",
+        json={"medicines": ["Paracetamol", "Amoxicillin"]},
+        headers=get_auth_headers()
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["analysis_coverage"] == "full"
+    assert data["safe"] is True
+    assert data["verified_medicines_count"] == 2
+    assert data["total_medicines_count"] == 2

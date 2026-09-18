@@ -73,7 +73,7 @@ def expand_aliases(drug_name: str) -> Set[str]:
     return aliases
 
 # ==============================================================================
-# EVIDENCE-ANNOTATED DETERMINISTIC CLINICAL RULES (Complete Gold-Standard Suite)
+# EVIDENCE-ANNOTATED DETERMINISTIC CLINICAL RULES (Hand-Curated Suite)
 # ==============================================================================
 KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
     ("warfarin", "aspirin"): {
@@ -196,7 +196,7 @@ KNOWN_CLINICAL_RULES: Dict[Tuple[str, str], Dict[str, Any]] = {
         "confidence": RuleConfidence.ESTABLISHED,
         "last_reviewed": RULE_TABLE_LAST_REVIEWED
     },
-    # --- Additional Standard Gold-Standard Clinical Rules ---
+    # --- Additional Standard Hand-Curated Clinical Rules ---
     ("omeprazole", "clopidogrel"): {
         "severity": Severity.HIGH,
         "explanation": "Omeprazole significantly reduces the antiplatelet efficacy of Clopidogrel, increasing the risk of stent thrombosis and cardiovascular events.",

@@ -5,6 +5,8 @@ import uuid
 import asyncio
 import itertools
 import logging
+import hashlib
+import jwt
 from datetime import timedelta
 from typing import List, Dict, Any, Optional
 
@@ -41,7 +43,8 @@ from services.auth import (
     create_access_token,
     get_current_user,
     set_session_cookie,
-    clear_session_cookie
+    clear_session_cookie,
+    SESSION_COOKIE_NAME
 )
 from services.openfda import fetch_drug_label
 from services.knowledge_base import (
@@ -82,11 +85,31 @@ logger = logging.getLogger("medcheck_api")
 
 # 2. Initialize Rate Limiter (with optional Redis support)
 def rate_limit_key(request: Request) -> str:
+    """
+    Computes a distinct rate limit key per client.
+    - For authenticated requests (Bearer token or session cookie): extracts the unique
+      subject / user identifier ('sub' or 'uid'), or a SHA-256 hash of the token.
+    - For guest / unauthenticated requests: falls back to client IP address.
+    """
+    token: Optional[str] = None
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header[7:].strip()
-        return token[:30] if token else (get_remote_address(request) or "127.0.0.1")
-    return get_remote_address(request) or "127.0.0.1"
+    elif SESSION_COOKIE_NAME in request.cookies:
+        token = request.cookies.get(SESSION_COOKIE_NAME)
+
+    if token:
+        try:
+            payload = jwt.decode(token, options={"verify_signature": False})
+            user_key = payload.get("uid") or payload.get("sub")
+            if user_key:
+                return f"usr_{user_key}"
+        except Exception:
+            token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+            return f"tok_{token_hash}"
+
+    ip = get_remote_address(request) or "127.0.0.1"
+    return f"ip_{ip}"
 
 limiter_kwargs = {"key_func": rate_limit_key}
 if settings.REDIS_URL:
@@ -96,8 +119,8 @@ limiter = Limiter(**limiter_kwargs)
 
 # 3. Create FastAPI Application
 app = FastAPI(
-    title="MEDCHECK Clinical Intelligence Platform",
-    description="Production-grade medicine safety API with deep individual pharmacology profiling, Stomach Guardian mucosal scoring, and pairwise interaction checking.",
+    title="MEDCHECK Clinical Intelligence API",
+    description="Production-styled architecture medicine safety API with deep individual pharmacology profiling, Stomach Guardian heuristic mucosal scoring, and pairwise interaction checking.",
     version="2.0.0"
 )
 
@@ -563,23 +586,45 @@ async def check_medicines_basket(
         medicines, profiles, **timeline_kwargs
     )
 
-    is_safe = len(detected_interactions) == 0
+    # Calculate analysis coverage across the basket
+    unverified_drugs = [
+        med.capitalize() for med in medicines
+        if profiles.get(med) is None or profiles[med].data_source == "unknown_fallback"
+    ]
+    verified_count = len(medicines) - len(unverified_drugs)
+    total_count = len(medicines)
+
+    if total_count == 0:
+        analysis_coverage = "none"
+    elif verified_count == total_count:
+        analysis_coverage = "full"
+    elif verified_count > 0:
+        analysis_coverage = "partial"
+    else:
+        analysis_coverage = "none"
 
     limited_data_warnings = []
-    if limited_data_drugs:
+    if unverified_drugs:
         limited_data_warnings.append(
-            f"Limited FDA label data available for: {', '.join(limited_data_drugs)}. Analysis may be incomplete."
+            f"Limited or unverified clinical data for: {', '.join(unverified_drugs)}. Analysis is incomplete."
         )
 
-    if is_safe:
-        if len(medicines) == 1:
-            summary_text = f"Profile analyzed for {medicines[0].capitalize()}. Add a second medicine to check pairwise interactions."
-        elif limited_data_drugs:
-            summary_text = f"No known interactions detected between verified medications. Note: Limited FDA label data for: {', '.join(limited_data_drugs)}."
-        else:
-            summary_text = "No known interactions detected between the selected medicines in verified clinical databases."
+    # Safe boolean strictly gated: can ONLY be True if analysis_coverage == 'full' AND zero interactions found
+    if analysis_coverage != "full":
+        is_safe = False
+        summary_text = (
+            f"Analysis is incomplete. Unverified medicines detected ({', '.join(unverified_drugs)}); "
+            "cannot guarantee safety."
+        )
     else:
-        summary_text = f"Identified {len(detected_interactions)} potential interaction{'s' if len(detected_interactions) > 1 else ''} across {len(pairs)} analyzed pairs."
+        is_safe = len(detected_interactions) == 0
+        if is_safe:
+            if len(medicines) == 1:
+                summary_text = f"Profile analyzed for {medicines[0].capitalize()}. Add a second medicine to check pairwise interactions."
+            else:
+                summary_text = "No known interactions detected between the selected medicines in verified clinical databases."
+        else:
+            summary_text = f"Identified {len(detected_interactions)} potential interaction{'s' if len(detected_interactions) > 1 else ''} across {len(pairs)} analyzed pairs."
 
     # 7. Audit Logging (Non-blocking but resilient)
     latency_ms = (time.time() - start_time) * 1000.0
@@ -610,7 +655,10 @@ async def check_medicines_basket(
         daily_food_timeline=timeline,
         aggregated_side_effects=amplified_side_effects,
         profiles=profiles,
-        limited_data_warnings=limited_data_warnings
+        limited_data_warnings=limited_data_warnings,
+        analysis_coverage=analysis_coverage,
+        verified_medicines_count=verified_count,
+        total_medicines_count=total_count
     )
 
 @app.post("/api/basket/analyze", response_model=CheckResponse, include_in_schema=False)

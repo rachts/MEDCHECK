@@ -230,7 +230,7 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
 }
 
 /**
- * Check interactions & comprehensive clinical intelligence for a basket of
+ * Check interactions & curated clinical intelligence for a basket of
  * medicines. Falls back to the last cached response for the same basket when the
  * network is unreachable.
  *

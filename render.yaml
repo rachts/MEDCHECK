@@ -1,6 +1,6 @@
 # ==============================================================================
 # MEDCHECK Render Blueprint Specification (Infrastructure-as-Code)
-# Production-ready configuration for 100% FREE deployment on Render.com
+# Production-styled architecture configuration for deployment on Render.com
 # ==============================================================================
 
 services:
@@ -28,7 +28,7 @@ services:
       - key: AUDIT_IP_SALT
         generateValue: true
       - key: ALLOWED_ORIGINS
-        value: http://localhost:5173,https://medcheck.vercel.app
+        value: http://localhost:5173,https://medcheck.vercel.app,https://medcheck-official.vercel.app
       - key: GUEST_TOKEN_EXPIRE_MINUTES
         value: 120
       - key: FORCE_HTTPS

@@ -46,6 +46,9 @@ export interface MedicineProfileResponse {
   lifestyle_warnings: string[];
   data_source: 'curated_kb' | 'openfda_live' | 'openfda_ai_parsed' | 'unknown_fallback';
   disclaimer?: string;
+  is_fdc?: boolean;
+  fdc_warning?: string;
+  fdc_ingredients?: string[];
 }
 
 export interface InteractionItem {
@@ -128,6 +131,9 @@ export interface CheckResponse {
   aggregated_side_effects: AmplifiedSideEffect[];
   profiles: Record<string, MedicineProfileResponse>;
   limited_data_warnings?: string[];
+  analysis_coverage?: 'full' | 'partial' | 'heuristic-only' | 'none';
+  verified_medicines_count?: number;
+  total_medicines_count?: number;
 }
 
 export interface UserAuthSession {

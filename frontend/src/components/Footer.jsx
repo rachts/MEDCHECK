@@ -16,7 +16,7 @@ export function Footer() {
       </div>
 
       <div className="text-center max-w-lg leading-relaxed text-[var(--text-muted)]">
-        © {new Date().getFullYear()} MEDCHECK. Powered by OpenFDA Clinical Databases & Pharmacological Rules.
+        © {new Date().getFullYear()} MEDCHECK. Built on OpenFDA drug label data &amp; curated pharmacological rules.
       </div>
 
       <div className="flex gap-3 text-[var(--text-secondary)] font-medium">

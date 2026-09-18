@@ -3,19 +3,14 @@ from models import MedicineProfileResponse, AmplifiedSideEffect, RiskTier
 from services.clinical_rules import expand_aliases
 
 # Neutral values used when a profile carries no usable GI data.
-DEFAULT_GI_SCORE = 20
-DEFAULT_GI_TIER = "gentle"
+DEFAULT_GI_SCORE = 0
+DEFAULT_GI_TIER = "unknown"
 
 
 def _read_gi_profile(profile: Optional[MedicineProfileResponse]) -> Tuple[int, str]:
     """
     Reads (stomach_health_score, risk_tier) defensively from a medicine profile.
-
-    MedicineProfileResponse declares gi_profile as required, so a model built
-    through Pydantic always has one. This helper additionally tolerates a profile
-    supplied as a plain dict or built by a future code path that leaves gi_profile
-    unset, because a missing GI profile must degrade to the neutral baseline
-    rather than raise AttributeError mid-analysis.
+    Missing or unverified GI profiles resolve to 0 and 'unknown' tier.
     """
     if profile is None:
         return DEFAULT_GI_SCORE, DEFAULT_GI_TIER
@@ -50,11 +45,17 @@ def calculate_composite_gi_score(
     """
     Calculates the Stomach Guardian Composite GI Score (0-100) based on cumulative mucosal load,
     multi-NSAID compounding penalties, Anticoagulant + NSAID synergy, and PPI protection credits.
+
+    Excludes unverified/fallback drugs (data_source == 'unknown_fallback' or tier == 'unknown')
+    from the base score average so 0-data compounds never pull down the composite score of known drugs.
+    If no verified drugs exist in the basket, the composite tier is explicitly set to 'unknown'.
     """
     if not medicines:
-        return 20, "gentle", [], []
+        return 0, "unknown", [], []
 
     total_base_score = 0
+    known_med_count = 0
+    has_unknown_drug = False
     contributors = []
     nsaid_count = 0
     ppi_present = False
@@ -65,28 +66,56 @@ def calculate_composite_gi_score(
         aliases = expand_aliases(med)
         med_score, med_tier = _read_gi_profile(profile)
 
-        # Check for PPIs (protective)
-        if any(ppi in aliases for ppi in ["omeprazole", "pantoprazole", "esomeprazole", "lansoprazole", "rabeprazole"]):
-            ppi_present = True
+        is_unknown = (
+            med_tier == "unknown"
+            or (profile and getattr(profile, "data_source", None) == "unknown_fallback")
+            or (isinstance(profile, dict) and profile.get("data_source") == "unknown_fallback")
+            or profile is None
+        )
 
-        # Check for NSAIDs / High GI irritants
-        if any(nsaid in aliases for nsaid in ["ibuprofen", "aspirin", "naproxen", "diclofenac", "celecoxib", "ketoprofen", "meloxicam", "indomethacin"]):
-            nsaid_count += 1
+        if is_unknown:
+            has_unknown_drug = True
+            contributors.append({
+                "drug": med.capitalize(),
+                "score_impact": 0,
+                "tier": "unknown",
+                "mechanism_short": "Insufficient pharmacological data in active clinical indices"
+            })
+        else:
+            known_med_count += 1
+            total_base_score += med_score
+            contributors.append({
+                "drug": med.capitalize(),
+                "score_impact": med_score,
+                "tier": med_tier,
+                "mechanism_short": (
+                    "Direct mucosal erosion & COX inhibition" if med_score > 60
+                    else "Metabolic / Mild GI burden" if med_score > 30
+                    else "Gentle mucosal profile"
+                )
+            })
 
-        # Check for Anticoagulants / Antiplatelets
-        if any(ac in aliases for ac in ["warfarin", "clopidogrel", "apixaban", "rivaroxaban", "dabigatran", "edoxaban", "prasugrel", "ticagrelor"]):
-            anticoagulant_count += 1
+            # Check for PPIs (protective) - only consider verified drugs
+            if any(ppi in aliases for ppi in ["omeprazole", "pantoprazole", "esomeprazole", "lansoprazole", "rabeprazole"]):
+                ppi_present = True
 
-        contributors.append({
-            "drug": med.capitalize(),
-            "score_impact": med_score,
-            "tier": med_tier,
-            "mechanism_short": "Direct mucosal erosion & COX inhibition" if med_score > 60 else "Metabolic / Mild GI burden" if med_score > 30 else "Gentle mucosal profile"
-        })
-        total_base_score += med_score
+            # Check for NSAIDs / High GI irritants
+            if any(nsaid in aliases for nsaid in ["ibuprofen", "aspirin", "naproxen", "diclofenac", "celecoxib", "ketoprofen", "meloxicam", "indomethacin"]):
+                nsaid_count += 1
 
-    # Average base score
-    base_average = total_base_score // len(medicines)
+            # Check for Anticoagulants / Antiplatelets
+            if any(ac in aliases for ac in ["warfarin", "clopidogrel", "apixaban", "rivaroxaban", "dabigatran", "edoxaban", "prasugrel", "ticagrelor"]):
+                anticoagulant_count += 1
+
+    # If the entire basket consists of unknown compounds, do not calculate an artificial score or default to gentle
+    if known_med_count == 0:
+        recommendations = [
+            "Insufficient clinical data to assess gastrointestinal risk for unverified compound(s). Consult a licensed pharmacist or physician."
+        ]
+        return 0, "unknown", contributors, recommendations
+
+    # Average base score calculated strictly across verified drugs
+    base_average = total_base_score // known_med_count
     composite = base_average
 
     # Multi-NSAID Compounding Penalty (+25 pts)
@@ -139,6 +168,8 @@ def calculate_composite_gi_score(
         recommendations.append("Proton Pump Inhibitor (PPI) detected: provides mucosal gastro-protection.")
     if any("alcohol" in expand_aliases(m) for m in medicines):
         recommendations.append("Avoid alcoholic beverages, which exponentially increase gastric mucosal bleeding risk.")
+    if has_unknown_drug:
+        recommendations.append("Note: Regimen contains unverified compound(s). GI risk score reflects verified medications only.")
     if not recommendations:
         recommendations.append("Maintain standard hydration and adhere to prescribed timing directions.")
 

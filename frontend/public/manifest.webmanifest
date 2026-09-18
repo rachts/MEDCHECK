@@ -1,7 +1,7 @@
 {
   "name": "MEDCHECK — Medicine Safety & Interaction Intelligence",
   "short_name": "MEDCHECK",
-  "description": "Clinical-grade drug interaction checker, side effect radar, food conflict timeline, and Stomach Guardian mucosal stress indicator.",
+  "description": "Evidence-cited drug interaction checker, side effect radar, food conflict timeline, and Stomach Guardian heuristic mucosal stress indicator.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

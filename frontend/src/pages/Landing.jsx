@@ -31,10 +31,10 @@ export function Landing() {
 
       {/* HERO SECTION: Editorial Authority with Cormorant Garamond */}
       <section className="pt-24 sm:pt-28 pb-12 px-4 sm:px-8 max-w-5xl mx-auto flex flex-col items-center text-center">
-        {/* Stat Pill Badge */}
-        <div className="badge badge-high mb-4 px-3.5 py-1.5 bg-[var(--alert-danger-bg)] border border-[var(--alert-danger-border)] text-[var(--alert-danger-text)] rounded-full flex items-center gap-2 shadow-sm">
-          <AlertTriangle className="w-3.5 h-3.5 text-[var(--severity-high)]" />
-          <span className="font-semibold text-xs sm:text-sm">1.3 Million Preventable Hospitalizations Annually</span>
+        {/* Clinical Focus Badge */}
+        <div className="badge mb-4 px-3.5 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-default)] text-[var(--text-secondary)] rounded-full flex items-center gap-2 shadow-sm">
+          <AlertTriangle className="w-3.5 h-3.5 text-[var(--severity-moderate)]" />
+          <span className="font-semibold text-xs sm:text-sm">Evidence-Cited Medication Safety &amp; Interaction Analysis</span>
         </div>
 
         {/* Serif Headline (Cormorant Garamond) */}
@@ -82,8 +82,8 @@ export function Landing() {
               <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
-              <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">OpenFDA Verified</div>
-              <div className="text-xs text-[var(--text-muted)] font-sans">Official FDA labels</div>
+              <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">Built on OpenFDA label data</div>
+              <div className="text-xs text-[var(--text-muted)] font-sans">Official label monographs</div>
             </div>
           </div>
 
@@ -103,7 +103,7 @@ export function Landing() {
             </div>
             <div>
               <div className="font-serif text-[15px] font-bold text-[var(--text-primary)] leading-tight">Stomach Guardian</div>
-              <div className="text-xs text-[var(--text-muted)] font-sans">Mucosal risk scoring</div>
+              <div className="text-xs text-[var(--text-muted)] font-sans">Heuristic mucosal score</div>
             </div>
           </div>
 
@@ -123,7 +123,7 @@ export function Landing() {
       <section className="py-10 px-4 sm:px-8 max-w-5xl mx-auto w-full">
         <div className="text-center mb-8">
           <h2 className="text-h1 text-[var(--text-primary)] mb-2">
-            Comprehensive Clinical Intelligence
+            Targeted Clinical Intelligence
           </h2>
           <p className="text-body text-[var(--text-secondary)] max-w-lg mx-auto">
             Clear, actionable medicine safety designed for patient understanding and clinical scrutiny.
@@ -163,10 +163,10 @@ export function Landing() {
               <Flame className="w-5 h-5" />
             </div>
             <h3 className="font-serif text-[20px] font-bold text-[var(--text-primary)]">
-              Food & Stomach Guardian
+              Food &amp; Stomach Guardian Score
             </h3>
             <p className="text-body text-[var(--text-secondary)] leading-relaxed">
-              GI upset is the #1 reason patients discontinue medications. Stomach Guardian estimates mucosal risk and suggests an actionable 24-hour meal schedule.
+              GI upset is a primary reason patients discontinue medications. The Stomach Guardian heuristic estimates mucosal risk and suggests an actionable 24-hour meal schedule.
             </p>
           </div>
         </div>
@@ -199,7 +199,7 @@ export function Landing() {
             </div>
 
             <p className="text-xs text-[var(--severity-high)] font-semibold font-sans pt-0.5">
-              Result: Critical Bleeding Synergy + 100/100 High Stomach Guardian Risk.
+              Result: Critical Bleeding Synergy + 100/100 High Stomach Guardian Heuristic Risk.
             </p>
           </div>
 

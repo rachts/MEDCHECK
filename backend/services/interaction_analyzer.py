@@ -154,7 +154,7 @@ async def analyze_drug_pair(
 ) -> Optional[InteractionItem]:
     """
     Multi-stage interaction analyzer:
-    1. Gold-standard deterministic clinical rule engine (sub-millisecond priority).
+    1. Evidence-cited deterministic clinical rule engine (sub-millisecond priority).
     2. FDA Label cross-referencing for verified pharmacological interactions.
     """
     # 1. Deterministic Rule Match

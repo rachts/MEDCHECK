@@ -250,3 +250,59 @@ def test_oversized_password_at_the_hasher_truncates_instead_of_raising():
 
     hashed = get_password_hash(over_limit)
     assert verify_password(over_limit, hashed) is True
+
+
+def test_rate_limit_key_distinct_for_different_users():
+    """Verify rate-limit keys are distinct per user and do not collapse on JWT header."""
+    from main import rate_limit_key
+    from services.auth import create_access_token, SESSION_COOKIE_NAME
+    from starlette.requests import Request
+
+    token_alice = create_access_token({"sub": "alice_clinician", "uid": "uid_alice_123"})
+    token_bob = create_access_token({"sub": "bob_pharmacist", "uid": "uid_bob_456"})
+
+    # Prior bug check: token_alice[:30] is identical to token_bob[:30] (standard base64 header)
+    assert token_alice[:30] == token_bob[:30]
+
+    # 1. Bearer Header requests
+    scope_a = {
+        "type": "http", "method": "GET", "path": "/api/check",
+        "headers": [(b"authorization", f"Bearer {token_alice}".encode())],
+        "client": ("192.168.1.1", 1234)
+    }
+    scope_b = {
+        "type": "http", "method": "GET", "path": "/api/check",
+        "headers": [(b"authorization", f"Bearer {token_bob}".encode())],
+        "client": ("192.168.1.1", 1234)
+    }
+    key_a = rate_limit_key(Request(scope_a))
+    key_b = rate_limit_key(Request(scope_b))
+
+    assert key_a != key_b, f"Keys collapsed! Both got {key_a}"
+    assert "uid_alice_123" in key_a
+    assert "uid_bob_456" in key_b
+
+    # 2. Cookie-based session matches Bearer token for same user
+    scope_cookie = {
+        "type": "http", "method": "GET", "path": "/api/check",
+        "headers": [(b"cookie", f"{SESSION_COOKIE_NAME}={token_alice}".encode())],
+        "client": ("192.168.1.1", 1234)
+    }
+    key_cookie = rate_limit_key(Request(scope_cookie))
+    assert key_cookie == key_a
+
+    # 3. Guest requests from same IP share IP bucket
+    scope_guest_1 = {
+        "type": "http", "method": "GET", "path": "/api/check",
+        "headers": [],
+        "client": ("10.0.0.50", 1234)
+    }
+    scope_guest_2 = {
+        "type": "http", "method": "GET", "path": "/api/check",
+        "headers": [],
+        "client": ("10.0.0.50", 5678)
+    }
+    key_g1 = rate_limit_key(Request(scope_guest_1))
+    key_g2 = rate_limit_key(Request(scope_guest_2))
+    assert key_g1 == key_g2
+    assert "10.0.0.50" in key_g1

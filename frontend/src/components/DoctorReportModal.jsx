@@ -51,7 +51,7 @@ export function DoctorReportModal() {
     reportMd += `**Active Regimen (${medicines.length}):** ${medicines.map(m => m.name).join(', ')}\n\n`;
 
     reportMd += `## 1. COMPOSITE RISK METRICS\n`;
-    reportMd += `- Stomach Guardian Score (GI Stress Heuristic): ${giScore}/100 (${results?.composite_gi_tier || 'gentle'})\n`;
+    reportMd += `- Stomach Guardian Score (GI Stress Heuristic): ${results?.composite_gi_tier === 'unknown' ? 'N/A' : `${giScore}/100`} (${results?.composite_gi_tier || 'unknown'})\n`;
     reportMd += `- Identified Interactions: ${interactions.length}\n`;
     reportMd += `- Food & Timing Conflicts: ${foodConflicts.length}\n\n`;
 
@@ -238,9 +238,11 @@ export function DoctorReportModal() {
             <div>
               <span className="text-xs text-[var(--text-muted)] uppercase block font-bold">Stomach Health Score</span>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="metric text-base text-[var(--severity-moderate)]">{giScore}/100</span>
-                <span className="tag">
-                  {results?.composite_gi_tier?.toUpperCase() || 'GENTLE'}
+                <span className="metric text-base text-[var(--severity-moderate)]">
+                  {results?.composite_gi_tier === 'unknown' ? 'N/A' : `${giScore}/100`}
+                </span>
+                <span className={`tag ${results?.composite_gi_tier === 'unknown' ? 'text-slate-600 bg-slate-100 border-slate-300' : ''}`}>
+                  {results?.composite_gi_tier?.toUpperCase() || 'UNKNOWN'}
                 </span>
               </div>
             </div>
@@ -347,7 +349,7 @@ export function DoctorReportModal() {
           </div>
 
           <div className="pt-3 border-t border-[var(--border-default)] text-center text-xs text-[var(--text-muted)]">
-            MEDCHECK Clinical Brief • OpenFDA Prescribing Data Validated • Informational Summary
+            MEDCHECK Clinical Brief • Built on OpenFDA Prescribing Data • Informational Summary
           </div>
         </div>
       </div>

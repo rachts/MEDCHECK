@@ -75,6 +75,7 @@ function MedicineProfilePanelBase({ onCloseMobile }) {
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showAllSideEffects, setShowAllSideEffects] = useState(false);
+  const [reportedMissing, setReportedMissing] = useState(false);
 
   if (!selectedMedicineName) {
     return (
@@ -173,7 +174,6 @@ function MedicineProfilePanelBase({ onCloseMobile }) {
 
   const isRx = profile.drug_type === 'prescription';
   const isOTC = profile.drug_type === 'otc';
-  const [reportedMissing, setReportedMissing] = useState(false);
 
   const TABS = [
     { id: 'overview', label: 'Overview', icon: Info },

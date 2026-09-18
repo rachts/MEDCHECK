@@ -102,10 +102,27 @@ function MedicineChipBase({ medicine, onRemove }) {
           <span className="text-xs text-[var(--text-muted)] capitalize truncate font-sans">
             {medProfile?.generic_name || medicine.name.toLowerCase()}
           </span>
+          {medProfile?.is_fdc && (
+            <span 
+              className="text-[11px] text-amber-700 font-medium font-sans leading-tight mt-0.5"
+              title={medProfile?.fdc_warning || "Combination product — analysis covers primary ingredient only."}
+            >
+              Combination product — covers primary ingredient only
+            </span>
+          )}
         </div>
       </button>
 
       <div className="flex items-center gap-2 shrink-0">
+        {medProfile?.is_fdc && (
+          <span 
+            className="tag text-amber-700 bg-amber-50 border-amber-200 font-sans cursor-help"
+            title={medProfile?.fdc_warning || "Combination product — analysis covers primary ingredient only."}
+          >
+            FDC
+          </span>
+        )}
+
         {/* Category Tag in Inter */}
         <span className={`tag font-sans ${drugBadge.cls}`}>
           {drugBadge.label}

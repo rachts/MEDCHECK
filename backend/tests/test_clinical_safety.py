@@ -69,3 +69,26 @@ def test_added_clinical_interaction_rules():
     theo_rule = match_known_clinical_rule("ciprofloxacin", "theophylline")
     assert theo_rule is not None
     assert theo_rule.severity == Severity.HIGH
+
+def test_unknown_drug_gi_tier_and_average_exclusion():
+    """Verify that unknown drugs are excluded from GI average and never falsely labeled gentle."""
+    from services.gi_engine import calculate_composite_gi_score
+
+    # 1. Basket of only unknown / unverified compounds
+    unknown_drugs = ["xyzdrug99999_fake", "unverified_compound_99"]
+    unknown_profiles = {d: get_or_build_medicine_profile(d) for d in unknown_drugs}
+    score, tier, contributors, recs = calculate_composite_gi_score(unknown_drugs, unknown_profiles)
+
+    assert tier == "unknown", f"Expected 'unknown' tier for unverified drugs, got '{tier}'"
+    assert score == 0, f"Expected 0 score for unverified drugs, got {score}"
+    assert any("insufficient" in r.lower() for r in recs)
+
+    # 2. Mixed basket: High GI drug (Aspirin, score 75) + Unknown compound (score 0)
+    # The unknown compound (0 score) must NOT pull down Aspirin's base score of 75 to 37
+    mixed_drugs = ["aspirin", "xyzdrug99999_fake"]
+    mixed_profiles = {d: get_or_build_medicine_profile(d) for d in mixed_drugs}
+    mixed_score, mixed_tier, mixed_contributors, mixed_recs = calculate_composite_gi_score(mixed_drugs, mixed_profiles)
+
+    assert mixed_score == 75, f"Unknown drug improperly dragged score down to {mixed_score}"
+    assert mixed_tier == "high", f"Expected 'high' tier, got '{mixed_tier}'"
+    assert any(c["tier"] == "unknown" for c in mixed_contributors)

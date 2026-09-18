@@ -23,7 +23,7 @@ not logged here.
 ## [2026.08.24-1] - 2026-08-24
 
 ### Added
-- **Restored Complete 17 Gold-Standard Rules**: Expanded deterministic clinical rules from 10 to 17 rules with full evidence citations and confidence metrics:
+- **Restored Complete 17 Hand-Curated Rules**: Expanded deterministic clinical rules from 10 to 17 rules with full evidence citations and confidence metrics:
   - *Omeprazole + Clopidogrel* (CYP2C19 competitive inhibition reducing clopidogrel active metabolite).
   - *Metoprolol + Amlodipine* (Compounded negative chronotropy and peripheral vasodilation).
   - *Levothyroxine + Omeprazole* (Impaired levothyroxine gastric absorption due to elevated gastric pH).

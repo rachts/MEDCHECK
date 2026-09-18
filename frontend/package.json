@@ -2,7 +2,7 @@
   "name": "medcheck-frontend",
   "private": true,
   "version": "2.0.0",
-  "description": "Clinical-grade medicine intelligence dashboard for drug interactions, side effects, food conflicts, and Stomach Guardian score.",
+  "description": "Evidence-cited medicine intelligence dashboard for drug interactions, side effects, food conflicts, and Stomach Guardian score.",
   "author": "MEDCHECK Team",
   "license": "MIT",
   "type": "module",

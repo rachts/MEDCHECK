@@ -106,3 +106,25 @@ def test_search_autocomplete_for_indian_brands():
     pan_results = search_medicine_database("pan 40")
     assert len(pan_results) > 0
     assert any("pantoprazole" in r.generic_name.lower() for r in pan_results)
+
+def test_fdc_detection_and_warning():
+    """Verify FDC combination products are flagged with warnings and ingredient lists."""
+    from services.knowledge_base import get_fdc_info, get_or_build_medicine_profile
+
+    # Combiflam (Ibuprofen + Paracetamol)
+    combiflam_info = get_fdc_info("Combiflam")
+    assert combiflam_info is not None
+    assert combiflam_info["is_fdc"] is True
+    assert "paracetamol" in combiflam_info["ingredients"]
+    assert "ibuprofen" in combiflam_info["ingredients"]
+
+    prof = get_or_build_medicine_profile("Combiflam")
+    assert prof.is_fdc is True
+    assert prof.fdc_warning == "Combination product — analysis covers primary ingredient only."
+    assert "ibuprofen" in prof.fdc_ingredients
+
+    # Telma H (Telmisartan + Hydrochlorothiazide)
+    telma_info = get_fdc_info("Telma H")
+    assert telma_info is not None
+    assert telma_info["is_fdc"] is True
+    assert "hydrochlorothiazide" in telma_info["ingredients"]

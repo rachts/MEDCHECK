@@ -48,7 +48,10 @@ export function StomachGuardianModal() {
 
   let scoreColor = 'var(--severity-low)'; // #059669
   let tierLabel = 'Gentle / Minimal Risk';
-  if (giScore > 60) {
+  if (giTier === 'unknown') {
+    scoreColor = '#94A3B8';
+    tierLabel = 'Insufficient data to assess GI risk';
+  } else if (giScore > 60) {
     scoreColor = 'var(--severity-high)'; // #DC2626
     tierLabel = 'High Gastrointestinal Burden';
   } else if (giScore > 30) {
@@ -123,10 +126,18 @@ export function StomachGuardianModal() {
             <div>
               <span className="text-xs text-[var(--text-muted)] uppercase block font-bold">Cumulative Stomach Score</span>
               <div className="flex items-baseline gap-1.5 mt-1">
-                <span className="metric text-3xl font-bold" style={{ color: scoreColor }}>
-                  {giScore}
-                </span>
-                <span className="text-sm text-[var(--text-muted)]">/ 100</span>
+                {giTier === 'unknown' ? (
+                  <span className="metric text-3xl font-bold text-slate-400">
+                    —
+                  </span>
+                ) : (
+                  <>
+                    <span className="metric text-3xl font-bold" style={{ color: scoreColor }}>
+                      {giScore}
+                    </span>
+                    <span className="text-sm text-[var(--text-muted)]">/ 100</span>
+                  </>
+                )}
               </div>
               <p className="text-sm font-semibold text-[var(--text-primary)] mt-1">{tierLabel}</p>
             </div>

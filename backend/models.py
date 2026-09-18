@@ -288,6 +288,9 @@ class MedicineProfileResponse(BaseModel):
     lifestyle_warnings: List[str] = []
     data_source: Literal["curated_kb", "openfda_live", "openfda_ai_parsed", "unknown_fallback"] = "curated_kb"
     disclaimer: Optional[str] = None
+    is_fdc: bool = False
+    fdc_warning: Optional[str] = None
+    fdc_ingredients: List[str] = []
 
 class FoodConflictDetail(BaseModel):
     medicine_a: str
@@ -389,3 +392,6 @@ class CheckResponse(BaseModel):
     aggregated_side_effects: List[AmplifiedSideEffect] = []
     profiles: Dict[str, MedicineProfileResponse] = {}
     limited_data_warnings: List[str] = []
+    analysis_coverage: Literal["full", "partial", "heuristic-only", "none"] = "full"
+    verified_medicines_count: int = 0
+    total_medicines_count: int = 0

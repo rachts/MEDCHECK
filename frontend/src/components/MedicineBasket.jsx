@@ -101,12 +101,14 @@ export function MedicineBasket() {
     setShowDropdown(false);
   };
 
-  const giScore = results?.composite_gi_score || 20;
-  const giTier = results?.composite_gi_tier || 'gentle';
+  const giScore = results?.composite_gi_score ?? (results ? 0 : 20);
+  const giTier = results?.composite_gi_tier || (results ? 'unknown' : 'gentle');
   const foodConflictCount = results?.food_conflicts?.length || 0;
 
   let giFillColor = 'var(--severity-low)'; // #059669
-  if (giScore > 60) {
+  if (giTier === 'unknown') {
+    giFillColor = '#94A3B8';
+  } else if (giScore > 60) {
     giFillColor = 'var(--severity-high)'; // #DC2626
   } else if (giScore > 30) {
     giFillColor = 'var(--severity-moderate)'; // #D97706
@@ -124,9 +126,22 @@ export function MedicineBasket() {
             <h2 className="font-serif text-[20px] font-bold text-[var(--text-primary)] leading-tight">
               Medicine Basket
             </h2>
-            <p className="text-xs text-[var(--text-muted)] font-sans">
-              {medicines.length} medication{medicines.length !== 1 ? 's' : ''} loaded
-            </p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="text-xs text-[var(--text-muted)] font-sans">
+                {medicines.length} medication{medicines.length !== 1 ? 's' : ''} loaded
+              </p>
+              {results?.analysis_coverage && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                  results.analysis_coverage === 'full'
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    : results.analysis_coverage === 'partial'
+                    ? 'text-amber-700 bg-amber-50 border-amber-200'
+                    : 'text-slate-600 bg-slate-50 border-slate-200'
+                }`}>
+                  Covers {results.verified_medicines_count ?? medicines.length} of {results.total_medicines_count ?? medicines.length}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -247,6 +262,24 @@ export function MedicineBasket() {
         </div>
       )}
 
+      {medicines.some((m) => results?.profiles?.[m.name.toLowerCase()]?.is_fdc) && (
+        <div className="alert-warning text-xs flex items-center gap-2 p-2.5 rounded-[6px]" role="alert">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--severity-moderate)]" aria-hidden="true" />
+          <span>
+            <strong>Combination product:</strong> Analysis covers primary ingredient only.
+          </span>
+        </div>
+      )}
+
+      {results?.analysis_coverage === 'partial' && (
+        <div className="alert-warning text-xs flex items-center gap-2 p-2.5 rounded-[6px]" role="alert">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--severity-moderate)]" aria-hidden="true" />
+          <span>
+            <strong>Partial scan:</strong> Analysis covers {results.verified_medicines_count ?? 0} of {results.total_medicines_count ?? medicines.length} medicines. Unverified medicines cannot be guaranteed safe.
+          </span>
+        </div>
+      )}
+
       {/* Medicines Chips Container */}
       <div className="flex flex-col gap-2 min-h-[120px]">
         {medicines.length === 0 ? (
@@ -328,13 +361,21 @@ export function MedicineBasket() {
               </div>
 
               <div className="flex items-center gap-1.5">
-                <span className="metric text-base text-[var(--text-primary)]">{giScore}</span>
-                <span className="text-xs text-[var(--text-muted)]">/100</span>
+                {giTier === 'unknown' ? (
+                  <span className="text-xs font-semibold text-[var(--text-muted)] font-sans">No GI Data</span>
+                ) : (
+                  <>
+                    <span className="metric text-base text-[var(--text-primary)]">{giScore}</span>
+                    <span className="text-xs text-[var(--text-muted)]">/100</span>
+                  </>
+                )}
                 <span className={`tag ${
                   giTier === 'high'
                     ? 'tag-danger'
                     : giTier === 'moderate'
                     ? 'tag-warning'
+                    : giTier === 'unknown'
+                    ? 'text-slate-600 bg-slate-100 border-slate-300'
                     : 'tag-success'
                 }`}>
                   {giTier}

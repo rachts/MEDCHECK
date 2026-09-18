@@ -1,5 +1,11 @@
 # MEDCHECK
 
+> **Live Deployment**:
+> - 🌐 **Web Application**: [https://medcheck-official.vercel.app](https://medcheck-official.vercel.app)
+> - ⚡ **Clinical API**: [https://medcheck-api-fptv.onrender.com](https://medcheck-api-fptv.onrender.com)
+> - 📖 **Interactive API Documentation**: [https://medcheck-api-fptv.onrender.com/docs](https://medcheck-api-fptv.onrender.com/docs)
+> - 🩺 **API Health Endpoint**: [https://medcheck-api-fptv.onrender.com/api/health](https://medcheck-api-fptv.onrender.com/api/health)
+
 MEDCHECK is a clinical safety intelligence platform designed to evaluate multidimensional pharmacology across drug-drug interactions, side effect compounding, food administration timings, and gastrointestinal mucosal stress. It combines a deterministic, evidence-cited rule engine with live OpenFDA label data and safe fallback modes.
 
 ---
@@ -9,11 +15,11 @@ MEDCHECK is a clinical safety intelligence platform designed to evaluate multidi
 - **Drug Interaction Matrix**: Pairwise pharmacokinetic and pharmacodynamic analysis with high-contrast, severity-coded clinical cards backed by a **foundational set of 17 high-risk, evidence-cited interaction rules** (citing FDA Black Box, CHEST, and KDIGO guidelines) with live OpenFDA label cross-referencing.
 - **Side Effect Radar**: Frequency-ranked adverse reaction profiles (`>10%`, `1-10%`, `0.1-1%`, `<0.1%`) with multi-drug compounding risk detection (Bleeding, Sedation, Hypotension, Hyperkalemia, Hepatic strain).
 - **Food Conflict Timeline**: Dynamic 24-hour chronological daily dosing schedule surfacing meal buffers, dairy spacing, and grapefruit/alcohol contraindications with configurable patient wake times.
-- **Stomach Guardian Score**: Heuristic gastrointestinal mucosal stress metric (0–100) factoring in NSAID gastric load (+25 multi-NSAID penalty), anticoagulant bleeding hazards (+30 synergy), and PPI protective mitigation (-20 credit). *(Educational heuristic based on established pharmacological mechanisms, not a clinically validated diagnostic device.)*
+- **Stomach Guardian Heuristic Score**: Heuristic gastrointestinal mucosal stress metric (0–100) factoring in NSAID gastric load (+25 multi-NSAID penalty), anticoagulant bleeding hazards (+30 synergy), and PPI protective mitigation (-20 credit). *(Educational heuristic based on established pharmacological mechanisms, not a diagnostic device.)*
 - **Contextual Medicine Profile**: 5-tab deep dive with prescribing indications, equivalent brand names, and personal administration notes.
 - **Doctor's Safety Summary**: Instant clipboard export (Markdown) and printable clinical brief formatted for primary care provider visits.
-- **Deterministic Rule Engine**: Evidence-cited deterministic evaluation for known high-risk medication pairs with defensive fallback handling and constrained AI label extraction.
-- **Clinical Authentication**: Instant anonymous Guest sessions alongside registered Doctor/Pharmacist user accounts.
+- **Deterministic Rule Engine**: Evidence-cited deterministic evaluation for known high-risk medication pairs with defensive fallback handling.
+- **Session Management**: Registered accounts & guest sessions.
 
 ---
 
@@ -21,7 +27,7 @@ MEDCHECK is a clinical safety intelligence platform designed to evaluate multidi
 
 MEDCHECK is currently optimized for **generic active pharmaceutical ingredients** (e.g. Paracetamol, Warfarin, Aspirin, Ibuprofen, Atorvastatin, Metformin, Pantoprazole) and **80+ curated international & Indian brand aliases** (`Dolo 650`, `Crocin`, `Pan 40`, `Ecosprin`, `Combiflam`, `Azithral`, `Volini`, `Gemer`, `Shelcal`, `Meftal Spas`, etc.) with automated dosage suffix normalization (`Dolo 650mg` → `paracetamol`).
 
-- **Deterministic Core**: Evaluates evidence-cited high-risk rules and curated drug profiles without hallucination.
+- **Deterministic Core**: Evaluates evidence-cited high-risk rules and curated drug profiles (no generative AI in the clinical decision path).
 - **Live Dynamic Fallback**: Queries the US OpenFDA drug label database for generic monographs.
 - **Safe Unknown Fallback**: Refuses to fake a safe profile for unverified compounds, returning an explicit cautionary banner and zero-score safety notice.
 - **Roadmap**: Full integration with Indian national/state formularies (CDSCO/Jan Aushadhi) and multi-ingredient fixed-dose combinations (FDCs).
@@ -36,7 +42,7 @@ MEDCHECK is currently optimized for **generic active pharmaceutical ingredients*
 - **Security & Auth**: JWT (HS256) + direct `bcrypt` hashing, delivered to browsers in an `httpOnly` `SameSite=Lax` session cookie (the `Authorization: Bearer` header is still accepted for non-browser callers)
 - **Database & Cache**: Local SQLite in WAL mode with TTL expiration + optional Supabase PostgreSQL sync
 - **Clinical Data**: OpenFDA Drug Label API + Curated Deterministic Pharmacology Rules (17 foundational pairs)
-- **AI Processing**: Mistral AI (Optional auxiliary fallback for unstructured FDA label extraction; core clinical logic is 100% deterministic)
+- **Clinical Engine**: Deterministic clinical engine; core pharmacological rules and OpenFDA label parsing operate with no generative AI in the clinical decision path.
 - **Containerization**: Multi-stage Docker & Docker Compose
 
 ---
@@ -137,20 +143,20 @@ cp .env.example .env
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/api/check` | Analyze multi-drug interactions, GI load, and side effects |
-| `GET` | `/api/medicine/{name}/profile` | Retrieve comprehensive clinical profile for a medicine |
+| `GET` | `/api/medicine/{name}/profile` | Retrieve curated clinical profile for a medicine |
 | `GET` | `/api/medicines/search?q={query}` | Search indexed medications and brand aliases |
 
 ### Telemetry & Health
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/health` | Health check endpoint reporting cache, auth, and AI status |
+| `GET` | `/api/health` | Health check endpoint reporting database, cache, and clinical KB version |
 | `POST` | `/api/client-error` | Telemetry endpoint for logging frontend UI exceptions |
 
 ---
 
 ## 🧪 Testing
 
-Run the full automated backend test suite (**45 tests** across auth, password policy, endpoint contracts, validation, circuit breakers, cache TTL, and clinical pharmacology) from the repository root:
+Run the full automated backend test suite (**60 tests** across auth, password policy, endpoint contracts, validation, circuit breakers, cache TTL, and clinical pharmacology) from the repository root:
 
 ```bash
 backend/venv/bin/pytest backend/tests/ -v

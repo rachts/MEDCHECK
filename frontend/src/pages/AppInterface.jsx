@@ -125,9 +125,22 @@ export function AppInterface() {
                 <h2 className="font-serif text-[18px] font-bold text-[var(--text-primary)] leading-tight">
                   {results.summary || 'Safety scan completed.'}
                 </h2>
-                <p className="text-xs text-[var(--text-muted)] font-sans">
-                  {medicines.length} medications analyzed • {results.analyzed_pairs_count} pair combinations checked
-                </p>
+                <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                  <p className="text-xs text-[var(--text-muted)] font-sans">
+                    {medicines.length} medications analyzed • {results.analyzed_pairs_count} pair combinations checked
+                  </p>
+                  {results.analysis_coverage && (
+                    <span className={`tag text-[11px] font-sans ${
+                      results.analysis_coverage === 'full'
+                        ? 'tag-success'
+                        : results.analysis_coverage === 'partial'
+                        ? 'tag-warning'
+                        : 'text-slate-600 bg-slate-100 border-slate-300'
+                    }`}>
+                      Analysis covers {results.verified_medicines_count ?? (medicines.length - limitedDataWarnings.length)} of {results.total_medicines_count ?? medicines.length} medicines
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -228,6 +241,38 @@ export function AppInterface() {
                     medicinesCount={medicines.length}
                     limitedDataWarnings={limitedDataWarnings}
                   />
+                )}
+
+                {/* Incomplete / Partial Analysis State (no interactions detected, but safe is false due to unverified drugs) */}
+                {results && !isSafe && interactions.length === 0 && medicines.length >= 2 && (
+                  <div className="card flex flex-col gap-3 border-l-4 border-amber-500">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-[6px] flex items-center justify-center bg-amber-50 text-amber-600 border border-amber-200">
+                        <AlertTriangle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="badge badge-moderate">
+                          PARTIAL SCAN — CANNOT GUARANTEE SAFETY
+                        </div>
+                        <h3 className="text-base font-semibold text-[var(--text-primary)] tracking-tight mt-0.5">
+                          Unverified medicines detected in regimen
+                        </h3>
+                      </div>
+                    </div>
+                    <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                      While no known interactions were detected among verified compounds, your basket contains unverified medicine(s) with limited pharmacological data. Consequently, full regimen safety cannot be certified.
+                    </p>
+                    {limitedDataWarnings.length > 0 && (
+                      <ul className="space-y-1.5 text-xs text-[var(--text-secondary)] bg-amber-50/50 p-3 rounded-[6px] border border-amber-200/50">
+                        {limitedDataWarnings.map((warning, idx) => (
+                          <li key={idx} className="flex items-start gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+                            <span>{warning}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
               </>
             )}
