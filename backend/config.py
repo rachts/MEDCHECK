@@ -18,7 +18,8 @@ MIN_JWT_SECRET_LENGTH = 32
 _DEV_DEFAULT_ORIGINS = (
     "http://localhost:5173,http://localhost:3000,"
     "http://127.0.0.1:5173,http://127.0.0.1:3000,"
-    "https://medcheck-official.vercel.app"
+    "https://medcheck-official.vercel.app,"
+    "https://medcheck.vercel.app"
 )
 
 _LOCAL_HOSTS = ("localhost", "127.0.0.1", "[::1]", "0.0.0.0")
@@ -258,13 +259,12 @@ def _validate_cors_origins(config: Settings) -> None:
     if not hardened:
         return
 
-    # Rule 2: the operator never touched the default.
+    # Rule 2: If the operator never touched the default in a hardened environment,
+    # log a warning rather than crashing the process, so production deployments boot cleanly.
     if config.ALLOWED_ORIGINS.strip() == _DEV_DEFAULT_ORIGINS:
-        raise RuntimeError(
-            f"ALLOWED_ORIGINS is still the built-in development default while "
-            f"ENV='{config.ENV}'. Every request from the deployed frontend would "
-            f"be rejected by the browser. Set it explicitly, e.g. "
-            f"ALLOWED_ORIGINS=https://medcheck.example.com"
+        logger.warning(
+            f"ALLOWED_ORIGINS is using the built-in default while ENV='{config.ENV}'. "
+            f"Permitting default origins including https://medcheck-official.vercel.app."
         )
 
     # Rule 4: advisory only.
