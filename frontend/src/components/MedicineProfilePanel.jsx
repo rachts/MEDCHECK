@@ -491,7 +491,7 @@ function MedicineProfilePanelBase({ onCloseMobile }) {
                 Gastric Erosion Mechanism
               </span>
               <p className="text-xs text-[#2d2b26] leading-relaxed">
-                {giProfile?.mechanism || 'No severe direct gastric mucosal erosion reported for this active ingredient.'}
+                {giProfile?.mechanism || 'No severe direct stomach irritation reported for this active ingredient.'}
               </p>
             </div>
 

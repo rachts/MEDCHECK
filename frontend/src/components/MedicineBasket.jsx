@@ -454,7 +454,7 @@ export function MedicineBasket({ onSeeTimeline }) {
             className="bg-[#f8f6f0] border border-[#b7b09d] hover:border-[#1a1a18] p-3.5 flex flex-col gap-2.5 transition-colors cursor-pointer"
             role="button"
             tabIndex={0}
-            aria-label={hasResults ? `Stomach Guardian GI Risk Heuristic: ${giScore} out of 100, Tier: ${giTier}. Open the full breakdown.` : 'Stomach Guardian GI Risk Heuristic: Not analyzed yet.'}
+            aria-label={hasResults ? `Stomach Guardian stomach risk score: ${giScore} out of 100, Tier: ${giTier}. Open the full breakdown.` : 'Stomach Guardian stomach risk score: Not analyzed yet.'}
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
@@ -462,7 +462,7 @@ export function MedicineBasket({ onSeeTimeline }) {
                 <span className="font-newsreader text-[16px] font-semibold text-[#1a1a18]">
                   Stomach Guardian
                 </span>
-                <span className="ed-tag text-[9px] px-1.5 py-0.5">Heuristic</span>
+                <span className="ed-tag text-[9px] px-1.5 py-0.5">Our score</span>
               </div>
 
               <div className="flex items-center gap-1.5 shrink-0">
@@ -503,7 +503,7 @@ export function MedicineBasket({ onSeeTimeline }) {
             </div>
 
             <div className="flex items-center justify-between text-xs text-[#57534a]">
-              <span className="font-ibm-serif">Cumulative mucosal load</span>
+              <span className="font-ibm-serif">Combined stomach stress</span>
               <span className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#8b2500] font-medium inline-flex items-center gap-1 hover:underline underline-offset-4">
                 <span>Inspect</span>
                 <ArrowRightIcon size={12} />

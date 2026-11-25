@@ -24,7 +24,7 @@ export function LoadingState() {
       </p>
 
       <p className="text-xs text-[#57534a] font-ibm-serif leading-relaxed">
-        Running deterministic clinical pharmacology rules, GI mucosal analysis, and 24-hour food cadence.
+        Running the clinical safety rules, stomach stress checks, and 24-hour food timing.
       </p>
     </section>
   );

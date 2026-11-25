@@ -79,7 +79,7 @@ function InteractionNetworkGraphBase() {
               Interaction Network Web
             </h3>
             <p className="font-ibm-mono text-[10px] uppercase tracking-[0.06em] text-[#57534a] mt-0.5">
-              Topology map · Click any node to open profile
+              Interaction map · Click any node to open profile
             </p>
           </div>
         </div>
@@ -94,7 +94,7 @@ function InteractionNetworkGraphBase() {
 
       {/* Square Flat SVG Canvas */}
       <div className="w-full max-w-[580px] h-[280px] relative bg-[#f8f6f0] border border-[#d5cfc0]">
-        <svg className="w-full h-full" viewBox="0 0 580 280" role="img" aria-label="Medicine interaction topology map">
+        <svg className="w-full h-full" viewBox="0 0 580 280" role="img" aria-label="Medicine interaction map">
           {/* Connecting Interaction Links */}
           {links.map((link) => (
             <line

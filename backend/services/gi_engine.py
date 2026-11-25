@@ -43,7 +43,7 @@ def calculate_composite_gi_score(
     profiles: Dict[str, MedicineProfileResponse]
 ) -> Tuple[int, str, List[Dict[str, Any]], List[str]]:
     """
-    Calculates the Stomach Guardian Composite GI Score (0-100) based on cumulative mucosal load,
+    Calculates the Stomach Guardian Composite GI Score (0-100) based on combined stomach stress,
     multi-NSAID compounding penalties, Anticoagulant + NSAID synergy, and PPI protection credits.
 
     Excludes unverified/fallback drugs (data_source == 'unknown_fallback' or tier == 'unknown')
@@ -89,9 +89,9 @@ def calculate_composite_gi_score(
                 "score_impact": med_score,
                 "tier": med_tier,
                 "mechanism_short": (
-                    "Direct mucosal erosion & COX inhibition" if med_score > 60
+                    "Direct stomach lining damage & COX inhibition" if med_score > 60
                     else "Metabolic / Mild GI burden" if med_score > 30
-                    else "Gentle mucosal profile"
+                    else "Gentle on the stomach"
                 )
             })
 
@@ -135,7 +135,7 @@ def calculate_composite_gi_score(
             "drug": "Anticoagulant + NSAID Synergistic Bleeding Hazard",
             "score_impact": 30,
             "tier": "high",
-            "mechanism_short": "Synergistic breakdown of coagulation and gastric mucosal barrier multiplies major upper GI bleeding events 3-5x"
+            "mechanism_short": "Breakdown of clotting and the stomach lining's defences multiplies major upper stomach bleeding events 3 to 5 times"
         })
 
     # PPI Protective Mitigation Credit (-20 pts)
@@ -145,7 +145,7 @@ def calculate_composite_gi_score(
             "drug": "PPI Gastro-Protection Credit",
             "score_impact": -20,
             "tier": "gentle",
-            "mechanism_short": "Proton pump inhibition reduces gastric acid, mitigating mucosal erosion"
+            "mechanism_short": "Stomach acid reduction lowers stomach lining damage"
         })
 
     composite_score = min(100, max(5, composite))
@@ -165,9 +165,9 @@ def calculate_composite_gi_score(
     if nsaid_count >= 2:
         recommendations.append("Dual NSAID regimen detected: discuss co-prescribing a gastroprotective agent (PPI) with your physician.")
     if ppi_present:
-        recommendations.append("Proton Pump Inhibitor (PPI) detected: provides mucosal gastro-protection.")
+        recommendations.append("A stomach protector (PPI) is in your list: it lowers stomach acid and helps protect the stomach lining.")
     if any("alcohol" in expand_aliases(m) for m in medicines):
-        recommendations.append("Avoid alcoholic beverages, which exponentially increase gastric mucosal bleeding risk.")
+        recommendations.append("Avoid alcohol, which greatly increases the risk of stomach bleeding.")
     if has_unknown_drug:
         recommendations.append("Note: Regimen contains unverified compound(s). GI risk score reflects verified medications only.")
     if not recommendations:
@@ -184,7 +184,7 @@ def detect_side_effect_amplifications(
     - Bleeding & Hemorrhage
     - Sedation & CNS Depression
     - Hypotension & Dizziness
-    - Gastrointestinal Mucosal Stress
+    - Combined stomach stress
     - Hyperkalemia (Potassium Elevation)
     - Hepatic Strain & Transaminase Elevation
     """
@@ -255,7 +255,7 @@ def detect_side_effect_amplifications(
 
     if len(gi_sources) >= 2:
         amplified_list.append(AmplifiedSideEffect(
-            effect="Compounded Gastrointestinal Mucosal Stress",
+            effect="Combined stomach stress",
             sources=gi_sources,
             severity="moderate",
             amplified=True,

@@ -36,7 +36,7 @@ const BRIEF_LEDGER_ITEMS = [
   {
     num: '04',
     title: 'Severity and Stomach Guardian',
-    desc: 'Pairwise conflicts ranked alongside cumulative mucosal stress on a 0 to 100 heuristic scale.',
+    desc: 'Pairwise conflicts ranked alongside a combined stomach stress score from 0 to 100.',
     Icon: ShieldCrossIcon,
   },
   {
@@ -69,7 +69,7 @@ const WORKED_CASE_ROWS = [
     severityLabel: 'Caution',
     severityClass: 'sev-caut',
     mechanism:
-      'Ibuprofen reversibly binds the platelet COX-1 catalytic channel and blocks low-dose aspirin from acetylating Serine 529, diminishing cardioprotection while adding mucosal irritation.',
+      'Ibuprofen reversibly binds the platelet COX-1 catalytic channel and blocks low-dose aspirin from acetylating Serine 529, diminishing cardioprotection while adding stomach irritation.',
     citation: 'OpenFDA Aspirin Drug Interactions; FDA Drug Safety Communication; Circulation Journal',
   },
 ];
@@ -101,7 +101,7 @@ const CHECKER_CAPABILITIES = [
     docketTitle: 'Pairwise drug-drug evaluation',
     rows: [
       { field: 'Warfarin + Aspirin', value: 'Critical: dual anticoagulant and antiplatelet bleeding hazard' },
-      { field: 'Warfarin + Ibuprofen', value: 'Critical: CYP2C9 inhibition, protein displacement, mucosal injury' },
+      { field: 'Warfarin + Ibuprofen', value: 'Critical: CYP2C9 inhibition, protein displacement, stomach lining injury' },
       { field: 'Aspirin + Ibuprofen', value: 'Caution: competitive COX-1 blockade and additive irritation' },
       { field: 'Duplicate guard', value: 'Detects shared active ingredients across distinct brands' },
     ],
@@ -128,16 +128,16 @@ const CHECKER_CAPABILITIES = [
     num: '04',
     name: 'Stomach',
     Icon: ShieldIcon,
-    desc: 'Computes the Stomach Guardian heuristic score from 0 to 100 across verified drugs, adding penalties for multi-NSAID and anticoagulant stacks.',
+    desc: 'Computes the Stomach Guardian stomach stress score from 0 to 100 across verified drugs, adding penalties for multi-NSAID and anticoagulant stacks.',
     docketCode: 'DOCKET 04 / STOMACH GUARDIAN',
-    docketTitle: 'Composite mucosal stress calculation',
+    docketTitle: 'How the stomach stress score is worked out',
     rows: [
       { field: 'Base profiles', value: 'Warfarin 50, Aspirin 75, Ibuprofen 85 (mean baseline 70)' },
       { field: 'Dual NSAID penalty', value: '+25 points for simultaneous COX-1 prostaglandin inhibition' },
       { field: 'Bleed synergy', value: '+30 points when anticoagulants and NSAIDs co-occur' },
       { field: 'PPI credit', value: '-20 points when a proton pump inhibitor is present (capped 5 to 100)' },
     ],
-    footerNote: 'Case file composite outcome: 100 / 100 (High mucosal stress).',
+    footerNote: 'Case file combined outcome: 100 / 100 (High stomach stress).',
   },
   {
     id: 'schedule',
@@ -434,7 +434,7 @@ export function Landing() {
 
               <p className="ed-lede">
                 MEDCHECK evaluates your regimen against OpenFDA prescribing labels and curated clinical rules to surface
-                drug interactions, side-effect compounding, food and timing conflicts, and Stomach Guardian mucosal risk.
+                drug interactions, side-effect compounding, food and timing conflicts, and Stomach Guardian stomach risk.
                 Enter prescription drugs, over-the-counter medicines, or common brands to review every pair before you
                 take them together.
               </p>
@@ -651,17 +651,22 @@ export function Landing() {
                     <td className="ed-docket-pair">Stomach Guardian outcome</td>
                     <td className="sev-crit">High · 100 / 100</td>
                     <td>
-                      Individual mucosal stress baselines (Warfarin 50, Aspirin 75, Ibuprofen 85; mean 70) receive a
-                      dual-NSAID COX-1 penalty (+25) and an anticoagulant-NSAID bleeding synergy penalty (+30), clamped
-                      at 100.
+                      Each medicine starts with a stomach stress score of its own (Warfarin 50, Aspirin 75, Ibuprofen 85;
+                      average 70). Two NSAID painkillers together add +25, and a blood thinner taken with an NSAID adds
+                      +30 for bleeding risk. The total is capped at 100.
                     </td>
                     <td className="ed-docket-cite">
-                      Stomach Guardian Heuristic GI Engine; OpenFDA GI bleeding and ulceration label profiles
+                      MEDCHECK Stomach Guardian scoring rules; OpenFDA label warnings on stomach bleeding and ulcers
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
+
+            <p className="ed-docket-cite" style={{ marginTop: '12px', marginBottom: 0 }}>
+              The Stomach Guardian score is MEDCHECK&apos;s own way of adding up stomach risk from the warnings on each
+              medicine&apos;s label. It is not a clinical standard or a medical measurement.
+            </p>
 
             <div className="ed-docket-action">
               <button type="button" className="ed-text-link" onClick={handleRunExampleCase}>

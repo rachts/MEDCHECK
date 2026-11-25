@@ -283,7 +283,7 @@ function MedicineDocket({ entry }) {
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="inline-flex items-center gap-1.5 font-ibm-mono text-[10px] uppercase tracking-[0.07em] text-[#1a1a18] font-medium">
                 <ShieldIcon size={13} />
-                <span>Stomach Guardian Mucosal Risk</span>
+                <span>Stomach Guardian Stomach Risk</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-newsreader text-base font-semibold tabular-nums text-[#1a1a18]">

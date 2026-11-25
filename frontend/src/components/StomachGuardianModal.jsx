@@ -38,7 +38,7 @@ export function StomachGuardianModal() {
     tierLabel = 'High Gastrointestinal Burden';
   } else if (giScore > 30) {
     scoreColor = '#8a5300';
-    tierLabel = 'Moderate Mucosal Irritation Risk';
+    tierLabel = 'Moderate Stomach Irritation Risk';
   }
 
   return (
@@ -71,7 +71,7 @@ export function StomachGuardianModal() {
                 Stomach Guardian Score Breakdown
               </h2>
               <p id="stomach-modal-subtitle" className="font-ibm-mono text-[10px] uppercase tracking-[0.07em] text-[#57534a] mt-0.5">
-                Heuristic Gastrointestinal &amp; Mucosal Stress Indicator
+                Your stomach stress score, explained
               </p>
             </div>
           </div>
@@ -95,16 +95,16 @@ export function StomachGuardianModal() {
                 Run an analysis to see your score
               </h3>
               <p className="text-xs text-[#57534a] max-w-sm font-ibm-serif leading-relaxed">
-                Add medicines to your basket and run a safety analysis to calculate your personalized gastric mucosal risk score.
+                Add medicines to your basket and run a safety analysis to calculate your stomach risk score.
               </p>
             </div>
           ) : (
             <>
-              {/* Clinical Heuristic Indicator Banner */}
+              {/* Plain-language score notice */}
               <div className="p-3.5 bg-[#f0ede1] border border-[#b7b09d] text-xs text-[#2d2b26] leading-relaxed flex items-start gap-2.5">
                 <InfoIcon size={15} className="text-[#1a1a18] mt-0.5 shrink-0" />
                 <p>
-                  <strong className="font-semibold text-[#1a1a18]">Educational Heuristic:</strong> This 0 to 100 score approximates cumulative mucosal stress based on established pharmacological mechanisms (e.g. dual COX-1 inhibition, anticoagulant synergy, and PPI mitigation). It is designed to guide pharmacist consultation, not replace diagnostic evaluation.
+                  <strong className="font-semibold text-[#1a1a18]">Our own score:</strong> This 0 to 100 score is MEDCHECK&apos;s own way of adding up stomach stress from how your medicines work (for example, two COX-1 painkillers together, a blood thinner adding bleeding risk, or a stomach protector lowering the risk). It is not a clinical standard or a medical measurement. Use it as a starting point for a talk with your pharmacist, not as a diagnosis.
                 </p>
               </div>
 
@@ -169,7 +169,7 @@ export function StomachGuardianModal() {
                           </div>
                           <div>
                             <span className="font-newsreader font-semibold text-[16px] text-[#1a1a18]">{c.drug}</span>
-                            <span className="text-xs text-[#57534a] block capitalize">{c.mechanism_short || 'Mucosal stress'}</span>
+                            <span className="text-xs text-[#57534a] block capitalize">{c.mechanism_short || 'Stomach stress'}</span>
                           </div>
                         </div>
 
