@@ -364,3 +364,8 @@ Pods/
 pitch-deck/
 demo-videos/
 screenshots/
+# Working documents (kept locally, not part of the repo)
+*_PROMPT.md
+design.md
+landing-design.html
+LANDING_REDESIGN_PROMPT_V2.md
