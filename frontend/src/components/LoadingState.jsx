@@ -1,32 +1,32 @@
 import React from 'react';
-import { Shield } from 'lucide-react';
+import { ShieldCrossIcon } from '../pages/landing-icons';
 import { useMedicine } from '../context/MedicineContext';
 
 export function LoadingState() {
   const { loadingStage } = useMedicine();
 
   return (
-    <section className="card flex flex-col items-center justify-center gap-4 text-center py-8">
-      <div className="w-10 h-10 rounded-[6px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center animate-pulse">
-        <Shield className="w-5 h-5" />
-      </div>
-
-      <div className="space-y-1 max-w-sm">
-        <div className="badge badge-info">
-          CLINICAL SCAN IN PROGRESS
+    <section
+      className="ed-sheet p-6 flex flex-col gap-3"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#d5cfc0]">
+        <div className="inline-flex items-center gap-2 font-ibm-mono text-xs uppercase tracking-[0.09em] text-[#8b2500] font-medium">
+          <ShieldCrossIcon size={15} />
+          <span>CLINICAL SCAN IN PROGRESS</span>
         </div>
-        <h3 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">
-          {loadingStage || 'Analyzing Drug Interactions...'}
-        </h3>
-        <p className="text-xs text-[var(--text-muted)]">
-          Evaluating pairwise kinetics, Stomach Guardian score, and 24-hour food schedule.
-        </p>
+        <span className="ed-tag ed-tag-ink">CHECKING THE LABELS</span>
       </div>
 
-      {/* Progress Bar Animation */}
-      <div className="w-full max-w-xs h-1.5 bg-[var(--bg-elevated)] rounded-full overflow-hidden border border-[var(--border-default)]">
-        <div className="h-full bg-[var(--accent)] rounded-full animate-pulse w-3/4" />
-      </div>
+      <p className="font-newsreader text-lg font-medium text-[#1a1a18]">
+        {loadingStage || 'Evaluating medication safety...'}
+      </p>
+
+      <p className="text-xs text-[#57534a] font-ibm-serif leading-relaxed">
+        Running deterministic clinical pharmacology rules, GI mucosal analysis, and 24-hour food cadence.
+      </p>
     </section>
   );
 }
+export default LoadingState;

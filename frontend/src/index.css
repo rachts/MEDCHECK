@@ -4,40 +4,56 @@
 
 @layer base {
   :root {
-    /* === TYPOGRAPHY === */
-    --font-serif: 'Cormorant Garamond', 'Source Serif Pro', 'Georgia', serif;
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    /* === TYPOGRAPHY (Solhaus: Fraunces serif display + DM Sans UI/body) === */
+    --font-fraunces: 'Fraunces', Georgia, serif;
+    --font-dm-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-serif: var(--font-fraunces);
+    --font-sans: var(--font-dm-sans);
+    --font-mono: var(--font-dm-sans);
 
-    /* === BACKGROUNDS === */
-    --bg-base:        #F1F5F9;   /* Very light cool grey. Page background. */
-    --bg-surface:     #FFFFFF;   /* Pure white. Cards, panels, modals. */
-    --bg-elevated:    #F8FAFC;   /* Slightly darker. Hover states, inner panels. */
-    --bg-input:       #F8FAFC;   /* Form fields. */
+    /* === SOLHAUS PALETTE === */
+    --color-cream:        #FAF8F5;   /* Canvas: default section background */
+    --color-cream-warm:   #F4EEE6;   /* Warm Cream: alt bands, card surface */
+    --color-muted:        #F0EBE6;   /* Linen: quiet inset surfaces */
+    --color-border:       #E0D9D1;   /* Sand: hairline borders, dividers */
+    --color-input:        #E7E0DA;   /* Putty: input border */
+    --color-taupe:        #67574C;   /* Taupe: body text, secondary copy */
+    --color-charcoal:     #2B2B2B;   /* Charcoal: headings, footer band */
+    --color-rust:         #C06230;   /* Single accent: CTAs, eyebrows, active */
+    --color-rust-deep:    #A04E22;   /* Accent hover */
+    --color-brown:        #864923;   /* Umber: dark hero substrate */
+    --color-brown-deep:   #864923;
+    --color-blush:        #DFB69F;
+    --color-terracotta:   #D17847;
+    --color-cocoa:        #7A4C2A;
+    --color-destructive:  #C32222;
 
-    /* === BORDERS === */
-    --border-default: #E2E8F0;   /* Card borders. Visible but soft. */
-    --border-hover:   #CBD5E1;   /* Interactive hover. */
-    --border-alert:   #FECACA;   /* Alert banner borders. */
+    /* === SEMANTIC MAPPINGS === */
+    --bg-base:            #FAF8F5;   /* Cream page canvas */
+    --bg-surface:         #F4EEE6;   /* Warm cream card/panel surface */
+    --bg-elevated:        #F0EBE6;   /* Linen inner panels / hover */
+    --bg-input:           #FAF8F5;   /* Cream input field background */
 
-    /* === TEXT === */
-    --text-primary:   #0F172A;   /* Near-black. Headlines, medicine names. */
-    --text-secondary: #475569;   /* Body text. */
-    --text-muted:     #64748B;   /* Labels, meta, timestamps. */
-    --text-inverse:   #FFFFFF;   /* Text on dark buttons. */
+    --border-default:     #E0D9D1;   /* Sand hairline */
+    --border-hover:       #C06230;   /* Rust interactive accent */
+    --border-alert:       #FECACA;   /* Functional alert border */
 
-    /* === ACCENT === */
-    --accent:         #0F172A;   /* Near-black buttons. Medical, authoritative. */
-    --accent-hover:   #1E293B;   /* Slightly lighter black. */
-    --accent-muted:   rgba(15, 23, 42, 0.06); /* Subtle backgrounds. */
+    --text-primary:       #2B2B2B;   /* Charcoal: headlines, medicine names */
+    --text-secondary:     #67574C;   /* Taupe: body copy */
+    --text-muted:         #67574C;   /* Taupe: labels, meta */
+    --text-inverse:       #FAF8F5;   /* Cream: text on dark slabs */
 
-    /* === SEVERITY === */
-    --severity-high:     #DC2626;   /* True red. Unmissable on white. */
-    --severity-moderate: #D97706;   /* Amber. */
-    --severity-low:      #059669;   /* Emerald. */
-    --severity-info:     #0284C7;   /* Sky-600. */
+    --accent:             #C06230;   /* Rust */
+    --accent-hover:       #A04E22;   /* Deep Rust */
+    --accent-muted:       rgba(192, 98, 48, 0.1);
 
-    /* === ALERT BACKGROUNDS === */
+    /* === SEVERITY (Functional clinical safety — preserved) === */
+    --severity-high:      #DC2626;
+    --severity-moderate:  #D97706;
+    --severity-low:       #059669;
+    --severity-info:      #0284C7;
+
+    /* Alert banner backgrounds */
     --alert-danger-bg:      #FEF2F2;
     --alert-danger-border:  #FECACA;
     --alert-danger-text:    #991B1B;
@@ -48,7 +64,7 @@
     --alert-success-border: #BBF7D0;
     --alert-success-text:   #065F46;
 
-    /* === SPACING === */
+    /* Spacing units */
     --space-1: 4px;
     --space-2: 8px;
     --space-3: 12px;
@@ -58,30 +74,34 @@
     --space-8: 32px;
     --space-10: 40px;
 
-    /* === RADII === */
-    --radius-sm: 4px;
-    --radius-md: 6px;
-    --radius-lg: 8px;
-    --radius-xl: 12px;
+    /* Radii — 0px everywhere (Solhaus square geometry) */
+    --radius-none: 0px;
+    --radius-sm: 0px;
+    --radius-md: 0px;
+    --radius-lg: 0px;
+    --radius-xl: 0px;
+
+    /* Shadows — warm-tinted only */
+    --shadow-soft: 0 10px 40px -15px rgba(122, 76, 42, 0.15);
+    --shadow-warm: 0 20px 60px -20px rgba(192, 98, 48, 0.25);
   }
 
   body {
     background-color: var(--bg-base);
     color: var(--text-secondary);
-    font-family: var(--font-sans);
-    font-size: 13px;
-    line-height: 1.6;
+    font-family: var(--font-dm-sans);
+    font-size: 16px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
   }
 
-  @media (max-width: 767px) {
-    body {
-      font-size: 14px;
-    }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
-  /* Custom Clean Scrollbar */
+  /* Custom Warm Scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -90,171 +110,106 @@
     background: var(--bg-base);
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--border-hover);
-    border-radius: var(--radius-sm);
+    background: var(--border-default);
+    border-radius: 0px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
+    background: var(--color-taupe);
   }
 }
 
 /* ==========================================================================
-   MEDCHECK DESIGN SYSTEM V2.0 TYPE SCALE
+   MEDCHECK SOLHAUS DESIGN SYSTEM TYPE SCALE
    ========================================================================== */
 
 /* Display — Hero headlines, landing page */
 .text-display { 
-  font-family: var(--font-serif); 
+  font-family: var(--font-fraunces); 
   font-size: 48px; 
-  font-weight: 700; 
-  letter-spacing: -0.02em; 
-  line-height: 1.1; 
+  font-weight: 400; 
+  letter-spacing: 0; 
+  line-height: 1.05; 
 }
-@media (max-width: 1023px) { .text-display { font-size: 40px; } }
-@media (max-width: 767px)  { .text-display { font-size: 32px; } }
+@media (min-width: 768px) { .text-display { font-size: 60px; } }
+@media (min-width: 1024px) { .text-display { font-size: 72px; } }
 
 /* H1 — Page titles */
 .text-h1 { 
-  font-family: var(--font-serif); 
-  font-size: 32px; 
-  font-weight: 700; 
-  letter-spacing: -0.01em; 
-  line-height: 1.2; 
+  font-family: var(--font-fraunces); 
+  font-size: 36px; 
+  font-weight: 400; 
+  letter-spacing: 0; 
+  line-height: 1.1; 
 }
-@media (max-width: 1023px) { .text-h1 { font-size: 28px; } }
-@media (max-width: 767px)  { .text-h1 { font-size: 24px; } }
+@media (min-width: 768px) { .text-h1 { font-size: 48px; } }
 
 /* H2 — Section headers */
 .text-h2 { 
-  font-family: var(--font-serif); 
+  font-family: var(--font-fraunces); 
   font-size: 24px; 
-  font-weight: 600; 
+  font-weight: 400; 
   letter-spacing: 0; 
-  line-height: 1.3; 
+  line-height: 1.2; 
 }
-@media (max-width: 1023px) { .text-h2 { font-size: 22px; } }
-@media (max-width: 767px)  { .text-h2 { font-size: 20px; } }
+@media (min-width: 768px) { .text-h2 { font-size: 30px; } }
 
 /* H3 — Card titles, panel headers */
 .text-h3 { 
-  font-family: var(--font-sans); 
-  font-size: 15px; 
-  font-weight: 700; 
-  letter-spacing: -0.01em; 
-  line-height: 1.4; 
-}
-@media (max-width: 767px) { .text-h3 { font-size: 14px; } }
-
-/* Body — Descriptions, explanations */
-.text-body { 
-  font-family: var(--font-sans); 
-  font-size: 13px; 
+  font-family: var(--font-fraunces); 
+  font-size: 18px; 
   font-weight: 400; 
   letter-spacing: 0; 
-  line-height: 1.6; 
+  line-height: 1.3; 
 }
-@media (max-width: 767px) { .text-body { font-size: 14px; } }
 
 /* Label — Uppercase tags, badges, meta */
 .text-label { 
-  font-family: var(--font-sans); 
-  font-size: 10px; 
-  font-weight: 800; 
-  letter-spacing: 1.5px; 
+  font-family: var(--font-dm-sans); 
+  font-size: 12px; 
+  font-weight: 500; 
+  letter-spacing: 0.2em; 
   text-transform: uppercase; 
+}
+
+/* Eyebrow — Section kickers */
+.eyebrow {
+  font-family: var(--font-dm-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--color-rust);
 }
 
 /* Metric — Numbers, scores, dosages */
 .text-metric { 
-  font-family: var(--font-mono); 
-  font-size: 22px; 
-  font-weight: 700; 
+  font-family: var(--font-fraunces); 
+  font-size: 24px; 
+  font-weight: 400; 
   font-variant-numeric: tabular-nums; 
-}
-@media (max-width: 1023px) { .text-metric { font-size: 20px; } }
-
-.metric {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ==========================================================================
    COMPONENT SPECIFICATIONS
    ========================================================================== */
 
-/* 1. Cards */
-.card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  padding: var(--space-5);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.card:hover {
-  border-color: var(--border-hover);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-@media (max-width: 767px) {
-  .card { 
-    padding: var(--space-4); 
-    border-radius: var(--radius-md); 
-  }
-}
-
-.card-elevated {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-}
-
-/*
- * Bare card background + border, with no padding, radius or shadow of its own.
- *
- * This class was referenced by ErrorBoundary.jsx and SkeletonCard.jsx (three call
- * sites) but only ever *defined* inside the `@media print` block at the bottom of
- * this file. On screen it therefore resolved to nothing: the error boundary's
- * fallback and every loading skeleton rendered with a transparent background,
- * showing the page behind them through the "card". It was invisible in review
- * precisely because printing looked correct.
- *
- * Deliberately minimal:
- *   - No padding or border-radius: all three call sites supply their own Tailwind
- *     utilities (`p-8 rounded-xl`, `p-5 rounded-xl`), and duplicating them here
- *     would make the class fight its own consumers.
- *   - No box-shadow: ErrorBoundary applies `shadow-xl`, and a shadow declared here
- *     would compete with it on specificity depending on layer order.
- *   - `--bg-surface`, matching `.card`, so a surface and a card sit at the same
- *     elevation.
- */
-.card-surface {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-}
-
-/* 2. Severity Badges */
+/* 2. Severity Badges (Functional dots preserved, square geometry) */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 800;
+  gap: 8px;
+  font-family: var(--font-dm-sans);
+  font-size: 11px;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.2em;
+  border-radius: 0px;
 }
 
 .badge::before {
   content: '';
   width: 6px;
   height: 6px;
-  border-radius: 50%;
   background: currentColor;
   flex-shrink: 0;
 }
@@ -264,99 +219,33 @@
 .badge-low      { color: var(--severity-low); }
 .badge-info     { color: var(--severity-info); }
 
-/* 3. Action Tags */
-.tag {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 3px 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-}
-
-.tag-danger {
-  background: var(--alert-danger-bg);
-  border-color: var(--alert-danger-border);
-  color: var(--alert-danger-text);
-}
-
-.tag-warning {
-  background: var(--alert-warning-bg);
-  border-color: var(--alert-warning-border);
-  color: var(--alert-warning-text);
-}
-
-.tag-success {
-  background: var(--alert-success-bg);
-  border-color: var(--alert-success-border);
-  color: var(--alert-success-text);
-}
-
-/* 4. Alert Banners */
-.alert-danger {
-  background: var(--alert-danger-bg);
-  border: 1px solid var(--alert-danger-border);
-  color: var(--alert-danger-text);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-}
-
-.alert-warning {
-  background: var(--alert-warning-bg);
-  border: 1px solid var(--alert-warning-border);
-  color: var(--alert-warning-text);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-}
-
-.alert-success {
-  background: var(--alert-success-bg);
-  border: 1px solid var(--alert-success-border);
-  color: var(--alert-success-text);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-}
-
 /* 5. Medicine Chips */
 .chip {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3);
-  background: var(--bg-input);
+  padding: 12px 16px;
+  background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  /* The 3px severity accent is applied inline by MedicineChip.jsx, which is the
-     only place that knows a given medicine's interaction severity and GI tier.
-     This declaration supplies the neutral baseline for chips rendered before an
-     analysis has run. It previously read `var(--severity-color, ...)`, a custom
-     property no code ever set -- misleading, since setting it would have had no
-     effect against the inline style that actually paints this border. */
   border-left: 3px solid var(--severity-low);
-  border-radius: var(--radius-md);
+  border-radius: 0px;
   cursor: pointer;
-  min-height: 48px; /* Touch target */
-  transition: background 0.15s ease, transform 0.1s ease;
+  min-height: 48px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
   animation: slideInLeft 0.18s ease-out forwards;
 }
 
 .chip:hover {
-  background: #F1F5F9;
-  border-color: var(--border-hover);
+  background: var(--color-muted);
+  border-color: var(--color-border);
 }
 
 .chip:active {
-  transform: scale(0.98);
+  transform: scale(0.99);
 }
 
 @media (max-width: 767px) {
-  .chip { padding: var(--space-3) var(--space-4); }
+  .chip { padding: 12px 16px; }
 }
 
 @keyframes slideInLeft {
@@ -364,85 +253,25 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 
-/* 6. Buttons */
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: 12px 20px;
-  background: var(--accent);
-  color: var(--text-inverse);
-  border: none;
-  border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  cursor: pointer;
-  min-height: 48px; /* Touch target */
-  transition: background 0.15s ease, transform 0.1s ease;
-}
-
-.btn-primary:hover {
-  background: var(--accent-hover);
-}
-
-.btn-primary:active {
-  transform: scale(0.98);
-}
-
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: 10px 16px;
-  background: var(--bg-surface);
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  min-height: 44px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.btn-secondary span {
-  color: var(--text-primary) !important;
-}
-
-.btn-secondary:hover {
-  border-color: var(--border-hover);
-  background: var(--bg-elevated);
-}
-
-/* Landing Subtitle High Contrast & Clean Typography */
+/* Landing Subtitle */
 .landing-subtitle {
-  font-family: var(--font-sans);
-  color: #334155 !important;
-  font-size: 15px;
-  line-height: 1.65;
-  letter-spacing: -0.01em;
-}
-@media (min-width: 640px) {
-  .landing-subtitle {
-    font-size: 17px;
-  }
+  font-family: var(--font-dm-sans);
+  color: var(--text-secondary) !important;
+  font-size: 18px;
+  line-height: 1.625;
+  letter-spacing: 0;
 }
 
 /* Mobile Sticky Button */
 @media (max-width: 767px) {
   .btn-sticky {
     position: fixed;
-    bottom: 74px; /* Above bottom nav */
+    bottom: 74px;
     left: 16px;
     right: 16px;
     z-index: 50;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-warm);
+    border-radius: 0px;
   }
 }
 
@@ -453,7 +282,8 @@
   left: 0;
   right: 0;
   height: 64px;
-  background: var(--bg-surface);
+  background: rgba(250, 248, 245, 0.96);
+  backdrop-filter: blur(8px);
   border-top: 1px solid var(--border-default);
   display: flex;
   justify-content: space-around;
@@ -466,11 +296,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   padding: 8px 16px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: var(--font-dm-sans);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   transition: color 0.15s ease;
   min-height: 48px;
   justify-content: center;
@@ -484,13 +317,13 @@
 .gi-score-bar {
   height: 6px;
   background: var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: 0px;
   overflow: hidden;
 }
 
 .gi-score-fill {
   height: 100%;
-  border-radius: var(--radius-sm);
+  border-radius: 0px;
   transition: width 0.25s ease;
 }
 
@@ -528,14 +361,26 @@
   }
 }
 
-/* 10. Print Stylesheet for Doctor's Report */
+.print-report {
+  display: none;
+}
+
+/* 10. Print Stylesheet for Doctor's Report (Hard Adaptation: functional print preserved) */
 @media print {
   body {
     background: #FFFFFF !important;
     color: #000000 !important;
   }
 
-  header, nav, .bottom-nav, .btn-sticky, button, .modal-backdrop {
+  .print-report {
+    display: block !important;
+  }
+
+  main, header, nav, footer, .bottom-nav, .btn-sticky, button, .modal-backdrop {
+    display: none !important;
+  }
+
+  #root {
     display: none !important;
   }
 
@@ -554,4 +399,3 @@
     display: none !important;
   }
 }
-

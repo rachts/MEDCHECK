@@ -89,6 +89,20 @@ def generate_food_conflicts_and_timeline(
     has_alcohol_risk_meds: List[str] = []
     has_dairy_calcium_block_meds: List[str] = []
 
+    from services.clinical_rules import resolve_canonical_name
+    from services.knowledge_base import get_fdc_info
+
+    def has_active_ingredient(med: str, target: str) -> bool:
+        canon = resolve_canonical_name(med).lower()
+        if canon == target or target in canon:
+            return True
+        if target in expand_aliases(med):
+            return True
+        fdc = get_fdc_info(med)
+        if fdc and target in fdc.get("ingredients", []):
+            return True
+        return False
+
     for med in medicines:
         profile = profiles.get(med)
         aliases = expand_aliases(med)
@@ -96,13 +110,17 @@ def generate_food_conflicts_and_timeline(
         if any(d in aliases for d in ["levothyroxine", "omeprazole", "esomeprazole", "pantoprazole", "alendronate", "ampicillin"]):
             has_empty_stomach_meds.append(med.capitalize())
 
-        if any(d in aliases for d in ["ibuprofen", "aspirin", "naproxen", "metformin", "augmentin", "amoxicillin/clavulanate", "prednisone"]):
+        if any(has_active_ingredient(med, d) for d in ["ibuprofen", "aspirin", "naproxen", "metformin", "augmentin", "amoxicillin/clavulanate", "prednisone"]):
             has_with_food_meds.append(med.capitalize())
 
-        if any(d in aliases for d in ["warfarin", "paracetamol", "metformin", "ibuprofen", "aspirin", "alprazolam", "diazepam"]):
-            has_alcohol_risk_meds.append(med.capitalize())
+        has_alc_warning = False
+        if profile and hasattr(profile, "food_interactions") and profile.food_interactions:
+            has_alc_warning = any(getattr(fi, "type", "") == "avoid_alcohol" for fi in profile.food_interactions)
+        if has_alc_warning or any(has_active_ingredient(med, d) for d in ["warfarin", "paracetamol", "metformin", "ibuprofen", "aspirin", "alprazolam", "diazepam", "metronidazole"]):
+            if med.capitalize() not in has_alcohol_risk_meds:
+                has_alcohol_risk_meds.append(med.capitalize())
 
-        if any(d in aliases for d in ["levothyroxine", "ciprofloxacin", "doxycycline"]):
+        if any(has_active_ingredient(med, d) for d in ["levothyroxine", "ciprofloxacin", "doxycycline"]):
             has_dairy_calcium_block_meds.append(med.capitalize())
 
     # Build Conflicts
@@ -117,6 +135,20 @@ def generate_food_conflicts_and_timeline(
                     recommended_schedule=f"Take {m_empty} 30-60 min before breakfast; take {m_food} with or immediately after the meal."
                 ))
 
+    # Levothyroxine + PPI spacing conflict (requires >=4 hours separation)
+    levo_meds = [m for m in medicines if has_active_ingredient(m, "levothyroxine")]
+    ppi_meds = [m for m in medicines if any(has_active_ingredient(m, p) for p in ["omeprazole", "esomeprazole", "pantoprazole", "rabeprazole", "lansoprazole", "dexlansoprazole"])]
+    if levo_meds and ppi_meds:
+        for lm in levo_meds:
+            for pm in ppi_meds:
+                conflicts.append(FoodConflictDetail(
+                    medicine_a=lm.capitalize(),
+                    medicine_b=pm.capitalize(),
+                    conflict_type="Gastric pH & Absorption Spacing",
+                    conflict=f"PPIs such as {pm.capitalize()} reduce gastric acidity, which significantly impedes optimal gastrointestinal absorption of {lm.capitalize()}.",
+                    recommended_schedule=f"Enforce at least 4 hours separation between taking {lm.capitalize()} (on an empty stomach) and {pm.capitalize()}."
+                ))
+
     if has_dairy_calcium_block_meds:
         for m_dairy in has_dairy_calcium_block_meds:
             conflicts.append(FoodConflictDetail(
@@ -126,6 +158,19 @@ def generate_food_conflicts_and_timeline(
                 conflict=f"Calcium and dairy products chelate {m_dairy} in the gastrointestinal tract, preventing systemic absorption.",
                 recommended_schedule=f"Space all milk, yogurt, and calcium/iron supplements by at least 4 hours from {m_dairy}."
             ))
+
+    # Grapefruit and Dairy Restriction Checks
+    has_grapefruit_meds = [
+        m for m in medicines 
+        if any(has_active_ingredient(m, d) for d in ["atorvastatin", "simvastatin", "lovastatin", "amlodipine", "nifedipine", "felodipine", "verapamil", "diltiazem"])
+        or (profiles.get(m) and any(getattr(fi, "type", "") == "avoid_grapefruit" for fi in getattr(profiles[m], "food_interactions", [])))
+    ]
+
+    has_dairy_restricted_meds = [
+        m for m in medicines
+        if any(has_active_ingredient(m, d) for d in ["ciprofloxacin", "levofloxacin", "doxycycline", "minocycline", "tetracycline"])
+        or (profiles.get(m) and any(getattr(fi, "type", "") == "avoid_dairy_2h" for fi in getattr(profiles[m], "food_interactions", [])))
+    ]
 
     # Dynamic Time Offsets from Patient Wake Time
     time_fast = _offset_time_str(wake_anchor, 0.0)      # e.g. 7:00 AM (Fast)
@@ -146,7 +191,7 @@ def generate_food_conflicts_and_timeline(
         ))
 
     # 2. Breakfast & Morning Food Meds
-    morning_food_meds = [m for m in has_with_food_meds if m not in ["Metformin"]]
+    morning_food_meds = [m for m in has_with_food_meds if not has_active_ingredient(m, "metformin")]
     timeline.append(TimelineSlot(
         time=time_breakfast,
         title="Breakfast Meal Window",
@@ -156,7 +201,19 @@ def generate_food_conflicts_and_timeline(
         note="Substantial meal buffers stomach acid." + (f" Administer {', '.join(morning_food_meds)} with meal." if morning_food_meds else "")
     ))
 
-    # 3. Lunch Window
+    # 3. Grapefruit Caution Window (if applicable)
+    if has_grapefruit_meds:
+        time_grapefruit = _offset_time_str(wake_anchor, 3.0)
+        timeline.append(TimelineSlot(
+            time=time_grapefruit,
+            title="Grapefruit Caution Window",
+            medicine=", ".join([m.capitalize() for m in has_grapefruit_meds]),
+            action_type="meal",
+            icon="citrus",
+            note=f"Avoid grapefruit and grapefruit juice entirely while taking {', '.join([m.capitalize() for m in has_grapefruit_meds])} due to CYP3A4 inhibition."
+        ))
+
+    # 4. Lunch Window
     timeline.append(TimelineSlot(
         time=time_lunch,
         title="Lunch & Mid-Day Dosing",
@@ -166,8 +223,20 @@ def generate_food_conflicts_and_timeline(
         note="If taking twice-daily antibiotic (e.g. Augmentin), take with lunch."
     ))
 
-    # 4. Dinner & Evening Meds
-    evening_food_meds = [m for m in medicines if "metformin" in expand_aliases(m) or "atorvastatin" in expand_aliases(m) or "warfarin" in expand_aliases(m)]
+    # 5. Dairy Restriction Window (if applicable)
+    if has_dairy_restricted_meds:
+        time_dairy = _offset_time_str(wake_anchor, 8.5)
+        timeline.append(TimelineSlot(
+            time=time_dairy,
+            title="Dairy Restriction Window",
+            medicine=", ".join([m.capitalize() for m in has_dairy_restricted_meds]),
+            action_type="dairy_restriction",
+            icon="coffee",
+            note=f"Ensure at least 2 hours separation before or after {', '.join([m.capitalize() for m in has_dairy_restricted_meds])} before consuming milk, yogurt, or calcium supplements."
+        ))
+
+    # 6. Dinner & Evening Meds
+    evening_food_meds = [m for m in medicines if has_active_ingredient(m, "metformin") or has_active_ingredient(m, "atorvastatin") or has_active_ingredient(m, "warfarin")]
     timeline.append(TimelineSlot(
         time=time_dinner,
         title="Dinner Meal & Evening Dosing",
@@ -177,7 +246,7 @@ def generate_food_conflicts_and_timeline(
         note="Take evening medications with dinner to maximize tolerance and maintain stable overnight levels."
     ))
 
-    # 5. Bedtime
+    # 7. Bedtime
     timeline.append(TimelineSlot(
         time=time_bedtime,
         title="Bedtime Review",

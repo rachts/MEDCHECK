@@ -7,20 +7,16 @@ import { searchMedicines, getMedicineProfile } from '../lib/api';
 import { useDebounce } from '../hooks/useDebounce';
 import { useMedicine } from '../context/MedicineContext';
 import {
-  Search,
-  Plus,
-  SlidersHorizontal,
-  X,
-  AlertTriangle,
-  SearchX
-} from 'lucide-react';
+  SearchIcon,
+  PlusIcon,
+  BalanceIcon,
+  CloseIcon,
+  WarningIcon,
+  CheckIcon,
+  ArrowRightIcon,
+} from './landing-icons';
+import './app-editorial.css';
 
-// Human labels for the therapeutic-class slugs the backend emits in
-// MedicineSearchResult.category_tags (see derive_category_tags in
-// services/search_engine.py). The chip list itself is derived from the slugs
-// actually present in the current results rather than hardcoded, so a chip can
-// never offer a filter that matches nothing, and a new backend slug shows up
-// without a frontend change -- it just falls back to a title-cased label.
 const CATEGORY_LABELS = {
   nsaid: 'NSAID',
   analgesic: 'Pain & Fever',
@@ -38,6 +34,19 @@ function labelForCategory(slug) {
   return CATEGORY_LABELS[slug] || slug.charAt(0).toUpperCase() + slug.slice(1);
 }
 
+function giBadgeClass(badge) {
+  if (badge === 'Critical' || badge === 'High') return 'ed-tag-crit';
+  if (badge === 'Moderate') return 'ed-tag-caut';
+  return 'ed-tag-safe';
+}
+
+function giScoreColor(score) {
+  if (typeof score !== 'number') return 'text-[#57534a]';
+  if (score > 60) return 'text-[#8b2500]';
+  if (score > 30) return 'text-[#8a5300]';
+  return 'text-[#2d4a22]';
+}
+
 export function DrugExplorer() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -45,7 +54,6 @@ export function DrugExplorer() {
   const [searchError, setSearchError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
 
-  // Side-by-side comparison state
   const [compareList, setCompareList] = useState([]);
   const [compareProfiles, setCompareProfiles] = useState([]);
   const [compareLoading, setCompareLoading] = useState(false);
@@ -53,14 +61,7 @@ export function DrugExplorer() {
   const { addMedicine, selectMedicine } = useMedicine();
   const navigate = useNavigate();
 
-  // Debounced so a burst of keystrokes issues one request instead of one per
-  // character. Without this the grid also cannot show an honest empty state: it
-  // would flash "no medicines found" between every letter typed.
   const debouncedQuery = useDebounce(query, 300);
-
-  // Monotonic request id. Responses can arrive out of order -- a slow request for
-  // "a" resolving after a fast one for "aspirin" would repaint the grid with the
-  // wrong results -- so only the newest request is allowed to commit state.
   const latestRequestRef = useRef(0);
 
   useEffect(() => {
@@ -78,8 +79,6 @@ export function DrugExplorer() {
         setResults(Array.isArray(data) ? data : []);
       } catch (e) {
         if (cancelled || requestId !== latestRequestRef.current) return;
-        // Surfaced rather than only logged: silently keeping the previous results
-        // on screen presents stale data as a live answer to the new query.
         setSearchError(e?.message || 'Search is unavailable right now.');
         setResults([]);
       } finally {
@@ -140,8 +139,6 @@ export function DrugExplorer() {
     navigate('/app');
   };
 
-  // Chips offered for the current result set, in the canonical order of
-  // CATEGORY_LABELS so the row does not reshuffle between searches.
   const categories = useMemo(() => {
     const present = new Set();
     results.forEach((item) => {
@@ -157,20 +154,12 @@ export function DrugExplorer() {
     ];
   }, [results]);
 
-  // A chip that disappears when the results change must not leave an active filter
-  // that now matches nothing -- that reads exactly like the broken empty grid this
-  // screen used to have.
   useEffect(() => {
     if (selectedCategory !== 'all' && !categories.some((c) => c.id === selectedCategory)) {
       setSelectedCategory('all');
     }
   }, [categories, selectedCategory]);
 
-  // Filtering on the backend's category_tags replaces a list of hand-maintained
-  // substring rules against the free-text `category` prose. Those rules silently
-  // dropped whole classes: a brand-only row's category is the literal string
-  // "Pharmacological Agent", which matched none of them, so brand results vanished
-  // from every filter except "All Classes".
   const filteredResults = useMemo(() => {
     if (selectedCategory === 'all') return results;
     return results.filter((item) => (item.category_tags || []).includes(selectedCategory));
@@ -179,28 +168,30 @@ export function DrugExplorer() {
   const showEmptyState = !loading && !searchError && filteredResults.length === 0;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
+    <div className="ed-app min-h-screen flex flex-col bg-[#f8f6f0] text-[#1a1a18]">
       <Navbar />
 
-      <main className="flex-1 pt-24 pb-12 px-4 sm:px-8 max-w-6xl mx-auto w-full flex flex-col gap-6">
-        {/* Search Hero with Cormorant Garamond */}
-        <div className="text-center max-w-2xl mx-auto space-y-3">
-          <div className="badge badge-info">
-            <Search className="w-3 h-3" />
-            <span>Pharmacology Intelligence Catalog</span>
+      <main className="flex-1 pt-28 pb-16 px-4 sm:px-8 max-w-[1200px] mx-auto w-full flex flex-col gap-6">
+        {/* Editorial Search Masthead */}
+        <section className="border-b border-[#b7b09d] pb-6 space-y-4">
+          <div className="max-w-3xl space-y-2.5">
+            <div className="inline-flex items-center gap-2 font-ibm-mono text-[11px] uppercase tracking-[0.09em] text-[#8b2500] font-medium">
+              <SearchIcon size={14} />
+              <span>Pharmacology Intelligence Catalog</span>
+            </div>
+            <h1 className="font-newsreader text-[34px] sm:text-[42px] font-medium text-[#1a1a18] leading-[1.08] tracking-[-0.015em]">
+              Explore Before You Commit
+            </h1>
+            <p className="text-[15px] text-[#2d2b26] leading-relaxed font-ibm-serif max-w-2xl">
+              Inspect reported adverse reactions, food &amp; alcohol guidelines, and Stomach Guardian mucosal safety indicators before adding to your regimen.
+            </p>
           </div>
-          <h1 className="text-h1 text-[var(--text-primary)]">
-            Explore Before You Commit
-          </h1>
-          <p className="text-body text-[var(--text-secondary)]">
-            Inspect reported adverse reactions, food &amp; alcohol guidelines, and Stomach Guardian mucosal safety indicators before adding to your regimen.
-          </p>
 
-          {/* Search bar */}
-          <div className="relative mt-2">
-            <Search
-              className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2"
-              aria-hidden="true"
+          {/* Search Bar */}
+          <div className="relative max-w-2xl">
+            <SearchIcon
+              size={16}
+              className="text-[#57534a] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
             />
             <label htmlFor="drug-search" className="sr-only">
               Search medicines by brand or generic name
@@ -211,125 +202,227 @@ export function DrugExplorer() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search brand (e.g. Advil, Lipitor, Tylenol) or generic..."
-              className="w-full bg-[var(--bg-surface)] border border-[var(--border-default)] focus:border-[var(--border-hover)] rounded-[8px] py-3 pl-10 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[48px] shadow-sm transition-colors"
+              className="w-full bg-[#f8f6f0] border border-[#1a1a18] py-3 pl-10 pr-4 text-sm text-[#1a1a18] placeholder-[#57534a] outline-none min-h-[48px] font-ibm-serif"
             />
           </div>
 
-          {/* Category Chips */}
-          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+          {/* Category Filters */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1" role="group" aria-label="Filter by pharmacological class">
             {categories.map((c) => (
               <button
                 key={c.id}
+                type="button"
                 onClick={() => setSelectedCategory(c.id)}
                 aria-pressed={selectedCategory === c.id}
-                className={`px-3 py-1.5 rounded-[6px] text-xs font-semibold min-h-[36px] transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 font-ibm-mono text-[11px] uppercase tracking-[0.07em] font-medium min-h-[34px] transition-colors cursor-pointer border ${
                   selectedCategory === c.id
-                    ? 'bg-[var(--accent)] text-[var(--text-inverse)]'
-                    : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-default)]'
+                    ? 'bg-[#1a1a18] text-[#f8f6f0] border-[#1a1a18]'
+                    : 'bg-[#f0ede1] hover:bg-[#ece7d5] text-[#2d2b26] border-[#b7b09d] hover:border-[#1a1a18]'
                 }`}
               >
                 {c.label}
               </button>
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* Side-by-Side Comparison Drawer */}
+        {/* Side-by-Side Comparison Docket */}
         {compareList.length > 0 && (
-          <div className="card flex flex-col gap-3">
-            <div className="flex items-center justify-between border-b border-[var(--border-default)] pb-2.5">
-              <div className="flex items-center gap-1.5">
-                <SlidersHorizontal className="w-4 h-4 text-[var(--text-primary)]" aria-hidden="true" />
-                <h3 className="font-serif text-[18px] font-bold text-[var(--text-primary)]">
-                  Side-by-Side Comparison ({compareList.length}/3)
-                </h3>
+          <section className="ed-sheet p-5 flex flex-col gap-4" aria-label="Side-by-side medicine comparison">
+            <div className="flex items-center justify-between border-b border-[#b7b09d] pb-3 gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 border border-[#1a1a18] bg-[#f8f6f0] text-[#1a1a18] flex items-center justify-center shrink-0">
+                  <BalanceIcon size={15} />
+                </div>
+                <div>
+                  <h2 className="font-newsreader text-[20px] font-semibold text-[#1a1a18] leading-tight">
+                    Side-by-Side Comparison ({compareList.length}/3)
+                  </h2>
+                  <p className="font-ibm-mono text-[10px] uppercase tracking-[0.07em] text-[#57534a]">
+                    Comparative pharmacology docket
+                  </p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={() => setCompareList([])}
-                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer"
+                className="ed-btn-outline text-[11px] py-1.5 px-2.5"
               >
-                <X className="w-3.5 h-3.5" aria-hidden="true" />
+                <CloseIcon size={13} />
                 <span>Close</span>
               </button>
             </div>
 
             {compareLoading ? (
-              <div className="h-20 flex items-center justify-center text-xs text-[var(--text-muted)]">
-                Loading comparison pharmacology...
+              <div className="py-5 px-3 bg-[#f8f6f0] border border-[#d5cfc0] font-ibm-mono text-xs uppercase tracking-[0.08em] text-[#8b2500]" role="status" aria-live="polite">
+                READING COMPARISON PROFILES
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {compareProfiles.map((p) => (
-                  <div key={p.name} className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-[8px] p-3.5 flex flex-col gap-2.5">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-serif text-[18px] font-bold text-[var(--text-primary)]">{p.name}</h4>
-                      <span className="tag">
-                        {p.drug_type}
-                      </span>
-                    </div>
+              <>
+                {/* Desktop Comparison Table */}
+                <div className="hidden md:block overflow-x-auto border border-[#b7b09d] bg-[#f8f6f0]">
+                  <table className="ed-docket-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" className="w-40">Attribute</th>
+                        {compareProfiles.map((p) => (
+                          <th key={p.name} scope="col" className="text-[#1a1a18]">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-newsreader text-[17px] font-semibold normal-case tracking-normal text-[#1a1a18]">
+                                {p.name}
+                              </span>
+                              <span className="ed-tag">{p.drug_type}</span>
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="font-ibm-serif text-sm">
+                      <tr>
+                        <th scope="row" className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#57534a] bg-[#f0ede1] font-medium">
+                          Class
+                        </th>
+                        {compareProfiles.map((p) => (
+                          <td key={`${p.name}-class`} className="text-[#1a1a18] font-medium">
+                            {p.category}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th scope="row" className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#57534a] bg-[#f0ede1] font-medium">
+                          Stomach Score
+                        </th>
+                        {compareProfiles.map((p) => {
+                          const score = p.gi_profile?.stomach_health_score;
+                          const tier = p.gi_profile?.risk_tier;
+                          return (
+                            <td key={`${p.name}-gi`}>
+                              <span className={`font-newsreader text-base font-semibold tabular-nums ${giScoreColor(score)}`}>
+                                {score ?? '--'}/100
+                              </span>
+                              {tier && (
+                                <span className={`ml-2 ed-tag ${
+                                  tier === 'high' ? 'ed-tag-crit' : tier === 'moderate' ? 'ed-tag-caut' : 'ed-tag-safe'
+                                }`}>
+                                  {tier}
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      <tr>
+                        <th scope="row" className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#57534a] bg-[#f0ede1] font-medium">
+                          Food Rule
+                        </th>
+                        {compareProfiles.map((p) => (
+                          <td key={`${p.name}-food`} className="text-xs text-[#2d2b26] leading-relaxed">
+                            {p.food_interactions?.[0]?.title || 'Take with water'}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th scope="row" className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#57534a] bg-[#f0ede1] font-medium">
+                          Actions
+                        </th>
+                        {compareProfiles.map((p) => (
+                          <td key={`${p.name}-actions`}>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/medicine/${encodeURIComponent(p.name)}`)}
+                                className="ed-btn-outline text-[11px] py-1.5 px-2.5"
+                              >
+                                Details
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAddAndGo(p.name, p.drug_type)}
+                                className="ed-btn-ink text-[11px] py-1.5 px-2.5"
+                              >
+                                <span>Add to Basket</span>
+                                <ArrowRightIcon size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
 
-                    <div className="space-y-1.5 text-xs text-[var(--text-secondary)]">
-                      <div>
-                        <span className="text-xs text-[var(--text-muted)] uppercase block font-bold">Class</span>
-                        <span className="text-[var(--text-primary)] font-medium">{p.category}</span>
+                {/* Mobile Ruled Comparison Rows */}
+                <div className="md:hidden border border-[#b7b09d] bg-[#f8f6f0] divide-y divide-[#d5cfc0]">
+                  {compareProfiles.map((p) => {
+                    const score = p.gi_profile?.stomach_health_score;
+                    return (
+                      <div key={p.name} className="p-4 flex flex-col gap-2.5 font-ibm-serif">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-newsreader text-[18px] font-semibold text-[#1a1a18]">{p.name}</h3>
+                          <span className="ed-tag">{p.drug_type}</span>
+                        </div>
+                        <div className="space-y-1.5 text-xs text-[#2d2b26]">
+                          <div>
+                            <span className="font-ibm-mono text-[10px] text-[#57534a] uppercase block tracking-[0.06em]">Class</span>
+                            <span className="text-[#1a1a18] font-medium">{p.category}</span>
+                          </div>
+                          <div>
+                            <span className="font-ibm-mono text-[10px] text-[#57534a] uppercase block tracking-[0.06em]">Stomach Score</span>
+                            <span className={`font-newsreader text-sm font-semibold tabular-nums ${giScoreColor(score)}`}>
+                              {score ?? '--'}/100
+                            </span>
+                          </div>
+                          <div>
+                            <span className="font-ibm-mono text-[10px] text-[#57534a] uppercase block tracking-[0.06em]">Food Rule</span>
+                            <span>{p.food_interactions?.[0]?.title || 'Take with water'}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/medicine/${encodeURIComponent(p.name)}`)}
+                            className="ed-btn-outline flex-1 text-[11px] py-2"
+                          >
+                            Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAddAndGo(p.name, p.drug_type)}
+                            className="ed-btn-ink flex-1 text-[11px] py-2"
+                          >
+                            <span>Add to Basket</span>
+                            <ArrowRightIcon size={12} />
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-xs text-[var(--text-muted)] uppercase block font-bold">Stomach Score</span>
-                        <span className="metric text-sm text-[var(--severity-moderate)]">
-                          {p.gi_profile?.stomach_health_score ?? '—'}/100
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-xs text-[var(--text-muted)] uppercase block font-bold">Food Rule</span>
-                        <span>{p.food_interactions?.[0]?.title || 'Take with water'}</span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleAddAndGo(p.name, p.drug_type)}
-                      className="btn-primary w-full mt-auto text-xs py-2 min-h-[40px]"
-                    >
-                      Add to Basket →
-                    </button>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
-          </div>
+          </section>
         )}
 
-        {/* Search failure. Distinct from "no matches": the catalog was never
-            reached, so the absence of results says nothing about the query. */}
+        {/* Search failure */}
         {searchError && (
-          <div className="alert-danger flex items-start gap-2.5" role="alert">
-            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="ed-notice-crit p-4 flex items-start gap-2.5 font-ibm-serif" role="alert">
+            <WarningIcon size={16} className="mt-0.5 shrink-0" />
             <div>
-              <p className="text-sm font-bold leading-tight">Could not reach the medicine catalog</p>
-              <p className="text-xs leading-relaxed mt-0.5">{searchError}</p>
+              <p className="text-sm font-semibold text-[#1a1a18] leading-tight">Could not reach the medicine catalog</p>
+              <p className="text-xs leading-relaxed mt-1">{searchError}</p>
             </div>
           </div>
         )}
 
-        {/* Loading skeletons. Previously the grid simply held the previous query's
-            results while a new search was in flight, with nothing to indicate the
-            screen was mid-update. */}
+        {/* Discrete Mono Loading State (no shimmer/skeletons) */}
         {loading && (
-          <div
-            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5"
-            aria-hidden="true"
-          >
-            {Array.from({ length: 8 }, (_, i) => (
-              <div key={`skeleton-${i}`} className="card flex flex-col gap-3 animate-pulse">
-                <div className="h-5 w-3/4 rounded-[4px] bg-[var(--bg-elevated)]" />
-                <div className="h-3 w-1/2 rounded-[4px] bg-[var(--bg-elevated)]" />
-                <div className="h-3 w-full rounded-[4px] bg-[var(--bg-elevated)]" />
-                <div className="flex gap-1.5 pt-1">
-                  <div className="h-5 w-16 rounded-[4px] bg-[var(--bg-elevated)]" />
-                  <div className="h-5 w-12 rounded-[4px] bg-[var(--bg-elevated)]" />
-                </div>
-                <div className="h-10 w-full rounded-[6px] bg-[var(--bg-elevated)] mt-auto" />
-              </div>
-            ))}
+          <div className="ed-sheet p-5 flex items-center justify-between gap-3">
+            <span className="font-ibm-mono text-xs uppercase tracking-[0.09em] text-[#8b2500] font-medium">
+              READING THE CATALOG
+            </span>
+            <span className="font-ibm-serif text-xs text-[#57534a]">
+              Querying prescribing monographs and brand aliases
+            </span>
           </div>
         )}
 
@@ -339,108 +432,208 @@ export function DrugExplorer() {
             : `${filteredResults.length} medicine${filteredResults.length === 1 ? '' : 's'} found`}
         </span>
 
-        {/* No matches. The grid used to render nothing at all here, which is
-            indistinguishable from the page having failed to load. */}
+        {/* No matches */}
         {showEmptyState && (
-          <div className="card flex flex-col items-center text-center gap-3 py-12">
-            <div className="w-11 h-11 rounded-[8px] bg-[var(--bg-elevated)] border border-[var(--border-default)] text-[var(--text-muted)] flex items-center justify-center">
-              <SearchX className="w-5 h-5" aria-hidden="true" />
+          <div className="ed-sheet flex flex-col items-center text-center gap-3 py-12 px-6">
+            <div className="w-11 h-11 bg-[#f8f6f0] border border-[#b7b09d] text-[#57534a] flex items-center justify-center">
+              <SearchIcon size={20} />
             </div>
-            <h3 className="font-serif text-[20px] font-bold text-[var(--text-primary)]">
+            <h2 className="font-newsreader text-[22px] font-semibold text-[#1a1a18]">
               {query.trim() ? `No medicines found for "${query.trim()}"` : 'No medicines to show'}
-            </h3>
-            <p className="text-body text-[var(--text-secondary)] max-w-md">
+            </h2>
+            <p className="text-sm text-[#57534a] max-w-md font-ibm-serif leading-relaxed">
               {selectedCategory !== 'all'
                 ? 'Nothing in the catalog matches this search within the selected class. Try another class or clear the filter.'
                 : 'Try a generic name (ibuprofen, warfarin, metformin) or a common brand (Advil, Lipitor, Tylenol).'}
             </p>
             {selectedCategory !== 'all' && (
-              <button onClick={() => setSelectedCategory('all')} className="btn-secondary text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedCategory('all')}
+                className="ed-btn-outline text-[11px] mt-1"
+              >
                 Show all classes
               </button>
             )}
           </div>
         )}
 
-        {/* Results Grid */}
+        {/* Results Ledger (Docket Table on Desktop, Ruled Rows on Mobile) */}
         {!loading && filteredResults.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-            {filteredResults.map((item) => {
-              const isComparing = compareList.includes(item.name);
-              return (
-                <div
-                  // Identity is the medicine, not its position: an index key makes
-                  // React reuse the previous query's card for a different drug, so
-                  // in-card state (the Compare toggle) lands on the wrong row.
-                  key={`${item.generic_name}-${item.name}`}
-                  className="card flex flex-col justify-between gap-3 group"
-                >
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-start justify-between gap-1.5">
+          <section className="ed-sheet flex flex-col" aria-label="Catalog entries">
+            <div className="px-4 py-3 border-b border-[#b7b09d] bg-[#ece7d5] flex items-center justify-between flex-wrap gap-2">
+              <span className="font-ibm-mono text-[11px] uppercase tracking-[0.08em] text-[#1a1a18] font-medium">
+                Catalog Ledger · {filteredResults.length} {filteredResults.length === 1 ? 'Entry' : 'Entries'}
+              </span>
+              <span className="font-ibm-mono text-[10px] uppercase tracking-[0.07em] text-[#57534a]">
+                Select up to 3 medicines to compare
+              </span>
+            </div>
+
+            {/* Desktop Ruled Docket Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="ed-docket-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Medicine / Active Ingredient</th>
+                    <th scope="col">Therapeutic Class</th>
+                    <th scope="col">GI Risk &amp; Reactions</th>
+                    <th scope="col" className="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredResults.map((item) => {
+                    const isComparing = compareList.includes(item.name);
+                    return (
+                      <tr key={`${item.generic_name}-${item.name}`}>
+                        <td>
+                          <div className="flex items-start gap-2.5">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/medicine/${encodeURIComponent(item.name)}`)}
+                                  className="font-newsreader text-[18px] font-semibold text-[#1a1a18] hover:text-[#8b2500] hover:underline underline-offset-4 text-left leading-tight cursor-pointer"
+                                >
+                                  {item.name}
+                                </button>
+                                <span className="ed-tag">{item.drug_type}</span>
+                              </div>
+                              <span className="font-ibm-serif text-xs text-[#57534a] capitalize block mt-0.5">
+                                {item.generic_name}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="font-ibm-serif text-sm text-[#2d2b26] max-w-[260px]">
+                          {item.category}
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className={`ed-tag ${giBadgeClass(item.stomach_risk_badge)}`}>
+                              {item.stomach_risk_badge} GI
+                            </span>
+                            {item.top_side_effects?.slice(0, 2).map((se) => (
+                              <span key={se} className="ed-tag">
+                                {se}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/medicine/${encodeURIComponent(item.name)}`)}
+                              className="ed-btn-outline text-[11px] py-1.5 px-2.5 min-h-[36px]"
+                              title={`View details for ${item.name}`}
+                            >
+                              Details
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleCompare(item.name)}
+                              aria-pressed={isComparing}
+                              className={`text-[11px] py-1.5 px-2.5 min-h-[36px] ${
+                                isComparing ? 'ed-btn-ink' : 'ed-btn-outline'
+                              }`}
+                            >
+                              {isComparing && <CheckIcon size={12} />}
+                              <span>{isComparing ? 'Comparing' : 'Compare'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleAddAndGo(item.name, item.drug_type)}
+                              className="ed-btn-ink p-2 min-h-[36px] w-9"
+                              aria-label={`Add ${item.name} to basket`}
+                              title="Add to Basket"
+                            >
+                              <PlusIcon size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Ruled Ledger Rows */}
+            <div className="md:hidden bg-[#f8f6f0] divide-y divide-[#d5cfc0]">
+              {filteredResults.map((item) => {
+                const isComparing = compareList.includes(item.name);
+                return (
+                  <article
+                    key={`${item.generic_name}-${item.name}-mobile`}
+                    className="p-4 flex flex-col gap-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
                       <div>
-                        <h3 className="font-serif text-[18px] font-bold text-[var(--text-primary)] group-hover:underline transition-colors leading-tight">
+                        <h3 className="font-newsreader text-[19px] font-semibold text-[#1a1a18] leading-tight">
                           {item.name}
                         </h3>
-                        <span className="text-xs text-[var(--text-muted)] capitalize block font-sans">
+                        <span className="text-xs text-[#57534a] capitalize block font-ibm-serif mt-0.5">
                           {item.generic_name}
                         </span>
                       </div>
-
-                      <span className="tag">
-                        {item.drug_type}
-                      </span>
+                      <span className="ed-tag">{item.drug_type}</span>
                     </div>
 
-                    <p className="text-body text-[var(--text-secondary)] line-clamp-2">
+                    <p className="text-xs text-[#2d2b26] font-ibm-serif leading-relaxed">
                       {item.category}
                     </p>
 
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {/* The backend emits "Critical" for the top GI tier (see
-                          search_medicine_database); matching on "High" left every
-                          highest-risk drug rendering in reassuring green. */}
-                      <span className={`tag ${
-                        item.stomach_risk_badge === 'Critical' || item.stomach_risk_badge === 'High'
-                          ? 'tag-danger'
-                          : item.stomach_risk_badge === 'Moderate'
-                          ? 'tag-warning'
-                          : 'tag-success'
-                      }`}>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className={`ed-tag ${giBadgeClass(item.stomach_risk_badge)}`}>
                         {item.stomach_risk_badge} GI
                       </span>
-
                       {item.top_side_effects?.slice(0, 2).map((se) => (
-                        <span key={se} className="tag">
+                        <span key={se} className="ed-tag">
                           {se}
                         </span>
                       ))}
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 pt-2 border-t border-[var(--border-default)]">
-                    <button
-                      onClick={() => toggleCompare(item.name)}
-                      aria-pressed={isComparing}
-                      className={`btn-secondary flex-1 text-xs py-2 min-h-[40px] ${
-                        isComparing ? 'border-[var(--accent)] font-bold' : ''
-                      }`}
-                    >
-                      {isComparing ? 'Comparing ✓' : 'Compare'}
-                    </button>
+                    <div className="flex items-center gap-2 pt-2 border-t border-[#d5cfc0]">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/medicine/${encodeURIComponent(item.name)}`)}
+                        className="ed-btn-outline text-[11px] py-2 px-2.5 min-h-[38px]"
+                        title={`View details for ${item.name}`}
+                      >
+                        Details
+                      </button>
 
-                    <button
-                      onClick={() => handleAddAndGo(item.name, item.drug_type)}
-                      className="btn-primary p-2 min-h-[40px] w-10 flex items-center justify-center rounded-[6px]"
-                      aria-label={`Add ${item.name} to basket`}
-                      title="Add to Basket"
-                    >
-                      <Plus className="w-4 h-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleCompare(item.name)}
+                        aria-pressed={isComparing}
+                        className={`flex-1 text-[11px] py-2 min-h-[38px] ${
+                          isComparing ? 'ed-btn-ink' : 'ed-btn-outline'
+                        }`}
+                      >
+                        {isComparing && <CheckIcon size={12} />}
+                        <span>{isComparing ? 'Comparing' : 'Compare'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAddAndGo(item.name, item.drug_type)}
+                        className="ed-btn-ink p-2 min-h-[38px] w-10"
+                        aria-label={`Add ${item.name} to basket`}
+                        title="Add to Basket"
+                      >
+                        <PlusIcon size={15} />
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         <div className="flex justify-center mt-4">
@@ -452,3 +645,4 @@ export function DrugExplorer() {
     </div>
   );
 }
+export default DrugExplorer;

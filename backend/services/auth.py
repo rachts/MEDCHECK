@@ -1,4 +1,6 @@
 import os
+import hashlib
+import secrets
 import sqlite3
 import uuid
 import logging
@@ -107,7 +109,7 @@ def _get_sqlite_auth_conn() -> sqlite3.Connection:
     return conn
 
 def _init_users_table():
-    """Ensure users table exists in SQLite database."""
+    """Ensure users and password_resets tables exist in SQLite database."""
     try:
         os.makedirs(os.path.dirname(settings.SQLITE_DB_PATH), exist_ok=True)
         with closing(_get_sqlite_auth_conn()) as conn:
@@ -121,6 +123,20 @@ def _init_users_table():
                     is_guest INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS password_resets (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    token_hash TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    used_at TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_password_resets_token_hash
+                ON password_resets (token_hash)
             """)
             conn.commit()
     except Exception as e:
@@ -246,6 +262,124 @@ async def authenticate_user(username: str, password: str) -> Optional[Dict[str, 
     if not verify_password(password, user["hashed_password"]):
         return None
     return user
+
+
+def _hash_reset_token(token: str) -> str:
+    """Return the SHA-256 hex digest of a raw password reset token."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _sync_create_password_reset(username: str) -> Optional[str]:
+    normalized = username.strip().lower()
+    if not normalized:
+        return None
+
+    with closing(_get_sqlite_auth_conn()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, is_guest FROM users WHERE username = ?",
+            (normalized,),
+        )
+        row = cursor.fetchone()
+        if not row or bool(row[1]):
+            return None
+
+        user_id = row[0]
+        # Invalidate any earlier unused reset links for this account.
+        cursor.execute(
+            "DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL",
+            (user_id,),
+        )
+
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = _hash_reset_token(raw_token)
+        now_utc = datetime.now(timezone.utc)
+        expires_at = (
+            now_utc + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+        ).isoformat()
+        reset_id = str(uuid.uuid4())
+
+        cursor.execute(
+            """
+            INSERT INTO password_resets (id, user_id, token_hash, expires_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (reset_id, user_id, token_hash, expires_at),
+        )
+        conn.commit()
+        return raw_token
+
+
+async def create_password_reset(username: str) -> Optional[str]:
+    """Create a single-use password reset token for a non-guest user."""
+    return await anyio.to_thread.run_sync(_sync_create_password_reset, username)
+
+
+def _sync_reset_password_with_token(token: str, new_password: str) -> bool:
+    if not token:
+        return False
+
+    token_hash = _hash_reset_token(token)
+    now_utc = datetime.now(timezone.utc)
+
+    with closing(_get_sqlite_auth_conn()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, user_id, expires_at, used_at
+            FROM password_resets
+            WHERE token_hash = ?
+            """,
+            (token_hash,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return False
+
+        reset_id, user_id, expires_at_str, used_at = row
+        if used_at is not None:
+            return False
+
+        try:
+            expires_at = datetime.fromisoformat(expires_at_str)
+        except (TypeError, ValueError):
+            return False
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at <= now_utc:
+            return False
+
+        hashed_pwd = get_password_hash(new_password)
+
+        # Claim the token and update the password atomically so concurrent
+        # submissions with the same token cannot both succeed.
+        if not conn.in_transaction:
+            conn.execute("BEGIN IMMEDIATE")
+        cursor.execute(
+            "UPDATE password_resets SET used_at = ? WHERE id = ? AND used_at IS NULL",
+            (now_utc.isoformat(), reset_id),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return False
+
+        cursor.execute(
+            "UPDATE users SET hashed_password = ? WHERE id = ?",
+            (hashed_pwd, user_id),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return False
+
+        conn.commit()
+        return True
+
+
+async def reset_password_with_token(token: str, new_password: str) -> bool:
+    """Validate a reset token, update the user's password once, and mark it used."""
+    return await anyio.to_thread.run_sync(
+        _sync_reset_password_with_token, token, new_password
+    )
 
 async def get_current_user(
     request: Request,

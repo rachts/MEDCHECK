@@ -4,8 +4,10 @@ from typing import List, Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 # Permitted characters in a medicine name: letters, digits, whitespace,
-# hyphens, dots, slashes and parentheses.
-MEDICINE_NAME_RE = re.compile(r"^[a-zA-Z0-9\s\-\.\/\(\)]+$")
+# hyphens, dots, slashes, parentheses, and '+' for combination products.
+MEDICINE_NAME_RE = re.compile(r"^[a-zA-Z0-9\s\-\.\/\(\)\+]+$")
+# Chat medicine/overview input also permits '?' and ',' for natural questions.
+CHAT_INPUT_RE = re.compile(r"^[a-zA-Z0-9\s\-\.\/\(\)\+\?,]+$")
 
 # Pragmatic RFC-5322 subset. Deliberately a local regex rather than
 # pydantic's EmailStr, which would pull in the email-validator dependency.
@@ -80,6 +82,26 @@ class RuleConfidence(str, Enum):
 # AUTH MODELS
 # ==============================================================================
 
+def validate_password_strength(v: str) -> str:
+    """Enforce password byte ceiling and character complexity rules."""
+    # The authoritative length check, in the same unit bcrypt uses.
+    if len(v.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise ValueError(
+            f"Password must not exceed {MAX_PASSWORD_BYTES} bytes. "
+            f"Accented, emoji and non-Latin characters count as 2-4 bytes each."
+        )
+    missing = []
+    if not any(c.isupper() for c in v):
+        missing.append("an uppercase letter")
+    if not any(c.islower() for c in v):
+        missing.append("a lowercase letter")
+    if not any(c.isdigit() for c in v):
+        missing.append("a digit")
+    if missing:
+        raise ValueError("Password must contain " + ", ".join(missing) + ".")
+    return v
+
+
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_\-\.]+$")
     password: str = Field(
@@ -98,22 +120,7 @@ class UserCreate(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password_complexity(cls, v: str) -> str:
-        # The authoritative length check, in the same unit bcrypt uses.
-        if len(v.encode("utf-8")) > MAX_PASSWORD_BYTES:
-            raise ValueError(
-                f"Password must not exceed {MAX_PASSWORD_BYTES} bytes. "
-                f"Accented, emoji and non-Latin characters count as 2-4 bytes each."
-            )
-        missing = []
-        if not any(c.isupper() for c in v):
-            missing.append("an uppercase letter")
-        if not any(c.islower() for c in v):
-            missing.append("a lowercase letter")
-        if not any(c.isdigit() for c in v):
-            missing.append("a digit")
-        if missing:
-            raise ValueError("Password must contain " + ", ".join(missing) + ".")
-        return v
+        return validate_password_strength(v)
 
     @field_validator("email")
     @classmethod
@@ -146,6 +153,30 @@ class UserOut(BaseModel):
     username: str
     email: Optional[str] = None
     is_guest: bool = False
+
+
+class PasswordResetRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(..., min_length=20, max_length=200)
+    new_password: str = Field(
+        ...,
+        min_length=MIN_PASSWORD_LENGTH,
+        max_length=MAX_PASSWORD_CHARS,
+        description=(
+            f"Minimum {MIN_PASSWORD_LENGTH} characters, including at least one "
+            f"uppercase letter, one lowercase letter and one digit. "
+            f"Maximum {MAX_PASSWORD_BYTES} bytes (bcrypt limit) -- note bytes, not "
+            f"characters: accented, emoji and non-Latin characters cost 2-4 each."
+        )
+    )
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_complexity(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 class ClientErrorReport(BaseModel):
     """
@@ -258,7 +289,7 @@ class SideEffectDetail(BaseModel):
     is_amplified: bool = False
 
 class FoodInteractionDetail(BaseModel):
-    type: str = Field(..., description="'take_with_food', 'empty_stomach', 'avoid_alcohol', 'avoid_grapefruit', 'avoid_dairy_2h', 'hydration'")
+    type: str = Field(..., description="'take_with_food', 'empty_stomach', 'avoid_alcohol', 'avoid_grapefruit', 'avoid_dairy_2h', 'hydration', 'avoid_potassium', 'avoid_cranberry'")
     title: str
     description: str
     severity: str = Field("recommended", description="'recommended', 'warning', 'critical'")
@@ -273,6 +304,54 @@ class GIProfile(BaseModel):
     reflux_aggravation: bool = False
     constipation_diarrhea: str = "none"
     recommendations: List[str] = []
+
+class IndiaBanInfo(BaseModel):
+    matched: bool
+    heading: str
+    message: str
+    entry_name: str
+    status: str
+    notification: Optional[str] = None
+    date: Optional[str] = None
+    source: str
+    qualified: bool = False
+
+
+class IndiaBanAlert(BaseModel):
+    medicine: str
+    info: IndiaBanInfo
+
+
+class IndiaBannedSearchItem(BaseModel):
+    name: str
+    kind: str
+    status: str
+    notification: Optional[str] = None
+    date: Optional[str] = None
+    ingredients: List[str] = []
+
+
+class IndiaBannedSearchResponse(BaseModel):
+    total: int
+    results: List[IndiaBannedSearchItem] = []
+
+
+class CatalogueProduct(BaseModel):
+    name: str
+    substitutes: List[str] = []
+    side_effects: List[str] = []
+    no_common_side_effects: bool = False
+    uses: List[str] = []
+    chemical_class: Optional[str] = None
+    habit_forming: bool = False
+    therapeutic_class: Optional[str] = None
+    action_class: Optional[str] = None
+
+
+class CatalogueSearchResponse(BaseModel):
+    total: int
+    results: List[CatalogueProduct] = []
+
 
 class MedicineProfileResponse(BaseModel):
     name: str
@@ -291,6 +370,7 @@ class MedicineProfileResponse(BaseModel):
     is_fdc: bool = False
     fdc_warning: Optional[str] = None
     fdc_ingredients: List[str] = []
+    india_ban: Optional[IndiaBanInfo] = None
 
 class FoodConflictDetail(BaseModel):
     medicine_a: str
@@ -373,6 +453,15 @@ class DrugLabelResult(BaseModel):
     pharm_class_cs: Optional[str] = None
     dosage_forms: List[str] = []
 
+    boxed_warnings: List[str] = []
+    warnings: List[str] = []
+    contraindications: List[str] = []
+    precautions: List[str] = []
+    adverse_reactions: List[str] = []
+    drug_interactions: List[str] = []
+    food_warnings: List[str] = []
+    side_effects: List[str] = []
+
     raw_text_summary: str = ""
     found: bool = False
     source: Literal["cache", "openfda", "fallback", "curated"] = "fallback"
@@ -395,3 +484,74 @@ class CheckResponse(BaseModel):
     analysis_coverage: Literal["full", "partial", "heuristic-only", "none"] = "full"
     verified_medicines_count: int = 0
     total_medicines_count: int = 0
+    india_ban_alerts: List[IndiaBanAlert] = []
+
+
+# ==============================================================================
+# MEDICINE CHATBOT MODELS
+# ==============================================================================
+
+class ChatRequest(BaseModel):
+    medicine: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Brand or generic medicine name to explain"
+    )
+    question: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Optional follow-up question about the active medicine; null for initial overview"
+    )
+
+    @field_validator("medicine")
+    @classmethod
+    def validate_medicine(cls, v: str) -> str:
+        trimmed = (v or "").strip()
+        if not trimmed:
+            raise ValueError("A medicine name is required.")
+        if len(trimmed) > 100:
+            raise ValueError("Medicine name exceeds maximum allowed length of 100 characters.")
+        if not CHAT_INPUT_RE.match(trimmed):
+            raise ValueError(
+                f"Invalid characters detected in medicine name '{trimmed}'. "
+                "Only letters, numbers, hyphens, dots, slashes, plus signs, commas, question marks, and parentheses are permitted."
+            )
+        return trimmed
+
+    @field_validator("question")
+    @classmethod
+    def validate_question(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        cleaned = "".join(" " if c in "\r\n\t" else c for c in v if c.isprintable() or c in "\r\n\t").strip()
+        return cleaned or None
+
+
+class ChatKnownInteraction(BaseModel):
+    other_medicine: str
+    severity: Severity
+    explanation: str
+    mechanism: Optional[str] = None
+    clinical_impact: Optional[str] = None
+    food_consideration: Optional[str] = None
+    action_guidance: Optional[str] = None
+    evidence_source: Optional[str] = None
+
+
+class ChatResponse(BaseModel):
+    found: bool
+    medicine: str
+    profile: Optional[MedicineProfileResponse] = None
+    answer: Optional[str] = None
+    ai_available: bool = False
+    ai_fallback: bool = False
+    disclaimer: Optional[str] = None
+    message: Optional[str] = None
+    boxed_warning: Optional[str] = None
+    known_interactions: List[ChatKnownInteraction] = []
+    label_interaction_notes: List[str] = []
+    india_ban: Optional[IndiaBanInfo] = None
+    india_ban_overview: bool = False
+    catalogue_match: bool = False
+    catalogue: Optional[CatalogueProduct] = None

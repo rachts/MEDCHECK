@@ -22,15 +22,33 @@
  *    `undefined`.
  */
 import type {
+  CatalogueProduct,
+  CatalogueSearchResponse,
+  ChatResponse,
   CheckResponse,
+  IndiaBanAlert,
+  IndiaBanInfo,
+  IndiaBannedSearchItem,
+  IndiaBannedSearchResponse,
   MedicineProfileResponse,
   MedicineSearchResult,
+  PasswordResetConfirmResponse,
+  PasswordResetRequestResponse,
   UserAuthSession,
 } from '../types/api';
 
+export type {
+  CatalogueProduct,
+  CatalogueSearchResponse,
+  IndiaBanAlert,
+  IndiaBanInfo,
+  IndiaBannedSearchItem,
+  IndiaBannedSearchResponse,
+};
+
 const API_BASE: string =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? 'https://medcheck-api-fptv.onrender.com' : 'http://localhost:8000');
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.PROD ? '' : 'http://localhost:8000');
 
 // Non-sensitive display profile (username, guest flag) may stay in localStorage:
 // it is not a credential and losing it only costs a name in the navbar. The JWT
@@ -40,6 +58,7 @@ const OFFLINE_CACHE_KEY = 'medcheck_offline_basket_cache';
 
 /** In-memory session token. Reset to null on every page load by design. */
 let sessionToken: string | null = null;
+let authPromise: Promise<string | null> | null = null;
 
 interface StoredUser {
   user_id: string;
@@ -131,26 +150,33 @@ function extractErrorMessage(body: unknown, fallback: string): string {
  */
 export async function ensureAuthSession(): Promise<string | null> {
   if (sessionToken) return sessionToken;
+  if (authPromise) return authPromise;
 
-  try {
-    const res = await fetch(`${API_BASE}/api/auth/guest`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    if (res.ok) {
-      const data = (await res.json()) as UserAuthSession;
-      setStoredToken(data.access_token);
-      setStoredUser({
-        user_id: data.user_id,
-        username: data.username,
-        is_guest: data.is_guest,
+  authPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/guest`, {
+        method: 'POST',
+        credentials: 'include',
       });
-      return data.access_token;
+      if (res.ok) {
+        const data = (await res.json()) as UserAuthSession;
+        setStoredToken(data.access_token);
+        setStoredUser({
+          user_id: data.user_id,
+          username: data.username,
+          is_guest: data.is_guest,
+        });
+        return data.access_token;
+      }
+    } catch (err) {
+      console.warn('Guest auth generation failed:', err);
+    } finally {
+      authPromise = null;
     }
-  } catch (err) {
-    console.warn('Guest auth generation failed:', err);
-  }
-  return null;
+    return null;
+  })();
+
+  return authPromise;
 }
 
 export async function loginUser(username: string, password: string): Promise<UserAuthSession> {
@@ -207,7 +233,68 @@ export async function logoutUser(): Promise<void> {
   }
 }
 
+export async function requestPasswordReset(
+  username: string,
+): Promise<PasswordResetRequestResponse> {
+  const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ username }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(extractErrorMessage(body, 'Unable to request password reset.'));
+  }
+  return (await res.json()) as PasswordResetRequestResponse;
+}
+
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<PasswordResetConfirmResponse> {
+  const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(
+      extractErrorMessage(
+        body,
+        'This reset link is invalid or has expired. Please request a new one.',
+      ),
+    );
+  }
+  return (await res.json()) as PasswordResetConfirmResponse;
+}
+
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  if (options.signal) {
+    options.signal.addEventListener('abort', () => controller.abort());
+  }
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new TypeError('Request timed out');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const timeoutMs = url.includes('/api/check') ? 60000 : url.includes('/api/chat') ? 30000 : 15000;
   let token = await ensureAuthSession();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -215,16 +302,20 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  let response = await fetch(url, { ...options, credentials: 'include', headers });
+  let response = await fetchWithTimeout(url, { ...options, credentials: 'include', headers }, timeoutMs);
 
-  // A 401 means the token (in memory or cookie) has expired. Drop it and mint a
-  // fresh guest session, then retry once.
+  // A 401 means the token (in memory or cookie) has expired.
   if (response.status === 401) {
+    const user = getStoredUser();
+    if (user && !user.is_guest) {
+      await logoutUser();
+      throw new Error('Session expired. Please log in again.');
+    }
     await logoutUser();
     token = await ensureAuthSession();
     if (token) {
       headers.Authorization = `Bearer ${token}`;
-      response = await fetch(url, { ...options, credentials: 'include', headers });
+      response = await fetchWithTimeout(url, { ...options, credentials: 'include', headers }, timeoutMs);
     }
   }
 
@@ -289,18 +380,18 @@ export async function checkMedicines(
     }
     return data;
   } catch (err: unknown) {
-    // Offline fallback: serve the last good analysis for this exact basket.
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached) as CheckResponse & { _offline?: boolean };
-        parsed._offline = true;
-        return parsed;
-      } catch {
-        // ignore
+    // Offline fallback: serve the last good analysis for this exact basket ONLY on network failure
+    if (err instanceof TypeError) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached) as CheckResponse;
+          parsed._offline = true;
+          return parsed;
+        } catch {
+          // ignore corrupted local storage
+        }
       }
-    }
-    if (err instanceof TypeError && err.message.includes('fetch')) {
       throw new Error(
         `Unable to connect to MedCheck API server. Please verify the backend is running on ${API_BASE}`,
       );
@@ -343,12 +434,88 @@ export async function searchMedicines(query: string): Promise<MedicineSearchResu
   }
 }
 
-/** Check backend health status. */
-export async function checkHealth(): Promise<boolean> {
+/** Ask the grounded medicine assistant about a medicine or a follow-up question. */
+export async function chatAboutMedicine(
+  medicine: string,
+  question?: string | null,
+): Promise<ChatResponse> {
+  const trimmedMedicine = (medicine || '').trim();
+  if (!trimmedMedicine) {
+    throw new Error('Please enter a medicine name.');
+  }
+  const trimmedQuestion = question ? question.trim() : null;
+
   try {
-    const response = await fetch(`${API_BASE}/api/health`);
-    return response.ok;
-  } catch {
-    return false;
+    const response = await authenticatedFetch(`${API_BASE}/api/chat`, {
+      method: 'POST',
+      body: JSON.stringify({
+        medicine: trimmedMedicine,
+        question: trimmedQuestion || null,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(extractErrorMessage(body, 'Unable to read the medicine label right now.'));
+    }
+
+    return (await response.json()) as ChatResponse;
+  } catch (err: unknown) {
+    if (err instanceof TypeError) {
+      throw new Error(
+        `Unable to reach the MedCheck API server. Please verify the backend is running on ${API_BASE}`,
+      );
+    }
+    throw err instanceof Error ? err : new Error('Unable to read the medicine label right now.');
+  }
+}
+
+/** Search India's official CDSCO banned and halted medicines list. */
+export async function searchIndiaBanned(
+  query: string = '',
+  limit: number = 20,
+): Promise<IndiaBannedSearchResponse> {
+  const cleanQuery = encodeURIComponent((query || '').trim());
+  try {
+    const response = await authenticatedFetch(
+      `${API_BASE}/api/india/banned?query=${cleanQuery}&limit=${limit}`,
+    );
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(extractErrorMessage(body, 'Failed to search India banned medicines list.'));
+    }
+    return (await response.json()) as IndiaBannedSearchResponse;
+  } catch (err: unknown) {
+    if (err instanceof TypeError) {
+      throw new Error(
+        `Unable to reach the MedCheck API server. Please verify the backend is running on ${API_BASE}`,
+      );
+    }
+    throw err instanceof Error ? err : new Error('Failed to search India banned medicines list.');
+  }
+}
+
+/** Search the Indian medicines brand reference catalogue. */
+export async function searchIndiaCatalogue(
+  query: string = '',
+  limit: number = 10,
+): Promise<CatalogueSearchResponse> {
+  const cleanQuery = encodeURIComponent((query || '').trim());
+  try {
+    const response = await authenticatedFetch(
+      `${API_BASE}/api/india/catalogue/search?query=${cleanQuery}&limit=${limit}`,
+    );
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(extractErrorMessage(body, 'Failed to search Indian medicines catalogue.'));
+    }
+    return (await response.json()) as CatalogueSearchResponse;
+  } catch (err: unknown) {
+    if (err instanceof TypeError) {
+      throw new Error(
+        `Unable to reach the MedCheck API server. Please verify the backend is running on ${API_BASE}`,
+      );
+    }
+    throw err instanceof Error ? err : new Error('Failed to search Indian medicines catalogue.');
   }
 }

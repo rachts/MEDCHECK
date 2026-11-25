@@ -32,6 +32,54 @@ export interface GIProfile {
   recommendations: string[];
 }
 
+export interface IndiaBanInfo {
+  matched: boolean;
+  heading: string;
+  message: string;
+  entry_name: string;
+  status: string;
+  notification?: string | null;
+  date?: string | null;
+  source: string;
+  qualified: boolean;
+}
+
+export interface IndiaBanAlert {
+  medicine: string;
+  info: IndiaBanInfo;
+}
+
+export interface IndiaBannedSearchItem {
+  name: string;
+  kind: string;
+  status: string;
+  notification?: string | null;
+  date?: string | null;
+  ingredients: string[];
+}
+
+export interface IndiaBannedSearchResponse {
+  total: number;
+  results: IndiaBannedSearchItem[];
+}
+
+export interface CatalogueProduct {
+  name: string;
+  substitutes: string[];
+  side_effects: string[];
+  no_common_side_effects: boolean;
+  uses: string[];
+  chemical_class?: string | null;
+  habit_forming: boolean;
+  therapeutic_class?: string | null;
+  action_class?: string | null;
+}
+
+export interface CatalogueSearchResponse {
+  total: number;
+  results: CatalogueProduct[];
+}
+
 export interface MedicineProfileResponse {
   name: string;
   generic_name: string;
@@ -49,6 +97,7 @@ export interface MedicineProfileResponse {
   is_fdc?: boolean;
   fdc_warning?: string;
   fdc_ingredients?: string[];
+  india_ban?: IndiaBanInfo | null;
 }
 
 export interface InteractionItem {
@@ -134,6 +183,8 @@ export interface CheckResponse {
   analysis_coverage?: 'full' | 'partial' | 'heuristic-only' | 'none';
   verified_medicines_count?: number;
   total_medicines_count?: number;
+  india_ban_alerts?: IndiaBanAlert[];
+  _offline?: boolean;
 }
 
 export interface UserAuthSession {
@@ -142,6 +193,15 @@ export interface UserAuthSession {
   user_id: string;
   username: string;
   is_guest: boolean;
+}
+
+export interface PasswordResetRequestResponse {
+  message: string;
+}
+
+export interface PasswordResetConfirmResponse {
+  status: string;
+  message: string;
 }
 
 /**
@@ -158,4 +218,33 @@ export interface BasketMedicine {
   id: string;
   name: string;
   drugType: DrugType;
+}
+
+export interface ChatKnownInteraction {
+  other_medicine: string;
+  severity: Severity;
+  explanation: string;
+  mechanism?: string | null;
+  clinical_impact?: string | null;
+  food_consideration?: string | null;
+  action_guidance?: string | null;
+  evidence_source?: string | null;
+}
+
+export interface ChatResponse {
+  found: boolean;
+  medicine: string;
+  profile: MedicineProfileResponse | null;
+  answer: string | null;
+  ai_available: boolean;
+  ai_fallback: boolean;
+  disclaimer?: string | null;
+  message?: string | null;
+  boxed_warning?: string | null;
+  known_interactions: ChatKnownInteraction[];
+  label_interaction_notes: string[];
+  india_ban?: IndiaBanInfo | null;
+  india_ban_overview?: boolean;
+  catalogue_match?: boolean;
+  catalogue?: CatalogueProduct | null;
 }

@@ -112,6 +112,7 @@ COMMON_BRAND_MAPPINGS: Dict[str, str] = {
     "pantodac": "pantoprazole",
     "nexium": "esomeprazole",
     "pepcid": "famotidine",
+    # Zantac historically contained ranitidine (withdrawn in 2020 due to NDMA impurities); modern Zantac 360 formulations use famotidine.
     "zantac": "famotidine",
     "rabium": "rabeprazole",
 
@@ -121,10 +122,8 @@ COMMON_BRAND_MAPPINGS: Dict[str, str] = {
     "voltaren": "diclofenac",
     "cataflam": "diclofenac",
     "volini": "diclofenac",
-    "moov": "diclofenac",
     "voveran": "diclofenac",
     "dynapar": "diclofenac",
-    "nac": "diclofenac",
     "celebrex": "celecoxib",
     "meftal": "mefenamic acid",
     "meftal spas": "mefenamic acid",
@@ -196,7 +195,7 @@ FDC_BRAND_MAPPINGS: Dict[str, List[str]] = {
     "meftal-spas": ["mefenamic acid", "dicyclomine"],
     "pan d": ["pantoprazole", "domperidone"],
     "pan-d": ["pantoprazole", "domperidone"],
-    "gemer": ["glimepiride", "metformin"],
+    "gemer": ["metformin", "glimepiride"],
     "glycomet gp": ["glimepiride", "metformin"],
     "glycomet-gp": ["glimepiride", "metformin"],
     "telma h": ["telmisartan", "hydrochlorothiazide"],
@@ -229,7 +228,7 @@ def get_fdc_info(name: str) -> Optional[Dict[str, Any]]:
             "is_fdc": True,
             "ingredients": ingredients,
             "primary_ingredient": ingredients[0],
-            "fdc_warning": "Combination product — analysis covers primary ingredient only."
+            "fdc_warning": "Combination product — all mapped active ingredients analyzed."
         }
     return None
 
@@ -248,6 +247,14 @@ def normalize_drug_query(name: str) -> str:
     if not cleaned:
         return cleaned
 
+    # Strip trailing parenthetical alternate names (e.g. "Paracetamol (Acetaminophen)")
+    # and collapse whitespace around slashes (e.g. "Amoxicillin / Clavulanate").
+    cleaned = re.sub(r"\s*\([^)]*\)\s*$", "", cleaned)
+    cleaned = re.sub(r"\s*/\s*", "/", cleaned)
+    cleaned = cleaned.strip()
+    if not cleaned:
+        return cleaned
+
     # 1. Exact match in brand mappings
     if cleaned in COMMON_BRAND_MAPPINGS:
         return COMMON_BRAND_MAPPINGS[cleaned]
@@ -262,7 +269,7 @@ def normalize_drug_query(name: str) -> str:
     if sub_base in COMMON_BRAND_MAPPINGS:
         return COMMON_BRAND_MAPPINGS[sub_base]
 
-    return cleaned
+    return sub_base
 
 # ==============================================================================
 # PHARMACOLOGICAL SYNONYM SETS
@@ -417,9 +424,9 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
                 "icon": "wine"
             },
             {
-                "type": "avoid_grapefruit",
+                "type": "avoid_cranberry",
                 "title": "Avoid Cranberry Juice & St. John's Wort",
-                "description": "CYP interactions significantly alter plasma warfarin concentrations.",
+                "description": "Cranberry inhibits CYP2C9 and potentiates Warfarin bleeding; St. John's Wort induces CYP enzymes and decreases efficacy.",
                 "severity": "warning",
                 "icon": "citrus"
             }
@@ -667,7 +674,7 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
         ],
         "food_interactions": [
             {
-                "type": "avoid_alcohol",
+                "type": "avoid_potassium",
                 "title": "Avoid Potassium Salt Substitutes & High Potassium Supplements",
                 "description": "ACE inhibitors reduce potassium excretion. Excessive potassium intake can cause dangerous hyperkalemic cardiac arrhythmias.",
                 "severity": "critical",
@@ -834,10 +841,10 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
         ],
         "food_interactions": [
             {
-                "type": "take_before_meals",
+                "type": "empty_stomach",
                 "title": "Administer 30–60 Minutes Before Breakfast",
-                "description": "Taking pantoprazole prior to a meal maximizes peak plasma concentration when gastric proton pumps are stimulated by food intake.",
-                "severity": "recommended",
+                "description": "Taking pantoprazole on an empty stomach prior to a meal maximizes peak plasma concentration when gastric proton pumps are stimulated by food intake.",
+                "severity": "critical",
                 "icon": "utensils"
             },
             {
@@ -913,7 +920,8 @@ CURATED_MEDICINE_PROFILES: Dict[str, Dict[str, Any]] = {
         },
         "lifestyle_warnings": [
             "Maintain adequate hydration to safeguard renal perfusion.",
-            "Inform physician if you have a history of peptic ulcer disease, heart disease, or renal impairment."
+            "Use lowest effective dose for shortest possible duration to minimize cardiovascular thrombotic and renal risk.",
+            "Inform physician if you have a history of peptic ulcer disease, heart disease, hypertension, or renal impairment."
         ]
     }
 }

@@ -4,6 +4,8 @@ import { MedicineProvider } from './context/MedicineContext';
 import { Landing } from './pages/Landing';
 import { AppInterface } from './pages/AppInterface';
 import { DrugExplorer } from './pages/DrugExplorer';
+import { Assistant } from './pages/Assistant';
+import { MedicineDetail } from './pages/MedicineDetail';
 import { Auth } from './pages/Auth';
 import { NotFound } from './pages/NotFound';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -17,6 +19,8 @@ export function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/app" element={<AppInterface />} />
             <Route path="/explorer" element={<DrugExplorer />} />
+            <Route path="/assistant" element={<Assistant />} />
+            <Route path="/medicine/:name" element={<MedicineDetail />} />
             <Route path="/auth" element={<Auth />} />
             {/* An unknown path renders a 404 rather than redirecting to "/": a
                 silent bounce to the landing page is indistinguishable from a

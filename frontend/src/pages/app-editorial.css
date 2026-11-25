@@ -1,0 +1,325 @@
+/* MEDCHECK Editorial Application Stylesheet
+   Scoped to .ed-app (Safety Dashboard & Drug Explorer) and .ed-modal (portals/overlays).
+   Preserves Solhaus classes in index.css untouched for routes outside scope. */
+
+.ed-app,
+.ed-modal {
+  --paper: #f8f6f0;
+  --paper-sheet: #f0ede1;
+  --paper-inset: #ece7d5;
+  --ink: #1a1a18;
+  --ink-body: #2d2b26;
+  --ink-muted: #57534a;
+  --rule: #d5cfc0;
+  --rule-mid: #b7b09d;
+  --terracotta: #8b2500;
+  --terracotta-bg: #f3e9e4;
+  --amber: #8a5300;
+  --amber-bg: #f4eee0;
+  --forest: #2d4a22;
+  --forest-bg: #e8eee3;
+  --olive: #4a5338;
+  --olive-bg: #eef0e5;
+
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-serif: 'IBM Plex Serif', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+
+  background-color: var(--paper);
+  color: var(--ink-body);
+  font-family: var(--font-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+.ed-app *,
+.ed-app *::before,
+.ed-app *::after,
+.ed-modal *,
+.ed-modal *::before,
+.ed-modal *::after {
+  box-sizing: border-box;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.ed-app :focus-visible,
+.ed-modal :focus-visible {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 2px;
+}
+
+.ed-app .ed-display {
+  font-family: var(--font-display);
+}
+
+.ed-app .ed-serif,
+.ed-modal .ed-serif {
+  font-family: var(--font-serif);
+}
+
+.ed-app .ed-mono,
+.ed-modal .ed-mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* Editorial Ledger Sheets */
+.ed-app .ed-sheet {
+  background-color: var(--paper-sheet);
+  border: 1px solid var(--rule-mid);
+  border-top: 3px solid var(--ink);
+}
+
+.ed-app .ed-sheet-crit {
+  background-color: var(--paper-sheet);
+  border: 1px solid var(--terracotta);
+  border-top: 3px solid var(--terracotta);
+}
+
+.ed-app .ed-sheet-caut {
+  background-color: var(--paper-sheet);
+  border: 1px solid var(--amber);
+  border-top: 3px solid var(--amber);
+}
+
+.ed-app .ed-sheet-safe {
+  background-color: var(--paper-sheet);
+  border: 1px solid var(--forest);
+  border-top: 3px solid var(--forest);
+}
+
+.ed-app .ed-inset {
+  background-color: var(--paper);
+  border: 1px solid var(--rule);
+}
+
+/* Editorial Notices */
+.ed-app .ed-notice-crit,
+.ed-modal .ed-notice-crit {
+  background-color: var(--terracotta-bg);
+  border: 1px solid var(--terracotta);
+  border-top: 3px solid var(--terracotta);
+  color: var(--terracotta);
+}
+
+.ed-app .ed-notice-caut,
+.ed-modal .ed-notice-caut {
+  background-color: var(--amber-bg);
+  border: 1px solid var(--amber);
+  border-top: 3px solid var(--amber);
+  color: var(--amber);
+}
+
+.ed-app .ed-notice-safe,
+.ed-modal .ed-notice-safe {
+  background-color: var(--forest-bg);
+  border: 1px solid var(--forest);
+  border-top: 3px solid var(--forest);
+  color: var(--forest);
+}
+
+/* Rectangular Mono Tags */
+.ed-app .ed-tag,
+.ed-modal .ed-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--rule-mid);
+  background-color: var(--paper);
+  color: var(--ink-body);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.ed-app .ed-tag-crit,
+.ed-modal .ed-tag-crit {
+  border-color: var(--terracotta);
+  background-color: var(--terracotta-bg);
+  color: var(--terracotta);
+}
+
+.ed-app .ed-tag-caut,
+.ed-modal .ed-tag-caut {
+  border-color: var(--amber);
+  background-color: var(--amber-bg);
+  color: var(--amber);
+}
+
+.ed-app .ed-tag-safe,
+.ed-modal .ed-tag-safe {
+  border-color: var(--forest);
+  background-color: var(--forest-bg);
+  color: var(--forest);
+}
+
+.ed-app .ed-tag-ink,
+.ed-modal .ed-tag-ink {
+  border-color: var(--ink);
+  background-color: var(--paper-inset);
+  color: var(--ink);
+}
+
+.ed-app .ed-tag-olive,
+.ed-modal .ed-tag-olive {
+  border-color: var(--olive);
+  background-color: var(--olive-bg);
+  color: var(--olive);
+}
+
+/* Buttons */
+.ed-app .ed-btn-ink,
+.ed-modal .ed-btn-ink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid var(--ink);
+  background-color: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.ed-app .ed-btn-ink:hover:not(:disabled),
+.ed-modal .ed-btn-ink:hover:not(:disabled) {
+  background-color: var(--terracotta);
+  border-color: var(--terracotta);
+}
+
+.ed-app .ed-btn-outline,
+.ed-modal .ed-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border: 1px solid var(--ink);
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.ed-app .ed-btn-outline:hover:not(:disabled),
+.ed-modal .ed-btn-outline:hover:not(:disabled) {
+  background-color: var(--ink);
+  color: var(--paper);
+}
+
+/* Editorial Mobile Bottom Navigation (solid parchment, zero blur) */
+.ed-app .ed-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background-color: var(--paper);
+  border-top: 1px solid var(--rule-mid);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 40;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.ed-app .ed-bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 14px;
+  min-height: 48px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  transition: color 0.12s ease;
+}
+
+.ed-app .ed-bottom-nav-item.active {
+  color: var(--terracotta);
+  border-top: 2px solid var(--terracotta);
+}
+
+/* Network Graph node hover tone shift (no scale) */
+.ed-app .ed-graph-node:hover rect.ed-node-frame {
+  fill: var(--paper-inset);
+  stroke: var(--terracotta);
+}
+
+.ed-app .ed-graph-node.selected:hover rect.ed-node-frame {
+  fill: var(--terracotta);
+  stroke: var(--terracotta);
+}
+
+/* Docket / Catalog Table */
+.ed-app .ed-docket-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--paper);
+}
+
+.ed-app .ed-docket-table th,
+.ed-app .ed-docket-table td {
+  padding: 13px 16px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ed-app .ed-docket-table th {
+  background-color: var(--paper-inset);
+  border-bottom: 1px solid var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.ed-app .ed-docket-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ed-app .ed-docket-table tbody tr:hover {
+  background-color: var(--paper-sheet);
+}
+
+/* Print semantics preserved for DoctorReportModal portal */
+@media print {
+  .print-report,
+  .print-report * {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ed-app *,
+  .ed-modal * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

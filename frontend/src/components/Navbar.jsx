@@ -2,15 +2,16 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useMedicine } from '../context/MedicineContext';
 import {
-  ShieldCheck,
-  Sparkles,
-  Search,
-  FileText,
-  User,
-  ChevronDown,
-  Menu,
-  X
-} from 'lucide-react';
+  ShieldCrossIcon,
+  BookIcon,
+  SearchIcon,
+  MessageIcon,
+  DocumentIcon,
+  UserIcon,
+  ChevronDownIcon,
+  MenuIcon,
+  CloseIcon,
+} from '../pages/landing-icons';
 
 export function Navbar() {
   const location = useLocation();
@@ -27,10 +28,7 @@ export function Navbar() {
 
   const isActive = (path) => location.pathname === path;
 
-  // The Doctor Report renders whatever is in `results`. With no analysis run it
-  // produces an empty document -- a blank "clinical summary" a patient could
-  // reasonably print and take to an appointment. Gate the trigger instead of
-  // letting the modal explain itself after the fact.
+  // Gate the Doctor Report trigger if no analysis has been run yet
   const canOpenDoctorReport = Boolean(results);
   const doctorReportHint = canOpenDoctorReport
     ? 'Export a clinical summary of this analysis'
@@ -47,46 +45,44 @@ export function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close both overlays whenever the route changes. Each mobile drawer link already
-  // clears the menu on click, but that misses every other way the path can change
-  // -- the browser back button, the brand logo, a redirect, or a <Link> elsewhere
-  // on the page -- leaving the drawer covering the screen it navigated to.
+  // Close overlays whenever the route changes
   useEffect(() => {
     setMobileMenuOpen(false);
     setShowPresetsMenu(false);
   }, [location.pathname]);
 
   return (
-    <header className="fixed top-0 w-full z-40 flex justify-between items-center px-4 sm:px-8 md:px-12 h-14 bg-[var(--bg-surface)] border-b border-[var(--border-default)]">
-      {/* Brand Logo */}
-      <Link to="/" className="flex items-center gap-2 group">
-        <div className="w-7 h-7 rounded-[4px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center font-bold">
-          <ShieldCheck className="w-4 h-4" aria-hidden="true" />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="font-serif text-[20px] font-bold tracking-tight text-[var(--text-primary)]">
+    <header className="fixed top-0 left-0 right-0 w-full z-40 flex justify-between items-center px-4 sm:px-8 md:px-12 h-20 bg-[#f8f6f0] border-b border-[#b7b09d] rounded-none shadow-none">
+      {/* Editorial Brand Mark */}
+      <Link
+        to="/"
+        className="flex items-center gap-2.5 text-[#1a1a18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-2"
+      >
+        <span
+          className="w-8 h-8 border border-[#1a1a18] bg-[#f0ede1] text-[#1a1a18] flex items-center justify-center shrink-0"
+          aria-hidden="true"
+        >
+          <ShieldCrossIcon size={18} />
+        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-newsreader text-[22px] font-semibold tracking-[0.02em] text-[#1a1a18] leading-none">
             MEDCHECK
           </span>
-          <span className="tag font-bold text-[9px] py-0 px-1">
+          <span className="font-ibm-mono text-[10px] font-medium uppercase tracking-[0.08em] py-0.5 px-1.5 border border-[#b7b09d] bg-[#f0ede1] text-[#57534a]">
             PRO
           </span>
         </div>
       </Link>
 
       {/* Center Nav Links (Desktop & Tablet) */}
-      {/* Two <nav> landmarks exist in this header (desktop and mobile drawer), so
-          both need a name -- otherwise assistive tech announces two indistinguishable
-          "navigation" regions and the user cannot tell which they are in. */}
-      <nav aria-label="Primary" className="hidden md:flex items-center gap-1.5 sm:gap-2">
-        {/* aria-current is the only signal a screen-reader user gets for "you are
-            here"; isActive previously drove nothing but the background colour. */}
+      <nav aria-label="Primary" className="hidden md:flex items-center gap-1.5 lg:gap-2.5">
         <Link
           to="/"
           aria-current={isActive('/') ? 'page' : undefined}
-          className={`px-3 py-1.5 rounded-[6px] text-xs font-semibold transition-colors min-h-[36px] flex items-center ${
+          className={`px-2.5 lg:px-3 py-1.5 font-ibm-mono text-[11px] uppercase tracking-[0.08em] font-medium transition-colors min-h-[36px] flex items-center border focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-2 ${
             isActive('/')
-              ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-default)]'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
+              ? 'bg-[#ece7d5] text-[#1a1a18] border-[#1a1a18]'
+              : 'border-transparent text-[#2d2b26] hover:text-[#1a1a18] hover:border-[#b7b09d] hover:bg-[#f0ede1]'
           }`}
         >
           Home
@@ -95,10 +91,10 @@ export function Navbar() {
         <Link
           to="/app"
           aria-current={isActive('/app') ? 'page' : undefined}
-          className={`px-3.5 py-1.5 rounded-[6px] text-xs font-bold transition-colors min-h-[36px] flex items-center ${
+          className={`px-2.5 lg:px-3.5 py-1.5 font-ibm-mono text-[11px] uppercase tracking-[0.08em] font-medium transition-colors min-h-[36px] flex items-center border focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-2 ${
             isActive('/app')
-              ? 'bg-[var(--accent)] text-[var(--text-inverse)]'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
+              ? 'bg-[#1a1a18] text-[#f8f6f0] border-[#1a1a18]'
+              : 'border-[#b7b09d] bg-[#f8f6f0] text-[#1a1a18] hover:bg-[#f0ede1] hover:border-[#1a1a18]'
           }`}
         >
           Safety Dashboard
@@ -107,14 +103,27 @@ export function Navbar() {
         <Link
           to="/explorer"
           aria-current={isActive('/explorer') ? 'page' : undefined}
-          className={`px-3 py-1.5 rounded-[6px] text-xs font-semibold transition-colors flex items-center gap-1.5 min-h-[36px] ${
+          className={`px-2.5 lg:px-3 py-1.5 font-ibm-mono text-[11px] uppercase tracking-[0.08em] font-medium transition-colors flex items-center gap-1.5 min-h-[36px] border focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-2 ${
             isActive('/explorer')
-              ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-default)]'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'
+              ? 'bg-[#1a1a18] text-[#f8f6f0] border-[#1a1a18]'
+              : 'border-transparent text-[#2d2b26] hover:text-[#1a1a18] hover:border-[#b7b09d] hover:bg-[#f0ede1]'
           }`}
         >
-          <Search className="w-3.5 h-3.5" aria-hidden="true" />
+          <SearchIcon size={14} />
           <span>Drug Explorer</span>
+        </Link>
+
+        <Link
+          to="/assistant"
+          aria-current={isActive('/assistant') ? 'page' : undefined}
+          className={`px-2.5 lg:px-3 py-1.5 font-ibm-mono text-[11px] uppercase tracking-[0.08em] font-medium transition-colors flex items-center gap-1.5 min-h-[36px] border focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-2 ${
+            isActive('/assistant')
+              ? 'bg-[#1a1a18] text-[#f8f6f0] border-[#1a1a18]'
+              : 'border-transparent text-[#2d2b26] hover:text-[#1a1a18] hover:border-[#b7b09d] hover:bg-[#f0ede1]'
+          }`}
+        >
+          <MessageIcon size={14} />
+          <span>Assistant</span>
         </Link>
 
         {/* Doctor's Report Trigger */}
@@ -124,28 +133,25 @@ export function Navbar() {
           disabled={!canOpenDoctorReport}
           title={doctorReportHint}
           aria-label={doctorReportHint}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] border border-[var(--border-default)] transition-colors cursor-pointer min-h-[36px] disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]"
+          className="flex items-center gap-1.5 px-3 py-1.5 font-ibm-mono text-[11px] uppercase tracking-[0.08em] font-medium text-[#1a1a18] bg-[#f8f6f0] hover:bg-[#f0ede1] border border-[#b7b09d] hover:border-[#1a1a18] transition-colors cursor-pointer min-h-[36px] disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-[#f8f6f0] disabled:hover:border-[#b7b09d] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-2"
         >
-          <FileText className="w-3.5 h-3.5 text-[var(--text-primary)]" aria-hidden="true" />
+          <DocumentIcon size={14} />
           <span>Doctor Report</span>
         </button>
 
         {/* Clinical Scenario Quick-Launcher */}
         <div className="relative" ref={presetsRef}>
-          {/* A collapsed menu that reports neither its expanded state nor that it
-              controls a menu is announced as an ordinary button, so its effect is
-              invisible to anyone not watching the screen. */}
           <button
             type="button"
             onClick={() => setShowPresetsMenu(!showPresetsMenu)}
             aria-expanded={showPresetsMenu}
             aria-haspopup="menu"
             aria-controls="navbar-scenarios-menu"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-xs font-semibold bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] text-[var(--text-primary)] border border-[var(--border-default)] transition-colors cursor-pointer min-h-[36px]"
+            className="flex items-center gap-1.5 px-3 py-1.5 font-ibm-mono text-[11px] uppercase tracking-[0.08em] font-medium bg-[#f0ede1] hover:bg-[#ece7d5] text-[#1a1a18] border border-[#b7b09d] hover:border-[#1a1a18] transition-colors cursor-pointer min-h-[36px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-2"
           >
-            <Sparkles className="w-3.5 h-3.5 text-[var(--text-primary)]" aria-hidden="true" />
+            <BookIcon size={14} className="text-[#8b2500]" />
             <span>Scenarios</span>
-            <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" aria-hidden="true" />
+            <ChevronDownIcon size={13} className="text-[#57534a]" />
           </button>
 
           {showPresetsMenu && (
@@ -153,9 +159,9 @@ export function Navbar() {
               id="navbar-scenarios-menu"
               role="menu"
               aria-label="Preloaded clinical cases"
-              className="absolute right-0 top-full mt-1.5 w-72 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[8px] p-1 shadow-lg z-50 flex flex-col gap-1"
+              className="absolute right-0 top-full mt-1.5 w-80 bg-[#f8f6f0] border border-[#1a1a18] border-t-[3px] border-t-[#1a1a18] z-50 flex flex-col rounded-none shadow-none"
             >
-              <div className="px-2.5 py-1 text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider border-b border-[var(--border-default)]">
+              <div className="px-3 py-2 bg-[#ece7d5] font-ibm-mono text-[11px] font-medium text-[#1a1a18] uppercase tracking-[0.08em] border-b border-[#b7b09d]">
                 Preloaded Clinical Cases
               </div>
               {demoPresets.map((preset) => (
@@ -167,18 +173,18 @@ export function Navbar() {
                     loadPreset(preset);
                     setShowPresetsMenu(false);
                   }}
-                  className="text-left p-2 rounded-[4px] hover:bg-[var(--bg-elevated)] transition-colors flex flex-col gap-0.5 cursor-pointer group"
+                  className="text-left p-3 border-b border-[#d5cfc0] last:border-b-0 hover:bg-[#f0ede1] transition-colors flex flex-col gap-1 cursor-pointer group focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-[-2px]"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-serif text-[15px] font-bold text-[var(--text-primary)] group-hover:underline">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-newsreader text-[15px] font-semibold text-[#1a1a18] group-hover:text-[#8b2500] leading-snug">
                       {preset.name}
                     </span>
-                    <span className="tag">
+                    <span className="shrink-0 font-ibm-mono text-[10px] uppercase tracking-[0.06em] px-1.5 py-0.5 border border-[#b7b09d] bg-[#f0ede1] text-[#2d2b26]">
                       {preset.badge}
                     </span>
                   </div>
-                  <span className="text-xs text-[var(--text-muted)] line-clamp-1">
-                    {preset.description}
+                  <span className="font-ibm-serif text-xs text-[#57534a] line-clamp-2 leading-relaxed">
+                    {preset.description.replace(/\s*\u2014\s*/g, '; ')}
                   </span>
                 </button>
               ))}
@@ -190,9 +196,9 @@ export function Navbar() {
         <Link
           to="/auth"
           aria-label="Account Settings"
-          className="w-8 h-8 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors ml-1"
+          className="w-9 h-9 bg-[#f0ede1] hover:bg-[#ece7d5] border border-[#b7b09d] hover:border-[#1a1a18] flex items-center justify-center text-[#2d2b26] hover:text-[#1a1a18] transition-colors ml-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-2"
         >
-          <User className="w-4 h-4" aria-hidden="true" />
+          <UserIcon size={16} />
         </Link>
       </nav>
 
@@ -204,9 +210,9 @@ export function Navbar() {
           disabled={!canOpenDoctorReport}
           aria-label={doctorReportHint}
           title={doctorReportHint}
-          className="w-8 h-8 rounded-[4px] bg-[var(--bg-elevated)] border border-[var(--border-default)] flex items-center justify-center text-[var(--text-primary)] disabled:opacity-45 disabled:cursor-not-allowed"
+          className="w-9 h-9 bg-[#f0ede1] border border-[#b7b09d] flex items-center justify-center text-[#1a1a18] disabled:opacity-45 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-2"
         >
-          <FileText className="w-4 h-4" aria-hidden="true" />
+          <DocumentIcon size={16} />
         </button>
 
         <button
@@ -215,9 +221,9 @@ export function Navbar() {
           aria-label="Toggle Navigation Menu"
           aria-expanded={mobileMenuOpen}
           aria-controls="navbar-mobile-menu"
-          className="w-8 h-8 rounded-[4px] bg-[var(--bg-elevated)] border border-[var(--border-default)] flex items-center justify-center text-[var(--text-primary)]"
+          className="w-9 h-9 bg-[#f0ede1] border border-[#1a1a18] flex items-center justify-center text-[#1a1a18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#8b2500] focus-visible:outline-offset-2"
         >
-          {mobileMenuOpen ? <X className="w-4 h-4" aria-hidden="true" /> : <Menu className="w-4 h-4" aria-hidden="true" />}
+          {mobileMenuOpen ? <CloseIcon size={16} /> : <MenuIcon size={16} />}
         </button>
       </div>
 
@@ -226,13 +232,17 @@ export function Navbar() {
         <nav
           id="navbar-mobile-menu"
           aria-label="Primary (mobile)"
-          className="md:hidden absolute top-14 left-0 right-0 bg-[var(--bg-surface)] border-b border-[var(--border-default)] p-4 shadow-xl z-50 flex flex-col gap-2"
+          className="md:hidden absolute top-20 left-0 right-0 bg-[#f8f6f0] border-b border-[#1a1a18] p-4 z-50 flex flex-col gap-2 rounded-none shadow-none"
         >
           <Link
             to="/"
             aria-current={isActive('/') ? 'page' : undefined}
             onClick={() => setMobileMenuOpen(false)}
-            className="p-3 rounded-[6px] bg-[var(--bg-elevated)] text-sm font-semibold text-[var(--text-primary)]"
+            className={`p-3 border font-ibm-mono text-xs uppercase tracking-[0.08em] font-medium ${
+              isActive('/')
+                ? 'bg-[#ece7d5] border-[#1a1a18] text-[#1a1a18]'
+                : 'bg-[#f0ede1] border-[#d5cfc0] text-[#1a1a18]'
+            }`}
           >
             Home
           </Link>
@@ -240,7 +250,11 @@ export function Navbar() {
             to="/app"
             aria-current={isActive('/app') ? 'page' : undefined}
             onClick={() => setMobileMenuOpen(false)}
-            className="p-3 rounded-[6px] bg-[var(--accent)] text-white text-sm font-bold"
+            className={`p-3 border font-ibm-mono text-xs uppercase tracking-[0.08em] font-medium ${
+              isActive('/app')
+                ? 'bg-[#1a1a18] border-[#1a1a18] text-[#f8f6f0]'
+                : 'bg-[#f0ede1] border-[#d5cfc0] text-[#1a1a18]'
+            }`}
           >
             Safety Dashboard
           </Link>
@@ -248,18 +262,39 @@ export function Navbar() {
             to="/explorer"
             aria-current={isActive('/explorer') ? 'page' : undefined}
             onClick={() => setMobileMenuOpen(false)}
-            className="p-3 rounded-[6px] bg-[var(--bg-elevated)] text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"
+            className={`p-3 border font-ibm-mono text-xs uppercase tracking-[0.08em] font-medium flex items-center gap-2 ${
+              isActive('/explorer')
+                ? 'bg-[#1a1a18] border-[#1a1a18] text-[#f8f6f0]'
+                : 'bg-[#f0ede1] border-[#d5cfc0] text-[#1a1a18]'
+            }`}
           >
-            <Search className="w-4 h-4" aria-hidden="true" />
+            <SearchIcon size={15} />
             <span>Drug Explorer</span>
+          </Link>
+          <Link
+            to="/assistant"
+            aria-current={isActive('/assistant') ? 'page' : undefined}
+            onClick={() => setMobileMenuOpen(false)}
+            className={`p-3 border font-ibm-mono text-xs uppercase tracking-[0.08em] font-medium flex items-center gap-2 ${
+              isActive('/assistant')
+                ? 'bg-[#1a1a18] border-[#1a1a18] text-[#f8f6f0]'
+                : 'bg-[#f0ede1] border-[#d5cfc0] text-[#1a1a18]'
+            }`}
+          >
+            <MessageIcon size={15} />
+            <span>Assistant</span>
           </Link>
           <Link
             to="/auth"
             aria-current={isActive('/auth') ? 'page' : undefined}
             onClick={() => setMobileMenuOpen(false)}
-            className="p-3 rounded-[6px] bg-[var(--bg-elevated)] text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"
+            className={`p-3 border font-ibm-mono text-xs uppercase tracking-[0.08em] font-medium flex items-center gap-2 ${
+              isActive('/auth')
+                ? 'bg-[#1a1a18] border-[#1a1a18] text-[#f8f6f0]'
+                : 'bg-[#f0ede1] border-[#d5cfc0] text-[#1a1a18]'
+            }`}
           >
-            <User className="w-4 h-4" aria-hidden="true" />
+            <UserIcon size={15} />
             <span>Account Profile</span>
           </Link>
         </nav>
@@ -267,3 +302,4 @@ export function Navbar() {
     </header>
   );
 }
+export default Navbar;

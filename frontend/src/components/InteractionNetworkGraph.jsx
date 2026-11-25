@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import { useMedicine } from '../context/MedicineContext';
-import { Activity } from 'lucide-react';
+import { NetworkIcon } from '../pages/landing-icons';
 
 function InteractionNetworkGraphBase() {
   const { medicines, results, selectMedicine, selectedMedicineName } = useMedicine();
 
-  // Compute node coordinates arranged in a harmonic circle
+  // Compute node coordinates arranged in a harmonic ring
   const nodePositions = useMemo(() => {
     const count = medicines.length;
     if (count === 0) return {};
@@ -37,15 +37,15 @@ function InteractionNetworkGraphBase() {
       const posB = nodePositions[interaction.drug_b.toLowerCase()];
       if (!posA || !posB) return null;
 
-      let strokeColor = '#059669'; // Low
-      let strokeWidth = 2;
+      let strokeColor = '#2d4a22'; // Safe / low
+      let strokeWidth = 1.75;
       let strokeDash = 'none';
 
       if (interaction.severity === 'high') {
-        strokeColor = '#DC2626'; // Danger
+        strokeColor = '#8b2500'; // Critical crimson/terracotta
         strokeWidth = 2.5;
       } else if (interaction.severity === 'moderate') {
-        strokeColor = '#D97706'; // Warning
+        strokeColor = '#8a5300'; // Caution mineral amber
         strokeWidth = 2;
         strokeDash = '4 4';
       }
@@ -67,35 +67,35 @@ function InteractionNetworkGraphBase() {
   }
 
   return (
-    <div className="card flex flex-col items-center">
+    <div className="ed-sheet p-5 flex flex-col items-center">
       {/* Header bar */}
-      <div className="w-full flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-[4px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center">
-            <Activity className="w-3.5 h-3.5" />
+      <div className="w-full flex items-center justify-between gap-2 pb-3 mb-3 border-b border-[#d5cfc0]">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 border border-[#1a1a18] bg-[#f8f6f0] text-[#1a1a18] flex items-center justify-center shrink-0">
+            <NetworkIcon size={15} />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+            <h3 className="font-newsreader text-[17px] font-semibold text-[#1a1a18] leading-tight">
               Interaction Network Web
             </h3>
-            <p className="text-xs text-[var(--text-muted)]">
-              Topology map • Click any node to open profile
+            <p className="font-ibm-mono text-[10px] uppercase tracking-[0.06em] text-[#57534a] mt-0.5">
+              Topology map · Click any node to open profile
             </p>
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="hidden sm:flex items-center gap-3">
-          <div className="badge badge-high">Critical</div>
-          <div className="badge badge-moderate">Moderate</div>
-          <div className="badge badge-low">Safe</div>
+        {/* Mineral Severity Legend */}
+        <div className="hidden sm:flex items-center gap-2">
+          <span className="ed-tag ed-tag-crit">High</span>
+          <span className="ed-tag ed-tag-caut">Moderate</span>
+          <span className="ed-tag ed-tag-safe">Low</span>
         </div>
       </div>
 
-      {/* SVG Canvas */}
-      <div className="w-full max-w-[580px] h-[280px] relative">
-        <svg className="w-full h-full" viewBox="0 0 580 280">
-          {/* Render Connecting Interaction Links */}
+      {/* Square Flat SVG Canvas */}
+      <div className="w-full max-w-[580px] h-[280px] relative bg-[#f8f6f0] border border-[#d5cfc0]">
+        <svg className="w-full h-full" viewBox="0 0 580 280" role="img" aria-label="Medicine interaction topology map">
+          {/* Connecting Interaction Links */}
           {links.map((link) => (
             <line
               key={link.id}
@@ -106,31 +106,29 @@ function InteractionNetworkGraphBase() {
               stroke={link.strokeColor}
               strokeWidth={link.strokeWidth}
               strokeDasharray={link.strokeDash}
-              strokeLinecap="round"
+              strokeLinecap="square"
             />
           ))}
 
-          {/* Render Medicine Nodes */}
+          {/* Medicine Nodes (Square Architectural Frames) */}
           {Object.entries(nodePositions).map(([key, node]) => {
             const isSelected = selectedMedicineName?.toLowerCase() === key;
             const hasCritical = links.some(
               (l) => (l.posA.med.name.toLowerCase() === key || l.posB.med.name.toLowerCase() === key) && l.interaction.severity === 'high'
             );
 
-            let nodeFill = '#F8FAFC';
-            let nodeStroke = '#CBD5E1';
-            // Literal colours, matching nodeFill/nodeStroke above: an SVG `stroke`
-            // attribute cannot resolve a Tailwind text-colour class, which is what
-            // the removed foreignObject relied on.
-            let iconColor = '#64748B';
+            let nodeFill = '#f8f6f0';
+            let nodeStroke = '#1a1a18';
+            let iconColor = '#1a1a18';
 
             if (isSelected) {
-              nodeFill = '#0F172A';
-              nodeStroke = '#0F172A';
-              iconColor = '#FFFFFF';
+              nodeFill = '#1a1a18';
+              nodeStroke = '#1a1a18';
+              iconColor = '#f8f6f0';
             } else if (hasCritical) {
-              nodeStroke = '#DC2626';
-              iconColor = '#DC2626';
+              nodeFill = '#f3e9e4';
+              nodeStroke = '#8b2500';
+              iconColor = '#8b2500';
             }
 
             return (
@@ -138,12 +136,7 @@ function InteractionNetworkGraphBase() {
                 key={key}
                 transform={`translate(${node.x}, ${node.y})`}
                 onClick={() => selectMedicine(node.med.name)}
-                // The former onMouseEnter/onMouseLeave fed a `hoveredNode` state
-                // that nothing read, so every pointer movement across the graph
-                // re-rendered all nodes and links to no visible effect. The hover
-                // emphasis comes from the `group-hover:` class on the circle below,
-                // which is pure CSS and needs no state.
-                className="cursor-pointer group"
+                className={`cursor-pointer ed-graph-node ${isSelected ? 'selected' : ''}`}
                 role="button"
                 tabIndex={0}
                 aria-label={`View profile for ${node.med.name}`}
@@ -154,47 +147,38 @@ function InteractionNetworkGraphBase() {
                   }
                 }}
               >
-                {/* Base Node Circle */}
-                <circle
-                  r={16}
+                {/* Sharp Rectangular Node Frame */}
+                <rect
+                  className="ed-node-frame"
+                  x={-16}
+                  y={-16}
+                  width={32}
+                  height={32}
                   fill={nodeFill}
                   stroke={nodeStroke}
                   strokeWidth={isSelected ? 2 : 1.5}
-                  className="transition-transform duration-150 group-hover:scale-105"
                 />
 
-                {/* Pill glyph, drawn as native SVG.
-                    This was a <foreignObject> wrapping the lucide <Pill> React
-                    component. foreignObject embeds an HTML subtree inside SVG and
-                    is unreliable in exactly the browsers this app targets on
-                    mobile: WebKit mis-positions or drops the content depending on
-                    transform and scaling context, so the node could render as a
-                    bare circle. Native <rect>/<line> primitives are painted by the
-                    same SVG code path as everything else here and are inert to
-                    pointer events without needing a pointer-events override.
-
-                    Geometry: a 12x6 capsule rotated 45deg about the node centre,
-                    with a divider across its short axis -- the standard pill
-                    silhouette, matching the 14x14 box the icon previously used. */}
+                {/* Geometric Angular Pill Mark */}
                 <g
-                  transform="rotate(-45)"
                   fill="none"
                   stroke={iconColor}
                   strokeWidth={1.4}
-                  strokeLinecap="round"
+                  strokeLinecap="square"
+                  strokeLinejoin="miter"
                   aria-hidden="true"
                 >
-                  <rect x={-6} y={-3} width={12} height={6} rx={3} ry={3} />
-                  <line x1={0} y1={-3} x2={0} y2={3} />
+                  <polygon points="3,-7 7,-3 -3,7 -7,3" />
+                  <line x1={-2} y1={-2} x2={2} y2={2} />
                 </g>
 
                 {/* Medicine Name Label */}
                 <text
-                  y={28}
+                  y={31}
                   textAnchor="middle"
-                  className={`text-xs font-semibold transition-colors ${
-                    isSelected ? 'fill-[var(--text-primary)] font-bold' : hasCritical ? 'fill-[var(--severity-high)]' : 'fill-[var(--text-primary)]'
-                  }`}
+                  style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', letterSpacing: '0.04em' }}
+                  fill={hasCritical && !isSelected ? '#8b2500' : '#1a1a18'}
+                  fontWeight={isSelected || hasCritical ? '600' : '500'}
                 >
                   {node.med.name}
                 </text>
@@ -207,9 +191,5 @@ function InteractionNetworkGraphBase() {
   );
 }
 
-// Memoised: this is the heaviest render on the analysis screen -- an SVG whose node
-// positions, link paths and per-node severity colours are all recomputed from the
-// basket and the results. It takes no props, so with the context value memoised it
-// now re-renders only when the basket or the analysis actually changes, rather than
-// on every mobile-tab switch and modal toggle in AppInterface.
 export const InteractionNetworkGraph = React.memo(InteractionNetworkGraphBase);
+export default InteractionNetworkGraph;

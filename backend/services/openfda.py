@@ -196,6 +196,16 @@ async def fetch_drug_label(drug_name: str) -> Optional[Dict[str, Any]]:
                         results = data.get("results", [])
                         if results:
                             label = results[0]
+                            if query.startswith("indications_and_usage"):
+                                openfda_meta = label.get("openfda", {})
+                                generic_list = [g.lower() for g in openfda_meta.get("generic_name", []) or []]
+                                brand_list = [b.lower() for b in openfda_meta.get("brand_name", []) or []]
+                                substance_list = [s.lower() for s in openfda_meta.get("substance_name", []) or []]
+                                active_ing = [a.lower() for a in label.get("active_ingredient", []) or []]
+                                all_names_text = " ".join(generic_list + brand_list + substance_list + active_ing)
+                                if cleaned_name.lower() not in all_names_text:
+                                    logger.info(f"OpenFDA indications_and_usage matched label, but '{cleaned_name}' not found in names/ingredients; rejecting.")
+                                    break
                             extracted = extract_label_info(label, fallback_name=cleaned_name)
                             if extracted:
                                 logger.info(f"Successfully fetched openFDA label for '{drug_name}' using query '{query}'")
@@ -276,31 +286,22 @@ def extract_label_info(raw_label: Dict[str, Any], fallback_name: str) -> Dict[st
     boxed_warnings = raw_label.get("boxed_warning", [])
     drug_interactions = raw_label.get("drug_interactions", [])
     adverse_reactions = raw_label.get("adverse_reactions", [])
-    food_interactions = raw_label.get("food_and_drug_interactions", [])
+    warnings_and_cautions = raw_label.get("warnings_and_cautions", [])
+    dosage_and_administration = raw_label.get("dosage_and_administration", [])
+    information_for_patients = raw_label.get("information_for_patients", [])
     contraindications = raw_label.get("contraindications", [])
     precautions = raw_label.get("precautions", [])
 
-    # Sections are concatenated in descending clinical severity, because
-    # raw_text_summary is truncated and whatever falls past the cap is invisible
-    # to every downstream consumer. Boxed warnings and contraindications must
-    # therefore never be the sections that get cut.
-    #
-    # adverse_reactions and precautions were previously omitted from this join
-    # entirely. That was not merely an incomplete summary: the side-effect
-    # detectors in knowledge_base.get_or_build_medicine_profile and
-    # interaction_analyzer.parse_drug_label_from_dict scan this exact string for
-    # "nausea", "vomiting", "drowsiness", "dizziness", "rash" and "hepat" --
-    # terms that live almost exclusively in the adverse-reactions section. Side
-    # effects were being derived from text that structurally excluded the side
-    # effects, so most drugs fell through to the generic two-item placeholder.
     full_text = "\n".join(
         boxed_warnings
         + contraindications
         + warnings
+        + warnings_and_cautions
         + drug_interactions
-        + food_interactions
         + precautions
         + adverse_reactions
+        + dosage_and_administration
+        + information_for_patients
     )
 
     return {
@@ -308,10 +309,6 @@ def extract_label_info(raw_label: Dict[str, Any], fallback_name: str) -> Dict[st
         "brand_names": brand_names,
         "substance_names": substance_names,
         "product_types": product_types,
-        # None rather than a "Prescription / OTC Drug" placeholder. The
-        # placeholder was a non-None value, so a downstream
-        # `label.get("pharm_class_cs", <sensible default>)` could never fall back
-        # to its default and rendered the placeholder as the drug's category.
         "pharm_class_cs": pharm_class_cs[0] if pharm_class_cs else None,
         "is_rx": is_rx,
         "dosage_forms": _extract_dosage_forms(raw_label, openfda),
@@ -319,7 +316,7 @@ def extract_label_info(raw_label: Dict[str, Any], fallback_name: str) -> Dict[st
         "boxed_warnings": boxed_warnings,
         "drug_interactions": drug_interactions,
         "adverse_reactions": adverse_reactions,
-        "food_interactions": food_interactions,
+        "food_interactions": [],
         "contraindications": contraindications,
         "precautions": precautions,
         "raw_text_summary": truncate_to_sentences(full_text, max_chars=RAW_TEXT_SUMMARY_MAX_CHARS),

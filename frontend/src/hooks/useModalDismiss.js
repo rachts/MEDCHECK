@@ -26,12 +26,41 @@ export function useModalDismiss(isOpen, onClose) {
   useEffect(() => {
     if (!isOpen) return undefined;
 
+    const previouslyFocused = document.activeElement;
+
     // Read the callback through a local so the listener does not have to be torn
     // down and rebuilt when a parent re-render hands us a new function identity.
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
         onClose();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        if (!dialogRef.current) return;
+        const focusable = dialogRef.current.querySelectorAll(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable || focusable.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first || !dialogRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last || !dialogRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       }
     };
 
@@ -40,15 +69,22 @@ export function useModalDismiss(isOpen, onClose) {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    // Focus the dialog container itself rather than guessing at a first control:
-    // the container carries tabIndex={-1}, so this is programmatic-only and does
-    // not add a stop to the tab order.
-    const focusTarget = dialogRef.current;
-    if (focusTarget) focusTarget.focus();
+    // Focus first focusable element inside the modal, or the dialog container itself
+    const focusable = dialogRef.current?.querySelectorAll(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable && focusable.length > 0) {
+      focusable[0].focus();
+    } else if (dialogRef.current) {
+      dialogRef.current.focus();
+    }
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousOverflow;
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+        previouslyFocused.focus();
+      }
     };
   }, [isOpen, onClose]);
 

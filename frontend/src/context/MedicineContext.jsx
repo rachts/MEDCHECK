@@ -123,6 +123,29 @@ function readStoredWakeTime() {
   }
 }
 
+export const DEFAULT_DEMO_BASKET = [
+  { id: '1', name: 'Warfarin', drugType: 'prescription' },
+  { id: '2', name: 'Aspirin', drugType: 'otc' },
+  { id: '3', name: 'Ibuprofen', drugType: 'otc' },
+];
+
+const BASKET_STORAGE_KEY = 'medcheck_basket';
+
+function readStoredBasket() {
+  try {
+    const saved = localStorage.getItem(BASKET_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+    return DEFAULT_DEMO_BASKET;
+  } catch {
+    return DEFAULT_DEMO_BASKET;
+  }
+}
+
 /**
  * Owns all analysis state: the basket, the last `CheckResponse`, the selected
  * medicine's `MedicineProfileResponse`, and the two modal flags.
@@ -131,12 +154,9 @@ function readStoredWakeTime() {
  * @param {import('react').ReactNode} props.children
  */
 export function MedicineProvider({ children }) {
-  const [medicines, setMedicines] = useState([
-    { id: '1', name: 'Warfarin', drugType: 'prescription' },
-    { id: '2', name: 'Aspirin', drugType: 'otc' },
-    { id: '3', name: 'Ibuprofen', drugType: 'otc' },
-  ]);
+  const [medicines, setMedicines] = useState(readStoredBasket);
   const [results, setResults] = useState(null);
+  const [resultsStale, setResultsStale] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState('');
   const [error, setError] = useState(null);
@@ -146,6 +166,15 @@ export function MedicineProvider({ children }) {
   // Anchors the backend's 24-hour administration timeline. Persisted because a
   // patient's wake time is a stable fact about them, not a per-session choice.
   const [patientWakeTime, setPatientWakeTimeState] = useState(readStoredWakeTime);
+
+  // Persist basket changes in localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(BASKET_STORAGE_KEY, JSON.stringify(medicines));
+    } catch (e) {
+      console.warn('Basket save error:', e);
+    }
+  }, [medicines]);
 
   const setPatientWakeTime = useCallback((value) => {
     // An invalid value is stored as the default rather than rejected outright:
@@ -272,6 +301,7 @@ export function MedicineProvider({ children }) {
     };
 
     setMedicines((prev) => [...prev, newMed]);
+    setResultsStale(true);
     selectMedicine(newMed.name);
     return true;
   }, [medicines, selectMedicine]);
@@ -287,6 +317,7 @@ export function MedicineProvider({ children }) {
       return remaining;
     });
     setResults(null);
+    setResultsStale(false);
     setError(null);
     setInputError(null);
   }, [selectMedicine]);
@@ -294,6 +325,7 @@ export function MedicineProvider({ children }) {
   const clearBasket = useCallback(() => {
     setMedicines([]);
     setResults(null);
+    setResultsStale(false);
     setSelectedProfile(null);
     setError(null);
     setInputError(null);
@@ -307,10 +339,22 @@ export function MedicineProvider({ children }) {
     }));
     setMedicines(newMeds);
     setResults(null);
+    setResultsStale(false);
     setError(null);
     setInputError(null);
     if (newMeds.length > 0) {
       selectMedicine(newMeds[0].name);
+    }
+  }, [selectMedicine]);
+
+  const resetToDemo = useCallback(() => {
+    setMedicines(DEFAULT_DEMO_BASKET);
+    setResults(null);
+    setResultsStale(false);
+    setError(null);
+    setInputError(null);
+    if (DEFAULT_DEMO_BASKET.length > 0) {
+      selectMedicine(DEFAULT_DEMO_BASKET[0].name);
     }
   }, [selectMedicine]);
 
@@ -328,11 +372,15 @@ export function MedicineProvider({ children }) {
     setIsDemoMode((prev) => !prev);
   }, []);
 
-  const checkSafety = useCallback(async () => {
+  const checkSafety = useCallback(async (opts) => {
     if (medicines.length < 1) {
       setError('Please add at least one medicine to begin analysis.');
       return;
     }
+
+    const effectiveWakeTime = (opts && typeof opts === 'object' && typeof opts.wakeTime === 'string')
+      ? opts.wakeTime
+      : patientWakeTime;
 
     setLoading(true);
     setError(null);
@@ -346,8 +394,9 @@ export function MedicineProvider({ children }) {
 
     try {
       const medNames = medicines.map((m) => m.name);
-      const data = await checkMedicines(medNames, patientWakeTime);
+      const data = await checkMedicines(medNames, effectiveWakeTime);
       setResults(data);
+      setResultsStale(false);
       if (selectedMedicineName && data.profiles && data.profiles[selectedMedicineName.toLowerCase()]) {
         setSelectedProfile(data.profiles[selectedMedicineName.toLowerCase()]);
       } else if (medNames.length > 0 && data.profiles && data.profiles[medNames[0].toLowerCase()]) {
@@ -397,6 +446,7 @@ export function MedicineProvider({ children }) {
   const value = useMemo(() => ({
     medicines,
     results,
+    resultsStale,
     loading,
     loadingStage,
     error,
@@ -420,17 +470,18 @@ export function MedicineProvider({ children }) {
     clearBasket,
     loadPreset,
     loadScenario,
+    resetToDemo,
     toggleDemoMode,
     checkSafety,
     canCheck: medicines.length >= 1,
     demoPresets: DEMO_PRESETS,
   }), [
-    medicines, results, loading, loadingStage, error, inputError, isDemoMode,
+    medicines, results, resultsStale, loading, loadingStage, error, inputError, isDemoMode,
     patientWakeTime, setPatientWakeTime,
     selectedMedicineName, selectedProfile, profileLoading, profileError,
     doctorReportOpen, stomachModalOpen, personalNotes, savePersonalNote,
     selectMedicine, addMedicine, removeMedicine, clearBasket, loadPreset,
-    loadScenario, toggleDemoMode, checkSafety,
+    loadScenario, resetToDemo, toggleDemoMode, checkSafety,
   ]);
 
   return <MedicineContext.Provider value={value}>{children}</MedicineContext.Provider>;

@@ -1,79 +1,123 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMedicine } from '../context/MedicineContext';
+import { searchMedicines, searchIndiaCatalogue } from '../lib/api';
 import { MedicineChip } from './MedicineChip';
-import { searchMedicines } from '../lib/api';
-import { useDebounce } from '../hooks/useDebounce';
-import { 
-  Plus, 
-  Trash2, 
-  ShieldCheck, 
-  Search, 
-  Flame, 
-  Clock, 
-  AlertTriangle,
-  ArrowRight,
-  Pill,
-  Archive,
-  Info
-} from 'lucide-react';
+import {
+  SearchIcon,
+  PlusIcon,
+  RemoveIcon,
+  PillIcon,
+  ShieldCrossIcon,
+  ShieldIcon,
+  ClockIcon,
+  ArrowRightIcon,
+  WarningIcon,
+  BasketIcon,
+  InfoIcon,
+} from '../pages/landing-icons';
 
-export function MedicineBasket() {
+export function MedicineBasket({ onSeeTimeline }) {
+  const navigate = useNavigate();
   const {
     medicines,
     addMedicine,
     removeMedicine,
     clearBasket,
-    results,
+    checkSafety,
     loading,
     loadingStage,
-    checkSafety,
-    inputError,
+    results,
     setStomachModalOpen
   } = useMedicine();
 
   const [inputVal, setInputVal] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [searchError, setSearchError] = useState(false);
+  const [catalogueResults, setCatalogueResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [inputError, setInputError] = useState('');
+
   const dropdownRef = useRef(null);
 
-  const debouncedQuery = useDebounce(inputVal, 250);
-
+  // Debounce autocomplete search input by 250ms
   useEffect(() => {
-    if (!debouncedQuery.trim()) {
-      setSearchResults([]);
-      setShowDropdown(false);
+    const timer = setTimeout(() => {
+      setDebouncedQuery(inputVal);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [inputVal]);
+
+  // Query clinical search and Indian medicines reference catalogue
+  useEffect(() => {
+    let active = true;
+
+    async function fetchMatches() {
+      const q = debouncedQuery.trim();
+      if (!q) {
+        setSearchResults([]);
+        setCatalogueResults([]);
+        setIsSearching(false);
+        setSearchError(false);
+        return;
+      }
+
+      setIsSearching(true);
       setSearchError(false);
-      setIsSearching(false);
-      return;
+
+      try {
+        const [clinicalOutcome, catalogueOutcome] = await Promise.allSettled([
+          searchMedicines(q),
+          searchIndiaCatalogue(q, 5),
+        ]);
+
+        if (!active) return;
+
+        const nextClinical =
+          clinicalOutcome.status === 'fulfilled' && Array.isArray(clinicalOutcome.value)
+            ? clinicalOutcome.value
+            : [];
+        const nextCatalogue =
+          catalogueOutcome.status === 'fulfilled' && Array.isArray(catalogueOutcome.value?.results)
+            ? catalogueOutcome.value.results.slice(0, 5)
+            : [];
+
+        const bothFailed =
+          clinicalOutcome.status === 'rejected' && catalogueOutcome.status === 'rejected';
+
+        if (clinicalOutcome.status === 'rejected') {
+          console.warn('MEDCHECK: clinical search API request failed:', clinicalOutcome.reason);
+        }
+        if (catalogueOutcome.status === 'rejected') {
+          console.warn('MEDCHECK: catalogue search API request failed:', catalogueOutcome.reason);
+        }
+
+        setSearchResults(nextClinical);
+        setCatalogueResults(nextCatalogue);
+        setSearchError(bothFailed);
+        setShowDropdown(true);
+      } catch (err) {
+        if (active) {
+          console.warn('MEDCHECK: search API request failed:', err);
+          setSearchResults([]);
+          setCatalogueResults([]);
+          setSearchError(true);
+          setShowDropdown(true);
+        }
+      } finally {
+        if (active) setIsSearching(false);
+      }
     }
 
-    let isMounted = true;
-    setIsSearching(true);
-    setSearchError(false);
-    searchMedicines(debouncedQuery)
-      .then((data) => {
-        if (isMounted) {
-          setSearchResults(data);
-          setShowDropdown(true);
-          setIsSearching(false);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setSearchResults([]);
-          setSearchError(true);
-          setIsSearching(false);
-          setShowDropdown(true);
-        }
-      });
-
+    fetchMatches();
     return () => {
-      isMounted = false;
+      active = false;
     };
   }, [debouncedQuery]);
 
+  // Click outside listener for dropdown
   useEffect(() => {
     function handleClickOutside(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -86,57 +130,81 @@ export function MedicineBasket() {
 
   const handleAddFromInput = (e) => {
     e.preventDefault();
-    if (inputVal.trim()) {
-      const added = addMedicine(inputVal);
-      if (added) {
-        setInputVal('');
-        setShowDropdown(false);
-      }
-    }
-  };
+    const trimmed = inputVal.trim();
+    if (!trimmed) return;
 
-  const handleSelectSearchResult = (item) => {
-    addMedicine(item.name, item.drug_type);
+    const exists = medicines.some(
+      (m) => m.name.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (exists) {
+      setInputError(`"${trimmed}" is already in your basket`);
+      setTimeout(() => setInputError(''), 3000);
+      return;
+    }
+
+    addMedicine(trimmed, 'otc');
     setInputVal('');
     setShowDropdown(false);
   };
 
-  const giScore = results?.composite_gi_score ?? (results ? 0 : 20);
-  const giTier = results?.composite_gi_tier || (results ? 'unknown' : 'gentle');
+  const handleSelectSearchResult = (item) => {
+    const exists = medicines.some(
+      (m) => m.name.toLowerCase() === item.name.toLowerCase()
+    );
+    if (exists) {
+      setInputError(`"${item.name}" is already in your basket`);
+      setTimeout(() => setInputError(''), 3000);
+      setShowDropdown(false);
+      return;
+    }
+
+    addMedicine(item.name, item.drug_type || 'otc');
+    setInputVal('');
+    setShowDropdown(false);
+  };
+
+  const handleSelectCatalogueResult = (item) => {
+    setShowDropdown(false);
+    navigate(`/assistant?medicine=${encodeURIComponent(item.name)}`);
+  };
+
+  const hasResults = Boolean(results);
+  const giScore = hasResults ? (results.composite_gi_score ?? 0) : null;
+  const giTier = hasResults ? (results.composite_gi_tier || 'unknown') : null;
   const foodConflictCount = results?.food_conflicts?.length || 0;
 
-  let giFillColor = 'var(--severity-low)'; // #059669
-  if (giTier === 'unknown') {
-    giFillColor = '#94A3B8';
+  let giFillColor = '#2d4a22';
+  if (!hasResults || giTier === 'unknown') {
+    giFillColor = '#57534a';
   } else if (giScore > 60) {
-    giFillColor = 'var(--severity-high)'; // #DC2626
+    giFillColor = '#8b2500';
   } else if (giScore > 30) {
-    giFillColor = 'var(--severity-moderate)'; // #D97706
+    giFillColor = '#8a5300';
   }
 
   return (
-    <div className="card flex flex-col gap-4" role="region" aria-label="Medicine Basket">
+    <div className="ed-sheet p-5 flex flex-col gap-4" role="region" aria-label="Medicine Basket">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--border-default)] pb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-[4px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center">
-            <Pill className="w-4 h-4" aria-hidden="true" />
+      <div className="flex items-start justify-between gap-2 border-b border-[#b7b09d] pb-3.5">
+        <div className="flex items-start gap-2.5">
+          <div className="w-8 h-8 border border-[#1a1a18] bg-[#f8f6f0] text-[#1a1a18] flex items-center justify-center shrink-0 mt-0.5">
+            <PillIcon size={16} />
           </div>
           <div>
-            <h2 className="font-serif text-[20px] font-bold text-[var(--text-primary)] leading-tight">
+            <h2 className="font-newsreader text-[21px] font-semibold text-[#1a1a18] leading-tight">
               Medicine Basket
             </h2>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <p className="text-xs text-[var(--text-muted)] font-sans">
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              <p className="font-ibm-mono text-[11px] uppercase tracking-[0.06em] text-[#57534a]">
                 {medicines.length} medication{medicines.length !== 1 ? 's' : ''} loaded
               </p>
               {results?.analysis_coverage && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                <span className={`ed-tag ${
                   results.analysis_coverage === 'full'
-                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    ? 'ed-tag-safe'
                     : results.analysis_coverage === 'partial'
-                    ? 'text-amber-700 bg-amber-50 border-amber-200'
-                    : 'text-slate-600 bg-slate-50 border-slate-200'
+                    ? 'ed-tag-caut'
+                    : ''
                 }`}>
                   Covers {results.verified_medicines_count ?? medicines.length} of {results.total_medicines_count ?? medicines.length}
                 </span>
@@ -147,11 +215,12 @@ export function MedicineBasket() {
 
         {medicines.length > 0 && (
           <button
+            type="button"
             onClick={clearBasket}
-            className="text-xs text-[var(--text-muted)] hover:text-[var(--severity-high)] flex items-center gap-1 transition-colors cursor-pointer py-1 px-1.5 rounded hover:bg-[#E2E8F0]"
+            className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#57534a] hover:text-[#8b2500] hover:underline underline-offset-4 flex items-center gap-1 transition-colors cursor-pointer py-1 px-1 shrink-0"
             aria-label="Clear all medicines from basket"
           >
-            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+            <RemoveIcon size={13} />
             <span>Clear</span>
           </button>
         )}
@@ -159,16 +228,23 @@ export function MedicineBasket() {
 
       {/* Autocomplete Input Form */}
       <div className="relative" ref={dropdownRef}>
-        <form onSubmit={handleAddFromInput} className="flex gap-1.5">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
+        <form onSubmit={handleAddFromInput} className="flex items-stretch border border-[#1a1a18] bg-[#f8f6f0]">
+          <div className="relative flex-1 min-w-0">
+            <SearchIcon
+              size={15}
+              className="text-[#57534a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            />
             <input
               type="text"
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
-              onFocus={() => inputVal.trim() && searchResults.length > 0 && setShowDropdown(true)}
+              onFocus={() =>
+                inputVal.trim() &&
+                (searchResults.length > 0 || catalogueResults.length > 0) &&
+                setShowDropdown(true)
+              }
               placeholder="Search brand or generic name..."
-              className="w-full bg-[var(--bg-input)] border border-[var(--border-default)] focus:border-[var(--border-hover)] focus:bg-[var(--bg-surface)] rounded-[6px] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[44px] transition-colors"
+              className="w-full bg-[#f8f6f0] py-2.5 pl-9 pr-3 text-sm text-[#1a1a18] placeholder-[#57534a] outline-none min-h-[44px] font-ibm-serif"
               aria-label="Medicine search query"
             />
           </div>
@@ -176,78 +252,112 @@ export function MedicineBasket() {
           <button
             type="submit"
             disabled={!inputVal.trim()}
-            className="btn-primary min-h-[44px] px-3.5 disabled:opacity-30 disabled:cursor-not-allowed"
+            className="ed-btn-ink border-0 border-l border-[#1a1a18] min-h-[44px] px-3.5 disabled:opacity-35 disabled:cursor-not-allowed shrink-0"
             aria-label="Add medicine to basket"
           >
-            <Plus className="w-4 h-4" aria-hidden="true" />
+            <PlusIcon size={15} />
             <span className="hidden sm:inline">Add</span>
           </button>
         </form>
 
         {/* Dropdown */}
         {showDropdown && debouncedQuery.trim().length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[8px] p-1 shadow-lg z-50 flex flex-col gap-1 max-h-[280px] overflow-y-auto">
-            {searchResults.length > 0 ? (
-              searchResults.map((item, idx) => (
-                <div
-                  key={`${item.generic_name}-${item.name}-${idx}`}
-                  onClick={() => handleSelectSearchResult(item)}
-                  className="p-2.5 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-transparent hover:border-[var(--border-hover)] transition-colors cursor-pointer flex items-center justify-between gap-2 min-h-[48px]"
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleSelectSearchResult(item);
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-[4px] bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-primary)] shrink-0">
-                      <Pill className="w-3.5 h-3.5" aria-hidden="true" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-serif text-[16px] font-bold text-[var(--text-primary)]">{item.name}</span>
-                        {item.brand_context ? (
-                          <span className="text-xs text-slate-500 font-sans">({item.brand_context})</span>
-                        ) : (
-                          <span className="tag">{item.drug_type}</span>
-                        )}
+          <div className="absolute top-full left-0 right-0 mt-1 bg-[#f8f6f0] border border-[#1a1a18] border-t-[3px] border-t-[#1a1a18] z-50 flex flex-col max-h-[360px] overflow-y-auto">
+            {searchResults.length > 0 || catalogueResults.length > 0 ? (
+              <>
+                {searchResults.map((item, idx) => (
+                  <div
+                    key={`${item.generic_name}-${item.name}-${idx}`}
+                    onClick={() => handleSelectSearchResult(item)}
+                    className="p-2.5 bg-[#f8f6f0] hover:bg-[#f0ede1] border-b border-[#d5cfc0] last:border-b-0 transition-colors cursor-pointer flex items-center justify-between gap-2 min-h-[48px]"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSelectSearchResult(item);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-6 h-6 border border-[#b7b09d] bg-[#f0ede1] flex items-center justify-center text-[#1a1a18] shrink-0">
+                        <PillIcon size={13} />
                       </div>
-                      <p className="text-xs text-[var(--text-muted)] line-clamp-1 font-sans">
-                        {item.category}
-                      </p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-newsreader text-[16px] font-semibold text-[#1a1a18]">{item.name}</span>
+                          {item.brand_context ? (
+                            <span className="text-xs text-[#57534a] font-ibm-serif">({item.brand_context})</span>
+                          ) : (
+                            <span className="ed-tag">{item.drug_type}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#57534a] line-clamp-1 font-ibm-serif">
+                          {item.category}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <span className={`tag shrink-0 ${
-                    item.stomach_risk_badge === 'Critical'
-                      ? 'tag-danger'
-                      : item.stomach_risk_badge === 'Moderate'
-                      ? 'tag-warning'
-                      : 'tag-success'
-                  }`}>
-                    {item.stomach_risk_badge} GI
-                  </span>
-                </div>
-              ))
+                    <span className={`ed-tag shrink-0 ${
+                      item.stomach_risk_badge === 'Critical'
+                        ? 'ed-tag-crit'
+                        : item.stomach_risk_badge === 'Moderate'
+                        ? 'ed-tag-caut'
+                        : 'ed-tag-safe'
+                    }`}>
+                      {item.stomach_risk_badge} GI
+                    </span>
+                  </div>
+                ))}
+
+                {catalogueResults.length > 0 && (
+                  <div
+                    className={searchResults.length > 0 ? 'border-t-2 border-[#1a1a18]' : ''}
+                    role="group"
+                    aria-label="From the Indian medicines catalogue"
+                  >
+                    <div className="px-2.5 py-1.5 bg-[#ece7d5] border-b border-[#b7b09d] font-ibm-mono text-[10px] uppercase tracking-[0.08em] text-[#57534a] font-medium">
+                      FROM THE INDIAN MEDICINES CATALOGUE
+                    </div>
+                    {catalogueResults.slice(0, 5).map((item, idx) => (
+                      <button
+                        key={`cat-${item.name}-${idx}`}
+                        type="button"
+                        onClick={() => handleSelectCatalogueResult(item)}
+                        className="w-full text-left p-2.5 bg-[#f8f6f0] hover:bg-[#f0ede1] border-b border-[#d5cfc0] last:border-b-0 transition-colors cursor-pointer flex items-center justify-between gap-2 min-h-[44px]"
+                      >
+                        <div className="min-w-0">
+                          <span className="font-newsreader text-[15px] font-semibold text-[#1a1a18] block truncate">
+                            {item.name}
+                          </span>
+                          {item.therapeutic_class && (
+                            <span className="font-ibm-mono text-[10px] uppercase tracking-[0.06em] text-[#57534a] block truncate mt-0.5">
+                              {item.therapeutic_class}
+                            </span>
+                          )}
+                        </div>
+                        <ArrowRightIcon size={13} className="text-[#57534a] shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             ) : searchError ? (
-              <div className="p-3 text-xs text-[var(--alert-danger-text)] bg-[var(--alert-danger-bg)] rounded-[6px] space-y-1">
-                <p className="font-semibold flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
-                  Search service unavailable
+              <div className="p-3 text-xs ed-notice-crit space-y-1 font-ibm-serif">
+                <p className="font-semibold flex items-center gap-1.5 font-ibm-mono uppercase tracking-[0.06em]">
+                  <WarningIcon size={14} />
+                  <span>Search service unavailable</span>
                 </p>
-                <p>Press <strong>Add</strong> or Enter to check "{inputVal}" directly against fallback clinical tables.</p>
+                <p>Press <strong>Add</strong> or Enter to check &ldquo;{inputVal}&rdquo; directly against fallback clinical tables.</p>
               </div>
             ) : !isSearching ? (
-              <div className="p-3 text-xs text-[var(--text-secondary)] space-y-1.5 bg-[var(--bg-surface)]">
-                <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
-                  <Info className="w-3.5 h-3.5 text-[var(--severity-info)] shrink-0" aria-hidden="true" />
+              <div className="p-3 text-xs text-[#2d2b26] space-y-1.5 bg-[#f0ede1] font-ibm-serif">
+                <div className="flex items-center gap-1.5 font-semibold text-[#1a1a18]">
+                  <InfoIcon size={14} className="text-[#1a1a18] shrink-0" />
                   <span>No direct match in active catalog</span>
                 </div>
-                <p className="text-[var(--text-muted)] leading-relaxed">
-                  Tip: Try searching by active generic compound (e.g. <em>Paracetamol</em>, <em>Pantoprazole</em>) or press <strong>Enter</strong> to evaluate "{debouncedQuery}" via fallback databases.
+                <p className="text-[#57534a] leading-relaxed">
+                  Tip: Try searching by active generic compound (e.g. <em>Paracetamol</em>, <em>Pantoprazole</em>) or press <strong>Enter</strong> to evaluate &ldquo;{debouncedQuery}&rdquo; via fallback databases.
                 </p>
               </div>
             ) : null}
@@ -256,15 +366,15 @@ export function MedicineBasket() {
       </div>
 
       {inputError && (
-        <div className="alert-danger text-sm flex items-center gap-2" role="alert">
-          <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
+        <div className="ed-notice-crit p-2.5 text-xs flex items-center gap-2 font-ibm-serif" role="alert">
+          <WarningIcon size={14} className="shrink-0" />
           <span>{inputError}</span>
         </div>
       )}
 
       {medicines.some((m) => results?.profiles?.[m.name.toLowerCase()]?.is_fdc) && (
-        <div className="alert-warning text-xs flex items-center gap-2 p-2.5 rounded-[6px]" role="alert">
-          <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--severity-moderate)]" aria-hidden="true" />
+        <div className="ed-notice-caut text-xs flex items-start gap-2 p-2.5 font-ibm-serif" role="alert">
+          <WarningIcon size={14} className="shrink-0 mt-0.5" />
           <span>
             <strong>Combination product:</strong> Analysis covers primary ingredient only.
           </span>
@@ -272,8 +382,8 @@ export function MedicineBasket() {
       )}
 
       {results?.analysis_coverage === 'partial' && (
-        <div className="alert-warning text-xs flex items-center gap-2 p-2.5 rounded-[6px]" role="alert">
-          <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--severity-moderate)]" aria-hidden="true" />
+        <div className="ed-notice-caut text-xs flex items-start gap-2 p-2.5 font-ibm-serif" role="alert">
+          <WarningIcon size={14} className="shrink-0 mt-0.5" />
           <span>
             <strong>Partial scan:</strong> Analysis covers {results.verified_medicines_count ?? 0} of {results.total_medicines_count ?? medicines.length} medicines. Unverified medicines cannot be guaranteed safe.
           </span>
@@ -283,12 +393,12 @@ export function MedicineBasket() {
       {/* Medicines Chips Container */}
       <div className="flex flex-col gap-2 min-h-[120px]">
         {medicines.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-5 border border-dashed border-[var(--border-default)] rounded-[8px] bg-[var(--bg-elevated)]">
-            <Archive className="w-7 h-7 text-[var(--text-muted)] mb-1.5 stroke-1" aria-hidden="true" />
-            <h4 className="font-serif text-[18px] font-bold text-[var(--text-primary)] mb-0.5">
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-5 border border-[#b7b09d] bg-[#ece7d5]">
+            <BasketIcon size={24} className="text-[#57534a] mb-2" />
+            <h4 className="font-newsreader text-[18px] font-semibold text-[#1a1a18] mb-0.5">
               Your medicine cabinet is empty
             </h4>
-            <p className="text-xs text-[var(--text-muted)] max-w-[200px] mb-3">
+            <p className="text-xs text-[#57534a] max-w-[220px] mb-3.5 font-ibm-serif">
               Add your first medicine to begin your safety check.
             </p>
 
@@ -296,21 +406,21 @@ export function MedicineBasket() {
               <button
                 type="button"
                 onClick={() => addMedicine('Aspirin', 'otc')}
-                className="tag hover:border-[var(--border-hover)] hover:bg-[#E2E8F0] min-h-[36px] px-3 transition-colors cursor-pointer"
+                className="ed-btn-outline text-[11px] py-1.5 px-2.5"
               >
                 + Aspirin
               </button>
               <button
                 type="button"
                 onClick={() => addMedicine('Ibuprofen', 'otc')}
-                className="tag hover:border-[var(--border-hover)] hover:bg-[#E2E8F0] min-h-[36px] px-3 transition-colors cursor-pointer"
+                className="ed-btn-outline text-[11px] py-1.5 px-2.5"
               >
                 + Ibuprofen
               </button>
               <button
                 type="button"
                 onClick={() => addMedicine('Paracetamol', 'otc')}
-                className="tag hover:border-[var(--border-hover)] hover:bg-[#E2E8F0] min-h-[36px] px-3 transition-colors cursor-pointer"
+                className="ed-btn-outline text-[11px] py-1.5 px-2.5"
               >
                 + Paracetamol
               </button>
@@ -331,82 +441,109 @@ export function MedicineBasket() {
 
       {/* Basket Footer */}
       {medicines.length > 0 && (
-        <div className="flex flex-col gap-3.5 pt-3 border-t border-[var(--border-default)]">
+        <div className="flex flex-col gap-3.5 pt-3.5 border-t border-[#b7b09d]">
           {/* Stomach Guardian Score Card */}
           <div
             onClick={() => setStomachModalOpen(true)}
-            // role="button" + tabIndex made this card focusable, but there was no key
-            // handler behind it: a keyboard user could tab to the score card, press
-            // Enter, and nothing opened. Native buttons get that for free; a div has
-            // to be given it explicitly. Space is included because that is what a
-            // button role implies.
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 setStomachModalOpen(true);
               }
             }}
-            className="bg-[var(--bg-elevated)] border border-[var(--border-default)] hover:border-[var(--border-hover)] rounded-[8px] p-3 flex flex-col gap-2 transition-colors cursor-pointer"
+            className="bg-[#f8f6f0] border border-[#b7b09d] hover:border-[#1a1a18] p-3.5 flex flex-col gap-2.5 transition-colors cursor-pointer"
             role="button"
             tabIndex={0}
-            aria-label={`Stomach Guardian GI Risk Heuristic: ${giScore} out of 100, Tier: ${giTier}. Open the full breakdown.`}
+            aria-label={hasResults ? `Stomach Guardian GI Risk Heuristic: ${giScore} out of 100, Tier: ${giTier}. Open the full breakdown.` : 'Stomach Guardian GI Risk Heuristic: Not analyzed yet.'}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-[var(--severity-moderate)]" aria-hidden="true" />
-                <span className="font-serif text-[16px] font-bold text-[var(--text-primary)]">
+                <ShieldIcon size={16} className="text-[#8a5300] shrink-0" />
+                <span className="font-newsreader text-[16px] font-semibold text-[#1a1a18]">
                   Stomach Guardian
                 </span>
-                <span className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-surface)] px-1.5 py-0.5 rounded border border-[var(--border-default)]">Heuristic</span>
+                <span className="ed-tag text-[9px] px-1.5 py-0.5">Heuristic</span>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                {giTier === 'unknown' ? (
-                  <span className="text-xs font-semibold text-[var(--text-muted)] font-sans">No GI Data</span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {!hasResults ? (
+                  <>
+                    <span className="font-newsreader text-base text-[#57534a]">--</span>
+                    <span className="ed-tag">not analyzed</span>
+                  </>
+                ) : giTier === 'unknown' ? (
+                  <>
+                    <span className="text-xs font-medium text-[#57534a] font-ibm-mono">No GI Data</span>
+                    <span className="ed-tag">unknown</span>
+                  </>
                 ) : (
                   <>
-                    <span className="metric text-base text-[var(--text-primary)]">{giScore}</span>
-                    <span className="text-xs text-[var(--text-muted)]">/100</span>
+                    <span className="font-newsreader text-lg font-semibold text-[#1a1a18] tabular-nums">{giScore}</span>
+                    <span className="font-ibm-mono text-[11px] text-[#57534a]">/100</span>
+                    <span className={`ed-tag ${
+                      giTier === 'high'
+                        ? 'ed-tag-crit'
+                        : giTier === 'moderate'
+                        ? 'ed-tag-caut'
+                        : 'ed-tag-safe'
+                    }`}>
+                      {giTier}
+                    </span>
                   </>
                 )}
-                <span className={`tag ${
-                  giTier === 'high'
-                    ? 'tag-danger'
-                    : giTier === 'moderate'
-                    ? 'tag-warning'
-                    : giTier === 'unknown'
-                    ? 'text-slate-600 bg-slate-100 border-slate-300'
-                    : 'tag-success'
-                }`}>
-                  {giTier}
-                </span>
               </div>
             </div>
 
             {/* Linear Progress Bar */}
-            <div className="gi-score-bar">
+            <div className="h-1.5 bg-[#ece7d5] border border-[#d5cfc0] overflow-hidden">
               <div
-                className="gi-score-fill"
-                style={{ width: `${Math.min(giScore, 100)}%`, backgroundColor: giFillColor }}
+                className="h-full"
+                style={{ width: hasResults ? `${Math.min(giScore, 100)}%` : '0%', backgroundColor: giFillColor }}
               />
             </div>
 
-            <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
-              <span>Cumulative mucosal load</span>
-              <span className="text-[var(--text-primary)] font-semibold hover:underline">Inspect →</span>
+            <div className="flex items-center justify-between text-xs text-[#57534a]">
+              <span className="font-ibm-serif">Cumulative mucosal load</span>
+              <span className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#8b2500] font-medium inline-flex items-center gap-1 hover:underline underline-offset-4">
+                <span>Inspect</span>
+                <ArrowRightIcon size={12} />
+              </span>
             </div>
           </div>
 
           {/* Food Conflict Alert */}
           {foodConflictCount > 0 && (
-            <div className="alert-warning text-xs flex items-center justify-between">
+            <div className="ed-notice-caut p-2.5 text-xs flex items-center justify-between gap-2 font-ibm-serif">
               <div className="flex items-center gap-1.5">
-                <Clock className="w-4 h-4 shrink-0 text-[var(--severity-moderate)]" aria-hidden="true" />
+                <ClockIcon size={14} className="shrink-0" />
                 <span className="font-semibold">
                   {foodConflictCount} timing conflict{foodConflictCount > 1 ? 's' : ''}
                 </span>
               </div>
-              <span className="font-medium underline cursor-pointer">See timeline</span>
+              <span
+                onClick={() => {
+                  if (typeof onSeeTimeline === 'function') onSeeTimeline();
+                  setTimeout(() => {
+                    const el = document.getElementById('food-timeline');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }, 50);
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (typeof onSeeTimeline === 'function') onSeeTimeline();
+                    setTimeout(() => {
+                      const el = document.getElementById('food-timeline');
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }, 50);
+                  }
+                }}
+                className="font-ibm-mono text-[11px] uppercase tracking-[0.06em] font-medium underline underline-offset-4 cursor-pointer hover:text-[#1a1a18] transition-colors shrink-0"
+              >
+                See timeline
+              </span>
             </div>
           )}
 
@@ -414,19 +551,16 @@ export function MedicineBasket() {
           <button
             onClick={checkSafety}
             disabled={loading || medicines.length < 1}
-            className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed min-h-[48px]"
+            className="ed-btn-ink w-full disabled:opacity-45 disabled:cursor-not-allowed min-h-[46px]"
             aria-label="Analyze Medicine Safety"
           >
             {loading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-[var(--text-inverse)] border-t-transparent rounded-full animate-spin" />
-                <span>{loadingStage || 'Analyzing Clinical Data...'}</span>
-              </>
+              <span>{loadingStage ? loadingStage.toUpperCase() : 'CHECKING THE LABELS'}</span>
             ) : (
               <>
-                <ShieldCheck className="w-4 h-4" aria-hidden="true" />
+                <ShieldCrossIcon size={16} />
                 <span>Analyze Medicine Safety</span>
-                <ArrowRight className="w-4 h-4 ml-0.5" aria-hidden="true" />
+                <ArrowRightIcon size={15} />
               </>
             )}
           </button>

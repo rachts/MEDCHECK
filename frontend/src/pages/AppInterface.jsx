@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { Disclaimer } from '../components/Disclaimer';
@@ -15,55 +16,39 @@ import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { useMedicine } from '../context/MedicineContext';
 import {
-  Activity,
-  Pill,
-  ShieldAlert,
-  Sparkles,
-  Layers,
-  FileText,
-  Home,
-  Search,
-  User,
-  ArrowRight,
-  ShieldCheck,
-  AlertTriangle
-} from 'lucide-react';
-import { Link } from 'react-router-dom';
+  NetworkIcon,
+  PillIcon,
+  ShieldCrossIcon,
+  LayersIcon,
+  DocumentIcon,
+  WarningIcon,
+  ArrowRightIcon,
+} from './landing-icons';
+import './app-editorial.css';
 
 export function AppInterface() {
-  const { 
-    medicines, 
-    results, 
-    loading, 
-    loadingStage,
-    error, 
+  const {
+    medicines,
+    results,
+    resultsStale,
+    loading,
+    error,
     checkSafety,
     setDoctorReportOpen,
-    selectedMedicineName,
-    selectMedicine
+    selectedMedicineName
   } = useMedicine();
 
-  // Mobile active bottom navigation tab: 'basket' | 'matrix' | 'profile' | 'reports'
   const [mobileTab, setMobileTab] = useState('basket');
 
-  const interactions = results?.interactions || [];
+  const interactions = (results?.interactions || []).filter((i) => i.severity !== 'none');
   const isSafe = results?.safe;
-
-  // The backend populates limited_data_warnings whenever a medicine in the basket
-  // had no usable FDA label and fell back to a generic profile. That caveat has to
-  // reach the user: an analysis built on missing label data can return "safe"
-  // simply because there was nothing to compare, and silently discarding the
-  // warning turns an incomplete scan into an unqualified all-clear.
   const limitedDataWarnings = results?.limited_data_warnings || [];
+  const indiaBanAlerts = results?.india_ban_alerts || [];
 
-  // Stable identity for the memoised MedicineProfilePanel. Passing
-  // `onCloseMobile={() => setMobileTab('matrix')}` inline created a new function on
-  // every render of this page -- including every keystroke in the medicine input --
-  // which defeats React.memo entirely: the prop compares unequal every time.
   const closeMobileProfile = useCallback(() => setMobileTab('matrix'), []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
+    <div className="ed-app min-h-screen flex flex-col bg-[#f8f6f0] text-[#1a1a18]">
       <Navbar />
 
       {/* Floating Modals */}
@@ -71,71 +56,142 @@ export function AppInterface() {
       <DoctorReportModal />
 
       {/* MOBILE BOTTOM NAVIGATION (< 768px) */}
-      <nav className="md:hidden bottom-nav" aria-label="Analysis sections">
+      <nav className="md:hidden ed-bottom-nav" aria-label="Analysis sections">
         <button
+          type="button"
           onClick={() => setMobileTab('basket')}
           aria-current={mobileTab === 'basket' ? 'true' : undefined}
-          className={`bottom-nav-item ${mobileTab === 'basket' ? 'active' : ''}`}
+          className={`ed-bottom-nav-item ${mobileTab === 'basket' ? 'active' : ''}`}
         >
-          <Pill className="w-5 h-5" aria-hidden="true" />
+          <PillIcon size={18} />
           <span>Basket ({medicines.length})</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setMobileTab('matrix')}
           aria-current={mobileTab === 'matrix' ? 'true' : undefined}
-          className={`bottom-nav-item ${mobileTab === 'matrix' ? 'active' : ''}`}
+          className={`ed-bottom-nav-item ${mobileTab === 'matrix' ? 'active' : ''}`}
         >
-          <Activity className="w-5 h-5" aria-hidden="true" />
+          <NetworkIcon size={18} />
           <span>Matrix</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setMobileTab('profile')}
           aria-current={mobileTab === 'profile' ? 'true' : undefined}
-          className={`bottom-nav-item ${mobileTab === 'profile' ? 'active' : ''}`}
+          className={`ed-bottom-nav-item ${mobileTab === 'profile' ? 'active' : ''}`}
         >
-          <Layers className="w-5 h-5" aria-hidden="true" />
+          <LayersIcon size={18} />
           <span>Profile</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setDoctorReportOpen(true)}
           disabled={!results}
-          title={results ? "Export a clinical summary of this analysis" : "Run an analysis first to generate a report"}
-          className="bottom-nav-item disabled:opacity-45 disabled:cursor-not-allowed"
+          title={results ? 'Export a clinical summary of this analysis' : 'Run an analysis first to generate a report'}
+          className="ed-bottom-nav-item disabled:opacity-45 disabled:cursor-not-allowed"
         >
-          <FileText className="w-5 h-5" aria-hidden="true" />
+          <DocumentIcon size={18} />
           <span>Report</span>
         </button>
       </nav>
 
       {/* MAIN DASHBOARD CONTENT */}
-      <main className="flex-1 pt-18 pb-24 md:pb-12 px-4 sm:px-6 md:px-8 max-w-[1600px] mx-auto w-full">
+      <main className="flex-1 pt-24 pb-24 md:pb-12 px-4 sm:px-6 md:px-8 max-w-[1440px] mx-auto w-full">
+        {/* Editorial Folio Header */}
+        <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 pb-4 mb-5 border-b border-[#b7b09d]">
+          <div>
+            <span className="font-ibm-mono text-[11px] uppercase tracking-[0.09em] text-[#8b2500] font-medium block">
+              Clinical Workspace · Safety Dashboard
+            </span>
+            <h1 className="font-newsreader text-[28px] sm:text-[32px] font-medium text-[#1a1a18] leading-tight mt-0.5">
+              Regimen Interaction &amp; Safety Audit
+            </h1>
+          </div>
+          <Link
+            to="/explorer"
+            className="font-ibm-mono text-[11px] uppercase tracking-[0.08em] text-[#1a1a18] hover:text-[#8b2500] hover:underline underline-offset-4 inline-flex items-center gap-1.5 self-start sm:self-end"
+          >
+            <span>Browse Drug Explorer</span>
+            <ArrowRightIcon size={13} />
+          </Link>
+        </header>
+
+        {/* Offline cached results warning */}
+        {results?._offline && (
+          <div className="ed-notice-caut w-full mb-4 p-3 flex items-center gap-2.5 text-sm font-ibm-serif" role="alert">
+            <WarningIcon size={16} className="shrink-0" />
+            <span>Offline: showing your last saved analysis. Reconnect and re-run for a fresh check.</span>
+          </div>
+        )}
+
+        {/* Basket changed stale warning */}
+        {results && resultsStale && (
+          <div className="ed-notice-caut w-full mb-4 p-3 flex items-center gap-2.5 text-sm font-ibm-serif" role="alert">
+            <WarningIcon size={16} className="shrink-0" />
+            <span>Basket changed; re-run analysis to update results</span>
+          </div>
+        )}
+
+        {/* India CDSCO Banned / Halted Medicine Alerts */}
+        {indiaBanAlerts.length > 0 && (
+          <div
+            className="border border-[#8b2500] bg-[#f3e9e4] w-full mb-4 p-4 sm:p-5 flex flex-col gap-2.5 font-ibm-serif"
+            style={{ borderRadius: 0, boxShadow: 'none' }}
+            role="alert"
+            aria-label="India banned or halted medicines alert"
+          >
+            <div className="flex items-center gap-2 font-ibm-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8b2500]">
+              <WarningIcon size={14} className="shrink-0" />
+              <span>CDSCO · GOVERNMENT OF INDIA REGULATORY ALERT</span>
+            </div>
+            <div className="space-y-2">
+              {indiaBanAlerts.map((alert, idx) => (
+                <div key={`${alert.medicine}-${idx}`} className="space-y-0.5">
+                  <p className="text-sm font-medium text-[#1a1a18] leading-relaxed">
+                    {alert.medicine}: {alert.info.heading}. Please do not use it. Talk to your doctor for a safe alternative.
+                  </p>
+                  <p className="font-ibm-mono text-[10px] uppercase tracking-[0.06em] text-[#57534a]">
+                    Official entry: {alert.info.entry_name}
+                    {alert.info.notification ? ` · ${alert.info.notification}` : ''}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Top Summary Banner */}
         {results && (
-          <div className="w-full mb-4 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[8px] p-3.5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 card-enter">
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-[6px] flex items-center justify-center ${
-                !isSafe ? 'bg-[rgba(220,38,38,0.08)] text-[var(--severity-high)]' : 'bg-[rgba(5,150,105,0.08)] text-[var(--severity-low)]'
+          <div className={`w-full mb-4 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+            !isSafe ? 'ed-sheet-crit' : 'ed-sheet-safe'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className={`w-9 h-9 border flex items-center justify-center shrink-0 mt-0.5 ${
+                !isSafe
+                  ? 'bg-[#f3e9e4] text-[#8b2500] border-[#8b2500]'
+                  : 'bg-[#e8eee3] text-[#2d4a22] border-[#2d4a22]'
               }`}>
-                {!isSafe ? <ShieldAlert className="w-4 h-4" /> : <Sparkles className="w-4 h-4 text-[var(--severity-low)]" />}
+                {!isSafe ? <WarningIcon size={17} /> : <ShieldCrossIcon size={17} />}
               </div>
               <div>
-                <h2 className="font-serif text-[18px] font-bold text-[var(--text-primary)] leading-tight">
+                <h2 className="font-newsreader text-[20px] font-semibold text-[#1a1a18] leading-tight">
                   {results.summary || 'Safety scan completed.'}
                 </h2>
-                <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                  <p className="text-xs text-[var(--text-muted)] font-sans">
-                    {medicines.length} medications analyzed • {results.analyzed_pairs_count} pair combinations checked
+                <div className="flex items-center gap-2 flex-wrap mt-1.5 font-ibm-serif">
+                  <p className="font-ibm-mono text-[11px] uppercase tracking-[0.06em] text-[#57534a]">
+                    {results.total_medicines_count ?? medicines.length} medications analyzed · {results.analyzed_pairs_count} pair combinations checked
                   </p>
                   {results.analysis_coverage && (
-                    <span className={`tag text-[11px] font-sans ${
+                    <span className={`ed-tag ${
                       results.analysis_coverage === 'full'
-                        ? 'tag-success'
+                        ? 'ed-tag-safe'
                         : results.analysis_coverage === 'partial'
-                        ? 'tag-warning'
-                        : 'text-slate-600 bg-slate-100 border-slate-300'
+                        ? 'ed-tag-caut'
+                        : ''
                     }`}>
                       Analysis covers {results.verified_medicines_count ?? (medicines.length - limitedDataWarnings.length)} of {results.total_medicines_count ?? medicines.length} medicines
                     </span>
@@ -145,31 +201,28 @@ export function AppInterface() {
             </div>
 
             <button
+              type="button"
               onClick={() => setDoctorReportOpen(true)}
-              className="btn-secondary text-xs shrink-0 w-full sm:w-auto"
+              className="ed-btn-outline shrink-0 w-full sm:w-auto"
             >
-              <FileText className="w-3.5 h-3.5 text-[var(--text-primary)]" />
-              <span>Export Doctor's Summary</span>
+              <DocumentIcon size={14} />
+              <span>Export Doctor&apos;s Summary</span>
             </button>
           </div>
         )}
 
-        {/* Incomplete-data caveat. Rendered immediately under the summary so it is
-            read together with the verdict it qualifies, and kept outside the
-            `results &&` banner above so it is visible whether the scan came back
-            safe or unsafe. */}
         {limitedDataWarnings.length > 0 && (
           <div
-            className="alert-warning w-full mb-4 flex items-start gap-2.5 card-enter"
+            className="ed-notice-caut w-full mb-5 p-3.5 flex items-start gap-2.5 font-ibm-serif"
             role="status"
           >
-            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+            <WarningIcon size={16} className="mt-0.5 shrink-0" />
             <div className="space-y-1">
-              <p className="text-sm font-bold leading-tight">
-                Incomplete label data — treat this analysis as partial
+              <p className="text-sm font-semibold text-[#1a1a18] leading-tight">
+                Incomplete label data; treat this analysis as partial
               </p>
               {limitedDataWarnings.map((warning, idx) => (
-                <p key={`${warning}-${idx}`} className="text-xs leading-relaxed">
+                <p key={`${warning}-${idx}`} className="text-xs text-[#2d2b26] leading-relaxed">
                   {warning}
                 </p>
               ))}
@@ -177,22 +230,16 @@ export function AppInterface() {
           </div>
         )}
 
-        {/* DESKTOP / TABLET / MOBILE LAYOUT
-            Column spans must be whole numbers: Tailwind generates col-span-1 .. -12
-            for a 12-column grid and nothing fractional, so the `lg:col-span-3.5`
-            these side panels used to carry produced no CSS at all. Between 1024px
-            and 1279px both panels therefore fell back to `grid-column: auto` -- one
-            column each, roughly 85px wide -- and only the `xl:` spans repaired the
-            layout at 1280px and up. 3 + 6 + 3 fills the row exactly. */}
+        {/* Clinical Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          {/* LEFT PANEL: MEDICINE BASKET (280px on desktop) */}
+          {/* LEFT PANEL: MEDICINE BASKET (3 cols on desktop) */}
           <div className={`lg:col-span-3 ${
             mobileTab === 'basket' ? 'block' : 'hidden md:block'
           }`}>
-            <MedicineBasket />
+            <MedicineBasket onSeeTimeline={() => setMobileTab('matrix')} />
           </div>
 
-          {/* CENTER PANEL: INTERACTION MATRIX (flex-grow) */}
+          {/* CENTER PANEL: INTERACTION MATRIX (6 cols on desktop) */}
           <div className={`lg:col-span-6 flex flex-col gap-4 ${
             mobileTab === 'matrix' || mobileTab === 'basket' ? 'block' : 'hidden md:block'
           }`}>
@@ -202,32 +249,24 @@ export function AppInterface() {
 
             {!loading && !error && (
               <>
-                {/* Visual Network Topology Graph */}
                 <InteractionNetworkGraph />
-
-                {/* Side Effect Amplification Warning Radar */}
                 <SideEffectRadar />
-
-                {/* 24-Hour Food Schedule Timeline */}
                 <FoodConflictTimeline />
 
                 {/* Pairwise Interaction Severity Cards */}
                 {results && !isSafe && interactions.length > 0 && (
                   <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-serif text-[20px] font-bold text-[var(--text-primary)]">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#b7b09d]">
+                      <h3 className="font-newsreader text-[21px] font-semibold text-[#1a1a18]">
                         Identified Drug Interactions ({interactions.length})
                       </h3>
-                      <span className="text-xs text-[var(--text-muted)] font-sans">Sorted by clinical severity</span>
+                      <span className="font-ibm-mono text-[10px] uppercase tracking-[0.07em] text-[#57534a]">
+                        Sorted by clinical severity
+                      </span>
                     </div>
 
                     {interactions.map((interaction, idx) => (
                       <InteractionCard
-                        // Drug pair first, index only as a tiebreaker: the pair is
-                        // what identifies an interaction, and the backend sorts by
-                        // severity, so an index-first key reassigns a card's
-                        // expand/collapse state to a different pair whenever the
-                        // ordering shifts.
                         key={`${interaction.drug_a}-${interaction.drug_b}-${idx}`}
                         interaction={interaction}
                       />
@@ -243,30 +282,60 @@ export function AppInterface() {
                   />
                 )}
 
-                {/* Incomplete / Partial Analysis State (no interactions detected, but safe is false due to unverified drugs) */}
-                {results && !isSafe && interactions.length === 0 && medicines.length >= 2 && (
-                  <div className="card flex flex-col gap-3 border-l-4 border-amber-500">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-[6px] flex items-center justify-center bg-amber-50 text-amber-600 border border-amber-200">
-                        <AlertTriangle className="w-4 h-4" />
+                {/* Single Medicine Guidance State */}
+                {results && medicines.length === 1 && (
+                  <div className="ed-sheet p-5 flex flex-col gap-3 font-ibm-serif">
+                    <div className="flex items-start gap-2.5 pb-3 border-b border-[#d5cfc0]">
+                      <div className="w-8 h-8 flex items-center justify-center bg-[#f8f6f0] text-[#1a1a18] border border-[#1a1a18] shrink-0 mt-0.5">
+                        <PillIcon size={16} />
                       </div>
                       <div>
-                        <div className="badge badge-moderate">
-                          PARTIAL SCAN — CANNOT GUARANTEE SAFETY
-                        </div>
-                        <h3 className="text-base font-semibold text-[var(--text-primary)] tracking-tight mt-0.5">
+                        <span className="ed-tag">Single Medication Regimen</span>
+                        <h3 className="text-[18px] font-semibold text-[#1a1a18] font-newsreader mt-1">
+                          {medicines[0].name} Pharmacology Profile
+                        </h3>
+                      </div>
+                    </div>
+                    <p className="text-sm text-[#2d2b26] leading-relaxed">
+                      Drug-drug interaction analysis requires at least 2 medications to evaluate pairwise contraindications and kinetic clashes.
+                      You can explore this medication&apos;s food guidelines, side effect frequencies, and GI safety below, or view its dedicated deep-dive page.
+                    </p>
+                    <div className="flex items-center gap-2 pt-1 flex-wrap">
+                      <Link
+                        to={`/medicine/${encodeURIComponent(medicines[0].name)}`}
+                        className="ed-btn-outline"
+                      >
+                        <span>Open Full Clinical Dossier</span>
+                        <ArrowRightIcon size={14} />
+                      </Link>
+                    </div>
+                  </div>
+                )}
+
+                {/* Incomplete / Partial Analysis State */}
+                {results && !isSafe && interactions.length === 0 && medicines.length >= 2 && (
+                  <div className="ed-sheet-caut p-5 flex flex-col gap-3 font-ibm-serif">
+                    <div className="flex items-start gap-2.5 pb-3 border-b border-[#d5cfc0]">
+                      <div className="w-8 h-8 flex items-center justify-center bg-[#f4eee0] text-[#8a5300] border border-[#8a5300] shrink-0 mt-0.5">
+                        <WarningIcon size={16} />
+                      </div>
+                      <div>
+                        <span className="ed-tag ed-tag-caut font-semibold">
+                          PARTIAL SCAN: CANNOT GUARANTEE SAFETY
+                        </span>
+                        <h3 className="text-[18px] font-semibold text-[#1a1a18] font-newsreader mt-1">
                           Unverified medicines detected in regimen
                         </h3>
                       </div>
                     </div>
-                    <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                    <p className="text-sm text-[#2d2b26] leading-relaxed">
                       While no known interactions were detected among verified compounds, your basket contains unverified medicine(s) with limited pharmacological data. Consequently, full regimen safety cannot be certified.
                     </p>
                     {limitedDataWarnings.length > 0 && (
-                      <ul className="space-y-1.5 text-xs text-[var(--text-secondary)] bg-amber-50/50 p-3 rounded-[6px] border border-amber-200/50">
+                      <ul className="space-y-1.5 text-xs text-[#2d2b26] bg-[#f4eee0] p-3 border border-[#8a5300]">
                         {limitedDataWarnings.map((warning, idx) => (
-                          <li key={idx} className="flex items-start gap-1.5">
-                            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+                          <li key={idx} className="flex items-start gap-2">
+                            <WarningIcon size={14} className="mt-0.5 shrink-0 text-[#8a5300]" />
                             <span>{warning}</span>
                           </li>
                         ))}
@@ -278,17 +347,15 @@ export function AppInterface() {
             )}
           </div>
 
-          {/* RIGHT PANEL: CONTEXTUAL MEDICINE PROFILE (340px on desktop) */}
-          <div className={`lg:col-span-3 ${
-            mobileTab === 'profile' ? 'block' : 'hidden lg:block'
-          }`}>
+          {/* RIGHT PANEL: CONTEXTUAL MEDICINE PROFILE (3 cols on desktop) */}
+          <div className="hidden md:block lg:col-span-3">
             <MedicineProfilePanel onCloseMobile={closeMobileProfile} />
           </div>
         </div>
 
-        {/* MOBILE FULL-SCREEN / SHEET PROFILE OVERLAY (< lg when profile is selected) */}
+        {/* MOBILE FULL-SCREEN / SHEET PROFILE OVERLAY */}
         {selectedMedicineName && mobileTab === 'profile' && (
-          <div className="lg:hidden fixed inset-0 z-50 bg-[var(--bg-base)] overflow-y-auto p-4 flex flex-col gap-4 sheet-enter">
+          <div className="md:hidden fixed inset-0 z-50 bg-[#f8f6f0] overflow-y-auto p-4 flex flex-col gap-4">
             <MedicineProfilePanel onCloseMobile={closeMobileProfile} />
           </div>
         )}
@@ -303,3 +370,4 @@ export function AppInterface() {
     </div>
   );
 }
+export default AppInterface;

@@ -4,7 +4,7 @@ Thank you for your interest in contributing to MEDCHECK! As an evidence-based me
 
 ## Code Standards & Philosophy
 1. **Clinical Accuracy & Safety**: All interaction logic and side effect mappings must be cross-verified with official OpenFDA drug labels or peer-reviewed pharmacology reference data.
-2. **Deterministic Guardrails**: The curated rule table in `backend/services/clinical_rules.py`, applied by `backend/services/interaction_analyzer.py`, is the primary defense against non-deterministic AI behavior — the optional Mistral path in `backend/services/mistral_client.py` is validated against it, never trusted directly. All new clinical rules must have unit test coverage.
+2. **Deterministic Guardrails**: The curated rule table in `backend/services/clinical_rules.py`, applied by `backend/services/interaction_analyzer.py`, is the primary defense against non-deterministic AI behavior — the optional Groq path in `backend/services/groq_client.py` is strictly grounded in curated/label data, never trusted as medical truth on its own. All new clinical rules must have unit test coverage.
 3. **Design System**: All frontend UI must adhere to the **Clinical White** design tokens defined in `frontend/tailwind.config.js` and `frontend/src/index.css`.
 4. **Commit Conventions**: Use conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
 

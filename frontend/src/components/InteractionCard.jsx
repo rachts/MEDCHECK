@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { 
-  Utensils, 
-  Wine, 
-  UserCheck, 
-  Clock, 
-  Pill, 
-  FileText, 
-  ChevronDown, 
-  ChevronUp,
-  ShieldCheck
-} from 'lucide-react';
+import {
+  FoodIcon,
+  AlcoholIcon,
+  UserIcon,
+  ClockIcon,
+  PillIcon,
+  DocumentIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  ShieldCrossIcon,
+} from '../pages/landing-icons';
 import { useMedicine } from '../context/MedicineContext';
 
 /**
@@ -17,65 +17,65 @@ import { useMedicine } from '../context/MedicineContext';
  *
  * @param {object} props
  * @param {import('../types/api').InteractionItem} props.interaction
- *   One entry from `CheckResponse.interactions`. `severity` drives the badge and
- *   the left border; `mechanism`, `stomach_impact`, `food_consideration`,
- *   `action_guidance`, `evidence_source` and `confidence` are all optional on the
- *   backend model, so every read of them here is guarded.
  */
 function InteractionCardBase({ interaction }) {
   const { selectMedicine, setDoctorReportOpen } = useMedicine();
   const [expandedMobile, setExpandedMobile] = useState(false);
 
+  // Neutral / no-op branch for 'none' severity so it can never render as LOW RISK
+  if (!interaction || interaction.severity === 'none') {
+    return null;
+  }
+
   const isHigh = interaction.severity === 'high';
   const isMod = interaction.severity === 'moderate';
 
-  const badgeClass = isHigh ? 'badge-high' : isMod ? 'badge-moderate' : 'badge-low';
-  const badgeLabel = isHigh ? 'CRITICAL RISK' : isMod ? 'MODERATE CAUTION' : 'LOW RISK';
+  const sheetClass = isHigh ? 'ed-sheet-crit' : isMod ? 'ed-sheet-caut' : 'ed-sheet-safe';
+  const badgeClass = isHigh ? 'ed-tag-crit' : isMod ? 'ed-tag-caut' : 'ed-tag-safe';
+  const badgeLabel = isHigh ? 'CRITICAL / HIGH RISK' : isMod ? 'CAUTION / MODERATE RISK' : 'LOW RISK';
 
   // Build Action Tags with strict word boundary regex
   const actionTags = [];
   const fullText = `${interaction.explanation} ${interaction.stomach_impact || ''} ${interaction.food_consideration || ''} ${interaction.action_guidance || ''}`;
 
   if (/\balcohol\b/i.test(fullText)) {
-    actionTags.push({ label: 'Avoid Alcohol', icon: Wine, type: 'tag-danger' });
+    actionTags.push({ label: 'Avoid Alcohol', Icon: AlcoholIcon, cls: 'ed-tag-crit' });
   }
   if (/\b(food|meal|milk)\b/i.test(fullText)) {
-    actionTags.push({ label: 'Take With Food', icon: Utensils, type: 'tag-warning' });
+    actionTags.push({ label: 'Take With Food', Icon: FoodIcon, cls: 'ed-tag-caut' });
   }
   if (/\b(doctor|consult|physician|prescriber)\b/i.test(fullText) || isHigh) {
-    actionTags.push({ label: 'Doctor Consult', icon: UserCheck, type: 'tag' });
+    actionTags.push({ label: 'Doctor Consult', Icon: UserIcon, cls: '' });
   }
   if (/\b(hour|hours|spacing|before|after)\b/i.test(fullText)) {
-    actionTags.push({ label: 'Dose Spacing', icon: Clock, type: 'tag' });
+    actionTags.push({ label: 'Dose Spacing', Icon: ClockIcon, cls: '' });
   }
 
   return (
-    <article 
-      className={`card card-enter flex flex-col gap-3.5 ${
-        isHigh ? 'border-l-4 border-l-[var(--severity-high)]' : isMod ? 'border-l-4 border-l-[var(--severity-moderate)]' : 'border-l-4 border-l-[var(--severity-low)]'
-      }`}
+    <article
+      className={`${sheetClass} p-5 flex flex-col gap-3.5`}
       aria-label={`Interaction between ${interaction.drug_a} and ${interaction.drug_b}, severity: ${interaction.severity}`}
     >
-      {/* Header: Dot + Uppercase Severity Label + Drug Pair Tags */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* Severity Badge */}
-        <div className={`badge ${badgeClass}`}>
+      {/* Header: Severity word tag + Drug Pair buttons */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[#d5cfc0]">
+        <span className={`ed-tag ${badgeClass} font-semibold`}>
           {badgeLabel}
-        </div>
+        </span>
 
-        {/* Drug Pair Buttons with Serif typography */}
         <div className="flex items-center gap-1.5">
           <button
+            type="button"
             onClick={() => selectMedicine(interaction.drug_a)}
-            className="px-2.5 py-1 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] font-serif font-bold text-[15px] text-[var(--text-primary)] transition-colors cursor-pointer capitalize"
+            className="px-2.5 py-1 bg-[#f8f6f0] hover:bg-[#1a1a18] hover:text-[#f8f6f0] border border-[#1a1a18] font-newsreader font-semibold text-[15px] text-[#1a1a18] transition-colors cursor-pointer capitalize"
             aria-label={`View clinical profile for ${interaction.drug_a}`}
           >
             {interaction.drug_a}
           </button>
-          <span className="text-[var(--text-muted)] text-xs font-bold font-sans">↔</span>
+          <span className="font-ibm-mono text-xs text-[#57534a]">+</span>
           <button
+            type="button"
             onClick={() => selectMedicine(interaction.drug_b)}
-            className="px-2.5 py-1 rounded-[4px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] font-serif font-bold text-[15px] text-[var(--text-primary)] transition-colors cursor-pointer capitalize"
+            className="px-2.5 py-1 bg-[#f8f6f0] hover:bg-[#1a1a18] hover:text-[#f8f6f0] border border-[#1a1a18] font-newsreader font-semibold text-[15px] text-[#1a1a18] transition-colors cursor-pointer capitalize"
             aria-label={`View clinical profile for ${interaction.drug_b}`}
           >
             {interaction.drug_b}
@@ -84,29 +84,28 @@ function InteractionCardBase({ interaction }) {
       </div>
 
       {/* Body: Explanation */}
-      <p className="text-body text-[var(--text-primary)] font-normal">
+      <p className="text-[15px] text-[#1a1a18] font-ibm-serif leading-relaxed">
         {interaction.explanation}
       </p>
 
       {/* Mechanism Snippet (Collapsible on mobile only) */}
       {interaction.mechanism && (
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-[6px] p-3 text-sm text-[var(--text-secondary)]">
-          <div 
-            onClick={() => {
-              if (window.innerWidth < 768) {
-                setExpandedMobile(!expandedMobile);
-              }
-            }}
-            className="flex items-center justify-between cursor-pointer md:cursor-default select-none"
-          >
-            <span className="text-label text-[var(--text-muted)] block">
+        <div className="ed-inset p-3.5 text-sm text-[#2d2b26] font-ibm-serif">
+          <div className="flex items-center justify-between">
+            <span className="font-ibm-mono text-[10px] uppercase tracking-[0.08em] text-[#57534a] font-medium">
               Biological Mechanism
             </span>
-            <span className="md:hidden text-xs text-[var(--text-muted)]">
-              {expandedMobile ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </span>
+            <button
+              type="button"
+              onClick={() => setExpandedMobile(!expandedMobile)}
+              aria-expanded={expandedMobile}
+              aria-label={expandedMobile ? 'Collapse biological mechanism' : 'Expand biological mechanism'}
+              className="md:hidden text-[#57534a] hover:text-[#1a1a18] p-1 cursor-pointer"
+            >
+              {expandedMobile ? <ChevronUpIcon size={14} /> : <ChevronDownIcon size={14} />}
+            </button>
           </div>
-          <div className={`${expandedMobile ? 'block' : 'hidden md:block'} mt-1`}>
+          <div className={`${expandedMobile ? 'block' : 'hidden md:block'} mt-1.5 leading-relaxed`}>
             <span>{interaction.mechanism}</span>
           </div>
         </div>
@@ -114,11 +113,15 @@ function InteractionCardBase({ interaction }) {
 
       {/* Evidence Source Metadata Bar */}
       {interaction.evidence_source && (
-        <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200/60 rounded px-2.5 py-1">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <span className="truncate"><strong>Evidence:</strong> {interaction.evidence_source}</span>
+        <div className="flex items-center gap-2 text-xs text-[#2d2b26] bg-[#ece7d5] border border-[#b7b09d] px-3 py-1.5 font-ibm-serif">
+          <ShieldCrossIcon size={14} className="text-[#2d4a22] shrink-0" />
+          <span className="truncate">
+            <strong className="font-semibold text-[#1a1a18]">Evidence:</strong> {interaction.evidence_source}
+          </span>
           {interaction.confidence && (
-            <span className="hidden sm:inline text-slate-400">({interaction.confidence})</span>
+            <span className="hidden sm:inline font-ibm-mono text-[10px] uppercase tracking-[0.06em] text-[#57534a]">
+              ({interaction.confidence})
+            </span>
           )}
         </div>
       )}
@@ -127,10 +130,10 @@ function InteractionCardBase({ interaction }) {
       {actionTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {actionTags.map((tag) => {
-            const Icon = tag.icon;
+            const IconComp = tag.Icon;
             return (
-              <span key={tag.label} className={`tag ${tag.type}`}>
-                <Icon className="w-3 h-3" aria-hidden="true" />
+              <span key={tag.label} className={`ed-tag ${tag.cls}`}>
+                <IconComp size={12} />
                 <span>{tag.label}</span>
               </span>
             );
@@ -139,30 +142,33 @@ function InteractionCardBase({ interaction }) {
       )}
 
       {/* Action Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-[var(--border-default)] text-sm text-[var(--text-muted)]">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between pt-3 border-t border-[#d5cfc0] text-sm text-[#57534a]">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
+            type="button"
             onClick={() => selectMedicine(interaction.drug_a)}
-            className="hover:text-[var(--accent)] flex items-center gap-1 cursor-pointer transition-colors font-serif font-semibold text-[14px]"
+            className="text-[#1a1a18] hover:text-[#8b2500] hover:underline underline-offset-4 flex items-center gap-1 cursor-pointer transition-colors font-newsreader font-semibold text-[14px]"
           >
-            <Pill className="w-3.5 h-3.5" />
+            <PillIcon size={13} />
             <span>Profile {interaction.drug_a}</span>
           </button>
-          <span>•</span>
+          <span className="text-[#b7b09d]">·</span>
           <button
+            type="button"
             onClick={() => selectMedicine(interaction.drug_b)}
-            className="hover:text-[var(--accent)] flex items-center gap-1 cursor-pointer transition-colors font-serif font-semibold text-[14px]"
+            className="text-[#1a1a18] hover:text-[#8b2500] hover:underline underline-offset-4 flex items-center gap-1 cursor-pointer transition-colors font-newsreader font-semibold text-[14px]"
           >
-            <Pill className="w-3.5 h-3.5" />
+            <PillIcon size={13} />
             <span>Profile {interaction.drug_b}</span>
           </button>
         </div>
 
         <button
+          type="button"
           onClick={() => setDoctorReportOpen(true)}
-          className="hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer transition-colors font-sans text-xs font-semibold"
+          className="text-[#1a1a18] hover:text-[#8b2500] hover:underline underline-offset-4 flex items-center gap-1.5 cursor-pointer transition-colors font-ibm-mono text-[11px] font-medium uppercase tracking-[0.07em]"
         >
-          <FileText className="w-3.5 h-3.5" />
+          <DocumentIcon size={13} />
           <span className="hidden sm:inline">Add to Report</span>
         </button>
       </div>
@@ -170,10 +176,5 @@ function InteractionCardBase({ interaction }) {
   );
 }
 
-// Memoised: these render one per interaction (a nine-medicine basket can produce
-// dozens), each with its own expand/collapse state. `interaction` is a stable object
-// off the results payload, so a re-render of AppInterface for any other reason --
-// switching mobile tab, opening a modal -- no longer re-renders the whole list.
 export const InteractionCard = React.memo(InteractionCardBase);
-
 export default InteractionCard;

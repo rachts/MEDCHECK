@@ -236,6 +236,44 @@ def test_api_medicine_profile_endpoint():
     assert len(data["side_effects"]) > 0
     assert data["gi_profile"]["stomach_health_score"] >= 50
 
+
+def test_api_medicine_profile_resolves_explorer_display_names():
+    """Explorer display names (parenthetical aliases and spaced slashes) must resolve to curated profiles."""
+    import uuid
+    uid = f"profile_disp_{uuid.uuid4().hex[:8]}"
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': uid, 'uid': uid, 'is_guest': False})}"}
+
+    paracetamol_resp = client.get("/api/medicine/Paracetamol (Acetaminophen)/profile", headers=headers)
+    assert paracetamol_resp.status_code == 200
+    p_data = paracetamol_resp.json()
+    assert p_data["data_source"] == "curated_kb"
+    assert p_data["generic_name"] == "paracetamol"
+    assert p_data["gi_profile"]["risk_tier"] == "gentle"
+    assert p_data["gi_profile"]["stomach_health_score"] == 10
+    assert len(p_data["side_effects"]) > 0
+
+    for path in (
+        "/api/medicine/Amoxicillin / Clavulanate/profile",
+        "/api/medicine/amoxicillin%20%2F%20clavulanate/profile",
+    ):
+        amox_resp = client.get(path, headers=headers)
+        assert amox_resp.status_code == 200
+        a_data = amox_resp.json()
+        assert a_data["data_source"] == "curated_kb"
+        assert a_data["generic_name"] == "amoxicillin/clavulanate"
+        assert a_data["gi_profile"]["risk_tier"] == "moderate"
+        assert a_data["gi_profile"]["stomach_health_score"] == 45
+        assert len(a_data["side_effects"]) > 0
+
+    unknown_resp = client.get("/api/medicine/UnknownCompound999/profile", headers=headers)
+    assert unknown_resp.status_code == 200
+    u_data = unknown_resp.json()
+    assert u_data["data_source"] == "unknown_fallback"
+    assert u_data["gi_profile"]["risk_tier"] == "unknown"
+
+    empty_resp = client.get("/api/medicine//profile", headers=headers)
+    assert empty_resp.status_code == 404
+
 def test_api_medicines_search_endpoint():
     """Test GET /api/medicines/search?q=aspirin with Bearer auth."""
     response = client.get("/api/medicines/search?q=aspirin", headers=get_auth_headers())
@@ -289,3 +327,83 @@ def test_fully_verified_safe_basket():
     assert data["safe"] is True
     assert data["verified_medicines_count"] == 2
     assert data["total_medicines_count"] == 2
+    assert len(data["interactions"]) == 0
+
+def test_therapeutic_duplication_dolo_and_crocin():
+    """Verify that two brands of paracetamol (Dolo 650 + Crocin) yield a high-severity therapeutic duplication finding and safe == False."""
+    response = client.post(
+        "/api/check",
+        json={"medicines": ["Dolo 650", "Crocin"]},
+        headers=get_auth_headers()
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["safe"] is False
+    assert len(data["interactions"]) >= 1
+    dup = data["interactions"][0]
+    assert dup["severity"] == "high"
+    assert "Therapeutic duplication" in dup["explanation"]
+    assert "paracetamol" in dup["explanation"].lower()
+
+def test_fdc_combiflam_and_crocin_not_safe():
+    """Verify that FDC Combiflam (Ibuprofen + Paracetamol) + Crocin (Paracetamol) detects paracetamol duplication and safe == False."""
+    response = client.post(
+        "/api/check",
+        json={"medicines": ["Combiflam", "Crocin"]},
+        headers=get_auth_headers()
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["safe"] is False
+    assert len(data["interactions"]) >= 1
+    dup = data["interactions"][0]
+    assert dup["severity"] == "high"
+    assert "Therapeutic duplication" in dup["explanation"]
+    assert "paracetamol" in dup["explanation"].lower()
+
+
+@pytest.mark.asyncio
+async def test_canonical_drug_caching_brand_hits_generic_cache():
+    """Verify that querying or saving details for a brand name hits the resolved generic cache entry."""
+    from services.supabase_cache import save_drug_details_to_cache, get_cached_drug_details
+    await save_drug_details_to_cache(
+        generic_name="paracetamol",
+        brand_names=["Crocin", "Dolo 650"],
+        side_effects=["Nausea"],
+        food_warnings=[],
+        drug_interactions=[],
+        severity="low",
+        raw_text="Generic paracetamol monograph"
+    )
+    # Looking up by brand name Crocin should hit the paracetamol cache entry
+    cached = await get_cached_drug_details("Crocin")
+    assert cached is not None
+    assert cached["generic_name"] == "paracetamol"
+    assert "Crocin" in cached["brand_names"]
+
+
+def test_phase3_clinical_engine_hardening():
+    """Verify Phase 3 data rules: levo+ppi spacing, lisinopril avoid_potassium, warfarin avoid_cranberry, pantoprazole empty_stomach."""
+    from services.knowledge_base import get_or_build_medicine_profile
+    from services.timeline_engine import generate_food_conflicts_and_timeline
+
+    # Lisinopril food rule
+    l_prof = get_or_build_medicine_profile("lisinopril")
+    assert any(fi.type == "avoid_potassium" for fi in l_prof.food_interactions)
+
+    # Warfarin food rule
+    w_prof = get_or_build_medicine_profile("warfarin")
+    assert any(fi.type == "avoid_cranberry" for fi in w_prof.food_interactions)
+
+    # Pantoprazole empty stomach critical
+    p_prof = get_or_build_medicine_profile("pantoprazole")
+    p_empty = [fi for fi in p_prof.food_interactions if fi.type == "empty_stomach"]
+    assert len(p_empty) >= 1
+    assert p_empty[0].severity == "critical"
+
+    # Levothyroxine + Pantoprazole spacing conflict
+    conflicts, timeline = generate_food_conflicts_and_timeline(
+        ["levothyroxine", "pantoprazole"],
+        {"levothyroxine": get_or_build_medicine_profile("levothyroxine"), "pantoprazole": p_prof}
+    )
+    assert any("absorption spacing" in c.conflict_type.lower() or "gastric ph" in c.conflict_type.lower() for c in conflicts)

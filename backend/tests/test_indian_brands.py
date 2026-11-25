@@ -52,12 +52,23 @@ def test_dosage_and_suffix_normalization():
     assert normalize_drug_query("Pantop 40") == "pantoprazole"
     assert normalize_drug_query("Ecosprin 75") == "aspirin"
     assert normalize_drug_query("Ecosprin 150mg") == "aspirin"
+    assert normalize_drug_query("Combiflam") == "ibuprofen"
     assert normalize_drug_query("Azithral 500") == "azithromycin"
     assert normalize_drug_query("Augmentin 625") == "amoxicillin/clavulanate"
     assert normalize_drug_query("Omez 20") == "omeprazole"
     assert normalize_drug_query("Telma 40") == "telmisartan"
     assert normalize_drug_query("Shelcal 500") == "calcium/vitamin d3"
     assert normalize_drug_query("Meftal Spas") == "mefenamic acid"
+
+
+def test_explorer_display_name_normalization():
+    """Verify Explorer display formatting resolves to canonical curated keys."""
+    assert normalize_drug_query("Paracetamol (Acetaminophen)") == "paracetamol"
+    assert normalize_drug_query("Amoxicillin / Clavulanate") == "amoxicillin/clavulanate"
+    assert normalize_drug_query("Alcohol (Ethanol)") == "alcohol"
+    assert normalize_drug_query("Metformin ER") == "metformin"
+    assert normalize_drug_query("Paracetamol 500mg") == "paracetamol"
+    assert normalize_drug_query("UnknownCompound999") == "unknowncompound999"
 
 def test_profile_resolution_for_indian_brands():
     """Verify that get_or_build_medicine_profile resolves Indian brands to curated profiles."""
@@ -120,7 +131,8 @@ def test_fdc_detection_and_warning():
 
     prof = get_or_build_medicine_profile("Combiflam")
     assert prof.is_fdc is True
-    assert prof.fdc_warning == "Combination product — analysis covers primary ingredient only."
+    # Updated expectation: FDC warning now accurately reflects that all mapped constituents are analyzed
+    assert prof.fdc_warning == "Combination product — all mapped active ingredients analyzed."
     assert "ibuprofen" in prof.fdc_ingredients
 
     # Telma H (Telmisartan + Hydrochlorothiazide)

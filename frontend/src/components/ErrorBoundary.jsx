@@ -1,42 +1,42 @@
 import React from 'react';
-import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
 
 const API_BASE =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.PROD ? 'https://medcheck-api-fptv.onrender.com' : 'http://localhost:8000');
 
-// Must stay at or below the bounds ClientErrorReport enforces in backend/models.py
-// (error: max_length=500, stack: max_length=4000). A React componentStack from a
-// deep tree routinely exceeds 4000 characters, and an over-long payload is
-// rejected with a 422 that the .catch() below swallows -- so the crash report
-// silently never arrives. Truncating client-side means a long stack is reported
-// in part rather than not at all.
 const MAX_ERROR_CHARS = 500;
 const MAX_STACK_CHARS = 4000;
 
 function clamp(value, limit) {
   const text = String(value ?? '');
   if (text.length <= limit) return text;
-  // Keep the head: the innermost frames and the message itself lead the string,
-  // and they are what identifies the fault.
   return `${text.slice(0, limit - 1)}…`;
 }
 
+function EditorialWarningIcon() {
+  return (
+    <svg
+      width={20}
+      height={20}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="square"
+      strokeLinejoin="miter"
+      aria-hidden="true"
+    >
+      <polygon points="12,3 22,20 2,20" />
+      <path d="M12 9.5v5" />
+      <path d="M12 17.2v0.4" />
+    </svg>
+  );
+}
+
 /**
- * Top-level render-error boundary. Catches anything thrown below it, reports a
- * clamped crash payload to `POST /api/client-error`, and renders a recovery card.
- *
- * @typedef {object} ErrorBoundaryProps
- * @property {import('react').ReactNode} children Subtree to guard.
- *
- * @typedef {object} ErrorBoundaryState
- * @property {boolean} hasError Whether a descendant has thrown.
- * @property {Error | null} error The thrown value, used for the fallback copy.
- *
- * @extends {React.Component<ErrorBoundaryProps, ErrorBoundaryState>}
+ * Top-level render-error boundary.
  */
 export class ErrorBoundary extends React.Component {
-  /** @param {ErrorBoundaryProps} props */
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -70,31 +70,33 @@ export class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-[400px] flex items-center justify-center p-6" role="alert">
-          <div className="card-surface p-8 max-w-md w-full text-center border-l-4 border-l-red-500 shadow-xl rounded-xl">
-            <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-6 h-6" />
+        <div
+          className="min-h-screen flex items-center justify-center p-6 bg-[#f8f6f0] text-[#1a1a18] font-ibm-serif rounded-none shadow-none"
+          role="alert"
+        >
+          <div className="p-8 max-w-md w-full text-center bg-[#f0ede1] border border-[#8b2500] rounded-none shadow-none">
+            <div className="w-11 h-11 bg-[#f3e9e4] text-[#8b2500] border border-[#8b2500] flex items-center justify-center mx-auto mb-4 rounded-none shadow-none">
+              <EditorialWarningIcon />
             </div>
-            <h2 className="text-xl font-bold font-serif text-slate-900 mb-2">
-              Clinical Interface Exception
+            <h2 className="text-[22px] font-semibold font-newsreader text-[#1a1a18] leading-snug mb-2">
+              Something went wrong
             </h2>
-            <p className="text-sm text-slate-600 mb-6">
-              The clinical visualization encountered an unexpected rendering error. Your data is preserved.
+            <p className="text-sm text-[#2d2b26] font-ibm-serif leading-relaxed mb-6">
+              This page hit an unexpected error. Your medicines and results are saved.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
+                type="button"
                 onClick={this.handleReset}
-                className="btn-primary flex items-center justify-center gap-2 text-sm py-2 px-4 shadow-sm"
+                className="inline-flex items-center justify-center px-5 py-2.5 min-h-[44px] bg-[#1a1a18] hover:bg-[#8b2500] text-[#f8f6f0] border border-[#1a1a18] hover:border-[#8b2500] font-ibm-mono text-xs uppercase tracking-[0.08em] font-medium rounded-none shadow-none transition-colors cursor-pointer"
               >
-                <RotateCcw className="w-4 h-4" />
-                Reload Interface
+                Reload page
               </button>
               <a
                 href="/"
-                className="btn-secondary flex items-center justify-center gap-2 text-sm py-2 px-4"
+                className="inline-flex items-center justify-center px-5 py-2.5 min-h-[44px] bg-[#f8f6f0] hover:bg-[#1a1a18] text-[#1a1a18] hover:text-[#f8f6f0] border border-[#1a1a18] font-ibm-mono text-xs uppercase tracking-[0.08em] font-medium rounded-none shadow-none transition-colors"
               >
-                <Home className="w-4 h-4" />
-                Return Home
+                Back to home
               </a>
             </div>
           </div>

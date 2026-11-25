@@ -11,7 +11,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#0F172A" />
+    <meta name="theme-color" content="#f8f6f0" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="MEDCHECK" />
 
@@ -20,10 +20,6 @@
       environment variable (see vite.config.js, which also templates
       public/robots.txt and public/sitemap.xml from the same value and warns on a
       production build that leaves it unset).
-
-      This replaced a hardcoded %VITE_SITE_URL% -- a placeholder domain nobody
-      here controls. A canonical tag naming a foreign origin tells search engines to
-      credit that origin rather than yours, and the og:image 404s.
     -->
     <link rel="canonical" href="%VITE_SITE_URL%/" />
     <meta name="robots" content="index, follow" />
@@ -37,18 +33,16 @@
     <meta property="og:image" content="%VITE_SITE_URL%/favicon.svg" />
     <meta property="og:locale" content="en_US" />
 
-    <!-- Twitter / X. summary rather than summary_large_image: the only artwork
-         shipped is the icon, and a large-image card with a tiny logo renders badly.
-         Switch to summary_large_image once a real 1200x630 og:image exists. -->
+    <!-- Twitter / X -->
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="MEDCHECK — Medicine Safety &amp; Interaction Intelligence" />
     <meta name="twitter:description" content="Check drug-drug interactions, compounded side effects, food and alcohol timing, and stomach risk for your full medicine list." />
     <meta name="twitter:image" content="%VITE_SITE_URL%/favicon.svg" />
 
-    <!-- Google Fonts: Cormorant Garamond (Editorial Authority), Inter (Clean Body), JetBrains Mono (Metrics) -->
+    <!-- Google Fonts: Newsreader, IBM Plex Serif, IBM Plex Mono (Editorial) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>

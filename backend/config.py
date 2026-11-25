@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     GUEST_TOKEN_EXPIRE_MINUTES: int = 120  # Anonymous sessions expire after 2 hours
+    # Password reset links are single-use and short-lived; only a SHA-256 hash
+    # of the token is stored in SQLite.
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
+    # Frontend Auth page URL used when composing password reset links; a
+    # deployment overrides this with its real /auth URL.
+    PASSWORD_RESET_LINK_BASE: str = "http://localhost:5173/auth"
 
     # Transport security. Enable only when this process terminates TLS itself;
     # behind a TLS-terminating reverse proxy it would cause a redirect loop.
@@ -74,7 +80,8 @@ class Settings(BaseSettings):
     REDIS_URL: Optional[str] = None
     
     # External APIs & Database
-    MISTRAL_API_KEY: Optional[str] = None
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
     SUPABASE_URL: Optional[str] = None
     SUPABASE_KEY: Optional[str] = None
     SQLITE_DB_PATH: str = os.getenv(

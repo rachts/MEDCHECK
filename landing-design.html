@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>medcheck — Medication safety, finally solved.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F5F2EB; --card:#fff; --ink:#181510; --ink2:#4A463E; --muted:#8A857A;
+  --line:#E6E1D5; --line2:#D6D0C2;
+  --green:#189A54; --red:#E5484D; --amber:#EFA400;
+  --disp:'Inter Tight',sans-serif; --body:'Inter',sans-serif; --mono:'JetBrains Mono',monospace;
+  --shadow:0 1px 2px rgba(24,21,16,.05),0 14px 34px -14px rgba(24,21,16,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 26px}
+a{color:inherit;text-decoration:none}
+.mono{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:500}
+button{font-family:inherit;cursor:pointer}
+
+/* header */
+header{position:sticky;top:0;z-index:60;background:rgba(245,242,235,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;justify-content:space-between;height:62px}
+.logo{font-family:var(--disp);font-weight:700;font-size:1.2rem;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.logo i{width:18px;height:18px;border-radius:5px;background:var(--ink);display:inline-block;position:relative}
+.logo i::after{content:"";position:absolute;inset:5px;border-radius:2px;background:var(--green)}
+.nav nav{display:flex;gap:24px;font-size:.9rem;color:var(--ink2)}
+.nav nav a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:10px;padding:12px 20px;font-weight:600;font-size:.9rem;transition:.18s}
+.btn.dark{background:var(--ink);color:#fff}
+.btn.dark:hover{background:var(--green)}
+.btn.light{background:var(--card);border:1px solid var(--line2);color:var(--ink)}
+.btn.light:hover{border-color:var(--ink)}
+.btn.green{background:var(--green);color:#fff}
+.btn.green:hover{filter:brightness(1.08)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;padding:70px 0 40px}
+.badge{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line2);border-radius:999px;padding:6px 14px;font-size:.78rem;font-weight:600;margin-bottom:22px;box-shadow:var(--shadow)}
+.badge .star{color:var(--amber)}
+h1{font-family:var(--disp);font-weight:700;font-size:clamp(2.6rem,5.2vw,4.1rem);line-height:1.02;letter-spacing:-.03em}
+h1 em{font-style:normal;color:var(--green)}
+.lede{margin:18px 0 26px;color:var(--ink2);font-size:1.06rem;max-width:46ch}
+.scanbox{display:flex;background:var(--card);border:1px solid var(--line2);border-radius:12px;padding:6px;box-shadow:var(--shadow);max-width:520px}
+.scanbox input{flex:1;border:none;outline:none;background:transparent;padding:10px 14px;font-size:.95rem;font-family:var(--body);color:var(--ink)}
+.scanbox input::placeholder{color:var(--muted)}
+.hint{margin-top:12px;font-size:.82rem;color:var(--muted)}
+.hint b{color:var(--green);font-weight:600}
+.quicklinks{display:flex;gap:18px;margin-top:18px;font-size:.85rem;color:var(--ink2);flex-wrap:wrap}
+.quicklinks a{border-bottom:1px solid var(--line2);padding-bottom:2px}
+.quicklinks a:hover{color:var(--ink);border-color:var(--ink)}
+#scanResult{display:none;margin-top:18px;background:var(--card);border:1px solid var(--line2);border-radius:12px;padding:16px;box-shadow:var(--shadow);max-width:520px}
+#scanResult.show{display:block;animation:pop .35s ease}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.chip{font-family:var(--mono);font-size:.68rem;padding:4px 10px;border-radius:999px;border:1px solid var(--line2);background:var(--paper)}
+.chip.crit{color:var(--red);border-color:var(--red)}
+.chip.caut{color:var(--amber);border-color:var(--amber)}
+.chip.safe{color:var(--green);border-color:var(--green)}
+.chip.unk{color:var(--muted)}
+#scanSummary{font-size:.88rem;color:var(--ink2);margin-bottom:12px}
+#scanSummary b{color:var(--ink)}
+
+/* floating collage */
+.collage{position:relative;height:520px}
+.fcard{position:absolute;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px 16px;width:250px;animation:float 6s ease-in-out infinite}
+.fcard .src{display:flex;justify-content:space-between;align-items:center;color:var(--muted);margin-bottom:8px}
+.fcard .src b{color:var(--ink);font-weight:600;font-size:.78rem;font-family:var(--body);text-transform:none;letter-spacing:0}
+.fcard .now{display:flex;align-items:center;gap:5px}
+.fcard .now i{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 2s infinite}
+@keyframes blink{50%{opacity:.3}}
+@keyframes float{0%,100%{transform:translateY(0) rotate(var(--r,0deg))}50%{transform:translateY(-9px) rotate(var(--r,0deg))}}
+.fcard p{font-size:.85rem;color:var(--ink2)}
+.fcard p b{color:var(--ink)}
+.f1{top:0;left:6%;--r:-3deg}
+.f2{top:60px;right:0;--r:2.5deg;animation-delay:.8s}
+.f3{top:230px;left:0;--r:2deg;animation-delay:1.6s}
+.f4{top:280px;right:4%;--r:-2deg;animation-delay:2.4s}
+.f5{bottom:0;left:22%;--r:1.5deg;animation-delay:3.2s}
+.stars{color:var(--amber);letter-spacing:2px;font-size:.8rem}
+.vote{display:flex;gap:8px;margin-top:10px}
+.vote button{flex:1;border:1px solid var(--line2);background:var(--paper);border-radius:8px;padding:7px 0;font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;transition:.15s}
+.vote button.ok.on{background:var(--green);border-color:var(--green);color:#fff}
+.vote button.no.on{background:var(--red);border-color:var(--red);color:#fff}
+.gaugebar{height:6px;border-radius:99px;background:var(--paper);border:1px solid var(--line);margin-top:8px;overflow:hidden}
+.gaugebar i{display:block;height:100%;width:88%;background:linear-gradient(90deg,var(--amber),var(--red))}
+
+/* steps strip */
+.steps{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:22px 0;display:flex;align-items:center;gap:34px;flex-wrap:wrap}
+.steps .lbl{color:var(--muted)}
+.steps .st{display:flex;align-items:baseline;gap:10px;font-family:var(--disp);font-weight:600;font-size:1.05rem}
+.steps .st i{font-family:var(--mono);font-style:normal;font-size:.7rem;color:var(--green)}
+
+/* marquee */
+.marquee{overflow:hidden;padding:44px 0;border-bottom:1px solid var(--line)}
+.mtrack{display:flex;width:max-content;animation:scroll 36s linear infinite}
+.marquee:hover .mtrack{animation-play-state:paused}
+.mtrack span{font-family:var(--disp);font-weight:600;font-size:clamp(1.7rem,3.4vw,2.7rem);letter-spacing:-.02em;white-space:nowrap;padding-right:.6em}
+.mtrack span em{font-style:normal;color:var(--green)}
+@keyframes scroll{to{transform:translateX(-50%)}}
+
+/* statement */
+.statement{padding:70px 0;text-align:center}
+.statement p{font-family:var(--disp);font-weight:600;font-size:clamp(1.4rem,2.6vw,2rem);letter-spacing:-.02em;max-width:26ch;margin:0 auto;line-height:1.25}
+.statement p b{color:var(--red)}
+
+/* agent tabs */
+section{padding:70px 0}
+.sec-kicker{color:var(--green);margin-bottom:10px}
+h2{font-family:var(--disp);font-weight:700;font-size:clamp(1.8rem,3.4vw,2.6rem);letter-spacing:-.025em;margin-bottom:8px}
+.sec-sub{color:var(--muted);max-width:52ch;margin-bottom:36px}
+.agent{display:grid;grid-template-columns:.9fr 1.1fr;gap:36px;align-items:start}
+.tablist{display:flex;flex-direction:column}
+.tab-btn{text-align:left;background:none;border:none;border-left:2px solid var(--line);padding:14px 18px;transition:.2s}
+.tab-btn .t{display:flex;gap:12px;align-items:baseline;font-family:var(--disp);font-weight:600;font-size:1.1rem;color:var(--muted)}
+.tab-btn .t i{font-family:var(--mono);font-style:normal;font-size:.68rem}
+.tab-btn .d{max-height:0;overflow:hidden;transition:max-height .3s ease;font-size:.86rem;color:var(--ink2)}
+.tab-btn.active{border-left-color:var(--green)}
+.tab-btn.active .t{color:var(--ink)}
+.tab-btn.active .t i{color:var(--green)}
+.tab-btn.active .d{max-height:80px;margin-top:6px}
+.chat{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.chat-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);color:var(--muted)}
+.chat-head b{color:var(--ink);font-family:var(--body);font-size:.82rem;font-weight:600;text-transform:none;letter-spacing:0}
+.chat-body{padding:18px;display:none;flex-direction:column;gap:14px;min-height:380px}
+.chat-body.active{display:flex}
+.user{align-self:flex-end;background:var(--ink);color:#fff;border-radius:12px 12px 3px 12px;padding:10px 14px;font-size:.88rem;max-width:80%}
+.think{font-family:var(--mono);font-size:.68rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.think::after{content:"…";animation:blink 1.2s infinite}
+.acard{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--paper)}
+.acard h5{font-family:var(--disp);font-size:.98rem;margin-bottom:10px}
+.arow{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-top:1px solid var(--line);font-size:.84rem}
+.arow span{color:var(--muted)}
+.arow b{font-weight:600;text-align:right}
+.pill{font-family:var(--mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
+.pill.crit{color:var(--red);border-color:var(--red)}
+.pill.caut{color:var(--amber);border-color:var(--amber)}
+.pill.safe{color:var(--green);border-color:var(--green)}
+.chat-foot{border-top:1px solid var(--line);padding:12px 18px;color:var(--muted);font-size:.84rem;display:flex;justify-content:space-between}
+.opt{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line);font-size:.84rem}
+.opt i{font-family:var(--mono);font-style:normal;font-size:.66rem;color:var(--green)}
+
+/* modes */
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.mode{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;box-shadow:var(--shadow)}
+.mode .tag{display:inline-block;font-family:var(--mono);font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line2);border-radius:999px;padding:4px 10px;color:var(--muted);margin-bottom:12px}
+.mode h3{font-family:var(--disp);font-size:1.5rem;letter-spacing:-.02em;margin-bottom:4px}
+.mode>p{color:var(--muted);font-size:.9rem;margin-bottom:20px}
+.pipe{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:20px}
+.pipe span{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line2);border-radius:6px;padding:4px 8px;color:var(--ink2)}
+.pipe span.you{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pipe span.live{background:var(--green);color:#fff;border-color:var(--green)}
+.pipe i{color:var(--line2);font-style:normal}
+.mode ul{list-style:none}
+.mode li{padding:10px 0;border-top:1px solid var(--line);font-size:.86rem;color:var(--ink2)}
+.mode li b{display:block;color:var(--ink);font-size:.8rem;margin-bottom:2px}
+
+/* pricing */
+.pricing{text-align:center}
+.price{display:flex;justify-content:center;align-items:center;gap:26px;flex-wrap:wrap;margin:26px 0}
+.price .big{font-family:var(--disp);font-weight:700;font-size:clamp(3rem,7vw,5rem);letter-spacing:-.04em}
+.price .plus{font-size:2rem;color:var(--muted)}
+.price small{display:block;font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+
+/* testimonials */
+.tmarquee{overflow:hidden;padding:10px 0}
+.ttrack{display:flex;gap:18px;width:max-content;animation:scroll 42s linear infinite}
+.ttrack.rev{animation-direction:reverse}
+.tmarquee:hover .ttrack{animation-play-state:paused}
+.tcard{width:360px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
+.tcard p{font-size:.9rem;color:var(--ink2);margin-bottom:12px}
+.tcard .who{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+/* faq */
+.faq{max-width:760px;margin:0 auto}
+details{border-bottom:1px solid var(--line)}
+summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 0;cursor:pointer;font-family:var(--disp);font-weight:600;font-size:1.05rem}
+summary::-webkit-details-marker{display:none}
+summary i{font-style:normal;font-size:1.3rem;color:var(--muted);transition:.25s}
+details[open] summary i{transform:rotate(45deg);color:var(--green)}
+details p{padding:0 0 20px;color:var(--ink2);font-size:.92rem;max-width:64ch}
+
+/* final cta */
+.final{background:var(--ink);color:#fff;border-radius:22px;padding:70px 40px;text-align:center;margin:30px 0 70px}
+.final h2{color:#fff;max-width:22ch;margin:0 auto 14px}
+.final p{color:#B9B4A9;max-width:52ch;margin:0 auto 28px}
+.final .note{margin-top:16px;font-size:.8rem;color:#8A857A}
+
+footer{border-top:1px solid var(--line);padding:34px 0 44px}
+.foot{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:center}
+.foot nav{display:flex;gap:20px;font-size:.85rem;color:var(--ink2)}
+.fine{margin-top:22px;font-size:.74rem;color:var(--muted);max-width:90ch;line-height:1.7}
+
+[data-reveal]{opacity:0;transform:translateY(16px);transition:opacity .6s ease,transform .6s ease}
+[data-reveal].in{opacity:1;transform:none}
+
+@media(max-width:920px){
+  .hero{grid-template-columns:1fr;padding:48px 0 20px}
+  .collage{height:auto;display:flex;flex-direction:column;gap:14px;margin-top:10px}
+  .fcard{position:static;width:100%;animation:none;transform:none}
+  .agent{grid-template-columns:1fr}
+  .modes{grid-template-columns:1fr}
+  .nav nav{display:none}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="#"><i></i>medcheck</a>
+    <nav>
+      <a href="#agent">The agent</a>
+      <a href="#modes">Modes</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="btn dark" href="#top" onclick="document.getElementById('medInput').focus()">Try medcheck →</a>
+  </div>
+</header>
+
+<main class="wrap" id="top">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div>
+      <div class="badge"><span class="star">★</span> Built on OpenFDA label data · live</div>
+      <h1>Medication safety,<br><em>finally solved.</em></h1>
+      <p class="lede">A clinical agent that reads the whole label, maps every interaction, scores your stomach, and hands you a schedule you can actually follow.</p>
+      <form class="scanbox" id="scanForm">
+        <input id="medInput" type="text" placeholder="Paste your medicines — e.g. Warfarin, Aspirin, Ibuprofen" autocomplete="off">
+        <button class="btn dark" type="submit">Scan →</button>
+      </form>
+      <div id="scanResult">
+        <div class="chips" id="scanChips"></div>
+        <p id="scanSummary"></p>
+        <button class="btn green" id="openScan">Open the full scan →</button>
+      </div>
+      <p class="hint">Your first scan is <b>free</b>. No card, no signup.</p>
+      <div class="quicklinks">
+        <a href="#agent">See the agent work</a>
+        <a href="#modes">Guardian vs Co-pilot</a>
+        <a href="#faq">Is this medical advice?</a>
+      </div>
+    </div>
+
+    <div class="collage">
+      <div class="fcard f1">
+        <div class="src mono"><b>OpenFDA</b><span class="now"><i></i>now</span></div>
+        <p><b>Warfarin label synced.</b> 42 interaction entries parsed from the official monograph.</p>
+      </div>
+      <div class="fcard f2">
+        <div class="src mono"><b>Interaction alert</b><span class="now"><i></i>now</span></div>
+        <p><b style="color:var(--red)">Critical bleeding synergy.</b> Warfarin + Aspirin + Ibuprofen detected.</p>
+      </div>
+      <div class="fcard f3">
+        <div class="src mono"><b>Drug library</b><span class="now"><i></i>now</span></div>
+        <p><b>Crocin → Paracetamol.</b> Indian brand alias resolved to active ingredient.</p>
+      </div>
+      <div class="fcard f4">
+        <div class="src mono"><b>Stomach Guardian</b><span class="now"><i></i>now</span></div>
+        <p>Mucosal stress <b>88 / 100</b> · 24-hour meal schedule ready.</p>
+        <div class="gaugebar"><i></i></div>
+      </div>
+      <div class="fcard f5">
+        <div class="src mono"><b>Recommendation</b><span class="now"><i></i>now</span></div>
+        <p>Swap <b>Ibuprofen → Paracetamol</b> for knee pain. Bleeding risk drops to caution.</p>
+        <div class="vote">
+          <button class="ok" type="button">✓ Approve</button>
+          <button class="no" type="button">✕ Hold</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEPS -->
+  <div class="steps">
+    <span class="lbl mono">How medcheck works</span>
+    <span class="st"><i>01</i> Meds in</span>
+    <span class="st"><i>02</i> Graph built</span>
+    <span class="st"><i>03</i> You approve</span>
+    <span class="st"><i>04</i> Schedule out</span>
+  </div>
+</main>
+
+<!-- MANIFESTO MARQUEE -->
+<div class="marquee">
+  <div class="mtrack">
+    <span>medcheck is the medication safety agent that reads your labels. maps every interaction. scores your stomach. writes your schedule. <em>basically watches the whole regimen for you.</em>&nbsp;</span>
+    <span>medcheck is the medication safety agent that reads your labels. maps every interaction. scores your stomach. writes your schedule. <em>basically watches the whole regimen for you.</em>&nbsp;</span>
+  </div>
+</div>
+
+<div class="wrap statement" data-reveal>
+  <p>Polypharmacy now means five drugs and twenty possible interactions. That means always-on checking: <b>an impossible workload for patients.</b></p>
+</div>
+
+<!-- AGENT TABS -->
+<section id="agent" class="wrap">
+  <div class="sec-kicker mono" data-reveal>What the agent does</div>
+  <h2 data-reveal>Watch it read a regimen.</h2>
+  <p class="sec-sub" data-reveal>Six jobs, one agent. Every answer cites the label it came from.</p>
+
+  <div class="agent">
+    <div class="tablist" data-reveal>
+      <button class="tab-btn active" data-tab="0"><span class="t"><i>01</i>Labels</span><span class="d">Resolves brands and generics to active ingredients and builds your Med Brain.</span></button>
+      <button class="tab-btn" data-tab="1"><span class="t"><i>02</i>Interactions</span><span class="d">Builds the topology — every drug pair, every pharmacokinetic conflict, ranked.</span></button>
+      <button class="tab-btn" data-tab="2"><span class="t"><i>03</i>Severity</span><span class="d">Decides what to fix first and which belief the patient should leave with.</span></button>
+      <button class="tab-btn" data-tab="3"><span class="t"><i>04</i>Stomach</span><span class="d">Scores mucosal stress and flags the drivers behind the number.</span></button>
+      <button class="tab-btn" data-tab="4"><span class="t"><i>05</i>Schedule</span><span class="d">Designs a 24-hour food and dose plan you can approve or hold.</span></button>
+      <button class="tab-btn" data-tab="5"><span class="t"><i>06</i>Report</span><span class="d">Compiles a doctor-ready report. Nothing leaves without your yes.</span></button>
+    </div>
+
+    <div class="chat" data-reveal>
+      <div class="chat-head mono"><b>medcheck agent</b><span id="chatTab">· Labels</span></div>
+
+      <div class="chat-body active" data-panel="0">
+        <div class="user">Read my regimen.</div>
+        <div class="think">Reading labels</div>
+        <div class="acard">
+          <h5>Here's your Med Brain.</h5>
+          <div class="arow"><span>Active ingredients</span><b>Warfarin 5mg · Aspirin 75mg · Ibuprofen 400mg</b></div>
+          <div class="arow"><span>Aliases resolved</span><b>Crocin → Paracetamol</b></div>
+          <div class="arow"><span>Conditions</span><b>AFib · knee osteoarthritis</b></div>
+          <div class="arow"><span>Meals / day</span><b>2 · no alcohol</b></div>
+        </div>
+      </div>
+
+      <div class="chat-body" data-panel="1">
+        <div class="user">Show me the dangerous pairs.</div>
+        <div class="think">Building topology</div>
+        <div class="acard">
+          <h5>3 critical edges found.</h5>
+          <div class="arow"><span>Warfarin × Aspirin</span><b><span class="pill crit">critical · bleed</span></b></div>
+          <div class="arow"><span>Warfarin × Ibuprofen</span><b><span class="pill crit">critical · bleed</span></b></div>
+          <div class="arow"><span>Aspirin × Ibuprofen</span><b><span class="pill crit">critical · GI</span></b></div>
+          <div class="arow"><span>Warfarin × Omeprazole</span><b><span class="pill caut">caution · CYP2C19</span></b></div>
+        </div>
+      </div>
+
+      <div class="chat-body" data-panel="2">
+        <div class="user">What should I fix first?</div>
+        <div class="think">Ranking risks</div>
+        <div class="acard">
+          <h5>Lead with the bleed, not the pain.</h5>
+          <div class="arow"><span>Belief to leave</span><b>"I can treat pain without touching my anticoagulant."</b></div>
+          <div class="opt"><i>1</i><span><b>Swap the NSAID.</b> Ibuprofen → Paracetamol.</span></div>
+          <div class="opt"><i>2</i><span><b>Discuss gastroprotection.</b> PPI with your physician.</span></div>
+          <div class="opt"><i>3</i><span><b>Time the doses.</b> Separate antiplatelet from meals.</span></div>
+        </div>
+      </div>
+
+      <div class="chat-body" data-panel="3">
+        <div class="user">Score my mucosal risk.</div>
+        <div class="think">Scoring mucosa</div>
+        <div class="acard">
+          <h5>Stomach Guardian · 88 / 100 · high.</h5>
+          <div class="arow"><span>Driver 1</span><b>NSAID × antiplatelet stack</b></div>
+          <div class="arow"><span>Driver 2</span><b>Empty-stomach morning dosing</b></div>
+          <div class="arow"><span>Action</span><b>Move doses post-meal · review PPI</b></div>
+        </div>
+      </div>
+
+      <div class="chat-body" data-panel="4">
+        <div class="user">Make me a 24-hour plan.</div>
+        <div class="think">Writing schedule</div>
+        <div class="acard">
+          <h5>Plan A · ready.</h5>
+          <div class="arow"><span>08:00</span><b>Breakfast</b></div>
+          <div class="arow"><span>08:30</span><b>Warfarin · with food</b></div>
+          <div class="arow"><span>13:00</span><b>Aspirin · post-meal</b></div>
+          <div class="arow"><span>21:00</span><b>Paracetamol · PRN</b></div>
+          <div class="vote"><button class="ok on" type="button">✓ Approved</button><button class="no" type="button">✕ Hold</button></div>
+        </div>
+      </div>
+
+      <div class="chat-body" data-panel="5">
+        <div class="user">Export this for my doctor.</div>
+        <div class="think">Compiling report</div>
+        <div class="acard">
+          <h5>Doctor report · ready.</h5>
+          <div class="arow"><span>Regimen</span><b>3 agents · 2 conditions</b></div>
+          <div class="arow"><span>Flags</span><b><span class="pill crit">3 critical</span> <span class="pill caut">1 caution</span></b></div>
+          <div class="arow"><span>Schedule</span><b>24h plan attached</b></div>
+          <div class="arow"><span>Export</span><b style="color:var(--green)">⬇ PDF · nothing sent without approval</b></div>
+        </div>
+      </div>
+
+      <div class="chat-foot"><span>Ask about your meds, your labels or your schedule</span><span>↵</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- MODES -->
+<section id="modes" class="wrap">
+  <div class="sec-kicker mono" data-reveal>Two ways to run it</div>
+  <h2 data-reveal>Guardian or Co-pilot.</h2>
+  <p class="sec-sub" data-reveal>Same agent, different amount of you.</p>
+  <div class="modes">
+    <div class="mode" data-reveal>
+      <span class="tag">Hands-off</span>
+      <h3>Guardian</h3>
+      <p>For people who just want to be told what's safe.</p>
+      <div class="pipe"><span>Labels</span><i>→</i><span>Interactions</span><i>→</i><span>Severity</span><i>→</i><span>Stomach</span><i>→</i><span>Schedule</span><i>→</i><span class="you">You approve</span><i>→</i><span class="live">Live schedule</span></div>
+      <ul>
+        <li><b>How it works</b>The agent checks independently and re-scores whenever a med changes.</li>
+        <li><b>Your involvement</b>Minimal. Review and approve the schedule before you follow it.</li>
+        <li><b>Control</b>Set your conditions and meals as guardrails. Nothing changes without your yes.</li>
+      </ul>
+    </div>
+    <div class="mode" data-reveal>
+      <span class="tag">Hands-on</span>
+      <h3>Co-pilot</h3>
+      <p>For clinicians and caregivers who want to work alongside it.</p>
+      <div class="pipe"><span>Labels</span><i>→</i><span class="you">You</span><i>→</i><span>Interactions</span><i>→</i><span class="you">You</span><i>→</i><span>Schedule</span><i>→</i><span class="you">You approve</span><i>→</i><span class="live">Report</span></div>
+      <ul>
+        <li><b>How it works</b>The agent assists at every step while you collaborate throughout.</li>
+        <li><b>Your involvement</b>Hands-on. Put it to work and review each output as you go.</li>
+        <li><b>Control</b>Stay close to every decision. Override any edge, any score, any dose time.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing" class="wrap pricing">
+  <div class="sec-kicker mono" data-reveal>Pricing</div>
+  <h2 data-reveal>Safety shouldn't have a paywall.</h2>
+  <div class="price" data-reveal>
+    <div><span class="big">$0</span><small>forever · every feature</small></div>
+    <span class="plus">+</span>
+    <div><span class="big">0%</span><small>of anything · no ads · no data selling</small></div>
+  </div>
+  <p class="sec-sub" style="margin:0 auto 26px" data-reveal>OpenFDA is public data. Anonymous guest sessions. That's the whole business model.</p>
+  <a class="btn dark" href="#top" data-reveal>Start a free scan →</a>
+</section>
+
+<!-- TESTIMONIALS -->
+<section style="padding-top:20px">
+  <div class="wrap"><div class="sec-kicker mono" data-reveal>People who stopped guessing</div></div>
+  <div class="tmarquee"><div class="ttrack">
+    <div class="tcard"><p>"It caught the warfarin–ibuprofen pair my own checklist missed. I approved the swap in ten seconds."</p><span class="who">Pharmacist · outpatient clinic</span></div>
+    <div class="tcard"><p>"My mother takes six medicines. The 24-hour schedule is the first thing she's actually followed."</p><span class="who">Caregiver · Pune</span></div>
+    <div class="tcard"><p>"The brand-alias resolution is the killer feature. Crocin, Calpol, Dolo — it just knows."</p><span class="who">General physician · Bengaluru</span></div>
+    <div class="tcard"><p>"I export the report before every consult. My doctor reads it in two minutes."</p><span class="who">Patient · AFib, 3 agents</span></div>
+    <div class="tcard"><p>"It flagged a caution pair I'd have sworn was safe. Cited the label section. Hard to argue with."</p><span class="who">Clinical reviewer</span></div>
+    <div class="tcard"><p>"It caught the warfarin–ibuprofen pair my own checklist missed. I approved the swap in ten seconds."</p><span class="who">Pharmacist · outpatient clinic</span></div>
+    <div class="tcard"><p>"My mother takes six medicines. The 24-hour schedule is the first thing she's actually followed."</p><span class="who">Caregiver · Pune</span></div>
+    <div class="tcard"><p>"The brand-alias resolution is the killer feature. Crocin, Calpol, Dolo — it just knows."</p><span class="who">General physician · Bengaluru</span></div>
+    <div class="tcard"><p>"I export the report before every consult. My doctor reads it in two minutes."</p><span class="who">Patient · AFib, 3 agents</span></div>
+    <div class="tcard"><p>"It flagged a caution pair I'd have sworn was safe. Cited the label section. Hard to argue with."</p><span class="who">Clinical reviewer</span></div>
+  </div></div>
+  <div class="tmarquee"><div class="ttrack rev">
+    <div class="tcard"><p>"No signup, no card, no newsletter. I scanned, I read, I left. Respect."</p><span class="who">Visitor · first scan</span></div>
+    <div class="tcard"><p>"The Stomach Guardian score finally gave my GI complaints a number I could discuss."</p><span class="who">Patient · NSAID stack</span></div>
+    <div class="tcard"><p>"We keep it open on the ward tablet. Residents run every new regimen through it."</p><span class="who">Residency program</span></div>
+    <div class="tcard"><p>"Approve / hold is exactly the right amount of control. It never went live without me."</p><span class="who">Caregiver · 2 patients</span></div>
+    <div class="tcard"><p>"It reads like an instrument, not a chatbot. Every claim has a source."</p><span class="who">Pharmacology student</span></div>
+    <div class="tcard"><p>"No signup, no card, no newsletter. I scanned, I read, I left. Respect."</p><span class="who">Visitor · first scan</span></div>
+    <div class="tcard"><p>"The Stomach Guardian score finally gave my GI complaints a number I could discuss."</p><span class="who">Patient · NSAID stack</span></div>
+    <div class="tcard"><p>"We keep it open on the ward tablet. Residents run every new regimen through it."</p><span class="who">Residency program</span></div>
+    <div class="tcard"><p>"Approve / hold is exactly the right amount of control. It never went live without me."</p><span class="who">Caregiver · 2 patients</span></div>
+    <div class="tcard"><p>"It reads like an instrument, not a chatbot. Every claim has a source."</p><span class="who">Pharmacology student</span></div>
+  </div></div>
+</section>
+
+<!-- FAQ -->
+<section id="faq" class="wrap">
+  <div class="sec-kicker mono" data-reveal>FAQ</div>
+  <h2 data-reveal>Fair questions.</h2>
+  <div class="faq" style="margin-top:26px" data-reveal>
+    <details><summary>What is a medication safety agent?<i>+</i></summary><p>An agent you brief in plain words. medcheck resolves your medicines to active ingredients, builds the interaction graph from FDA labels, scores mucosal risk, and writes a 24-hour schedule. Built for patients, caregivers and clinicians.</p></details>
+    <details><summary>How is it different from asking ChatGPT?<i>+</i></summary><p>A chatbot starts from what you type. medcheck starts from official OpenFDA monographs and curated pharmacological rules, and every flag cites the label section it came from. No vibes, no hallucinated interactions.</p></details>
+    <details><summary>Does it replace my doctor?<i>+</i></summary><p>No. It's informational clinical pharmacology, not a diagnosis. Nothing goes live without your approval, and the report is designed to be read <em>with</em> your prescribing physician, not instead of them.</p></details>
+    <details><summary>Will it know Indian brand names?<i>+</i></summary><p>Yes — select international and Indian brand aliases (Crocin, Dolo, Ecosprin, Brufen, Omez…) resolve to generic active ingredients before any analysis runs.</p></details>
+    <details><summary>Is my data stored or sold?<i>+</i></summary><p>Anonymous guest sessions. No signup, no card, no ads, no data selling. Your regimen stays in your session.</p></details>
+    <details><summary>Is it really free?<i>+</i></summary><p>$0 forever, 0% of anything. The underlying label data is public. Safety shouldn't have a paywall.</p></details>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<div class="wrap">
+  <div class="final" data-reveal>
+    <h2>Hand your regimen to an agent that reads the whole label.</h2>
+    <p>It maps the interactions, scores the stomach, and writes the schedule. You review what it makes and decide what you follow.</p>
+    <a class="btn green" href="#top" onclick="document.getElementById('medInput').focus()">Scan my medicines →</a>
+    <p class="note">Your first scan is free. No card, no signup.</p>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <a class="logo" href="#"><i></i>medcheck <span class="mono" style="color:var(--muted)">v2.0</span></a>
+      <nav><a href="#agent">The agent</a><a href="#modes">Modes</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
+    </div>
+    <p class="fine">© 2026 MEDCHECK · Built on OpenFDA drug label data & curated pharmacological rules. Informational clinical pharmacology only — not a substitute for clinical judgment or individualized medical advice. Always consult your prescribing physician before altering any drug regimen.</p>
+  </div>
+</footer>
+
+<script>
+/* ---- tabs ---- */
+const tabNames=['Labels','Interactions','Severity','Stomach','Schedule','Report'];
+const tabBtns=[...document.querySelectorAll('.tab-btn')];
+const panels=[...document.querySelectorAll('.chat-body')];
+function setTab(i){
+  tabBtns.forEach(b=>b.classList.toggle('active',+b.dataset.tab===i));
+  panels.forEach(p=>p.classList.toggle('active',+p.dataset.panel===i));
+  document.getElementById('chatTab').textContent='· '+tabNames[i];
+}
+tabBtns.forEach(b=>b.addEventListener('click',()=>setTab(+b.dataset.tab)));
+
+/* ---- approve / hold ---- */
+document.querySelectorAll('.vote').forEach(v=>{
+  const ok=v.querySelector('.ok'),no=v.querySelector('.no');
+  ok.addEventListener('click',()=>{ok.classList.add('on');no.classList.remove('on');ok.textContent='✓ Approved';no.textContent='✕ Hold';});
+  no.addEventListener('click',()=>{no.classList.add('on');ok.classList.remove('on');no.textContent='✕ Held';ok.textContent='✓ Approve';});
+});
+
+/* ---- hero mini-scan (REFERENCE ONLY — in the React app this is replaced by real API resolution; see prompt) ---- */
+const ALIAS={crocin:'paracetamol',dolo:'paracetamol',calpol:'paracetamol',panadol:'paracetamol',ecosprin:'aspirin',disprin:'aspirin',brufen:'ibuprofen',advil:'ibuprofen',motrin:'ibuprofen',coumadin:'warfarin',omez:'omeprazole',prilosec:'omeprazole'};
+const LABEL={warfarin:'Warfarin',aspirin:'Aspirin',ibuprofen:'Ibuprofen',omeprazole:'Omeprazole',paracetamol:'Paracetamol'};
+const CRIT=new Set(['aspirin|ibuprofen','aspirin|warfarin','ibuprofen|warfarin']);
+const CAUT=new Set(['omeprazole|warfarin','paracetamol|warfarin','ibuprofen|omeprazole','aspirin|omeprazole']);
+const key=(a,b)=>[a,b].sort().join('|');
+
+document.getElementById('scanForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const raw=document.getElementById('medInput').value.split(/[,;\n]+/).map(s=>s.trim().toLowerCase()).filter(Boolean);
+  const meds=[...new Set(raw.map(m=>ALIAS[m]||m))];
+  const known=meds.filter(m=>LABEL[m]), unknown=meds.filter(m=>!LABEL[m]);
+  const box=document.getElementById('scanResult');
+  const chips=document.getElementById('scanChips');
+  const sum=document.getElementById('scanSummary');
+  if(!known.length){
+    chips.innerHTML='<span class="chip unk">try: Warfarin, Aspirin, Ibuprofen</span>';
+    sum.innerHTML='No library matches yet — the demo library covers 5 agents + brand aliases.';
+    box.classList.add('show');return;
+  }
+  let crit=0,caut=0;
+  for(let i=0;i<known.length;i++)for(let j=i+1;j<known.length;j++){
+    const k=key(known[i],known[j]);
+    if(CRIT.has(k))crit++;else if(CAUT.has(k))caut++;
+  }
+  const nsaid=known.includes('ibuprofen'),anti=known.includes('aspirin'),wrf=known.includes('warfarin');
+  const score=Math.min(100,10+(nsaid?35:0)+(anti?30:0)+(nsaid&&anti?20:0)+(wrf?10:0));
+  chips.innerHTML=known.map(m=>{
+    const worst=known.some(o=>o!==m&&CRIT.has(key(m,o)))?'crit':known.some(o=>o!==m&&CAUT.has(key(m,o)))?'caut':'safe';
+    return `<span class="chip ${worst}">${LABEL[m]}</span>`;
+  }).join('')+unknown.map(u=>`<span class="chip unk">? ${u}</span>`).join('');
+  sum.innerHTML=`<b>${known.length} agents</b> · <b style="color:var(--red)">${crit} critical</b> · <b style="color:var(--amber)">${caut} caution</b> · Stomach Guardian <b>${score}/100</b>`;
+  box.classList.add('show');
+});
+document.getElementById('openScan').addEventListener('click',()=>{
+  setTab(1);
+  document.getElementById('agent').scrollIntoView({behavior:'smooth'});
+});
+
+/* ---- scroll reveal ---- */
+const io=new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting){en.target.classList.add('in');io.unobserve(en.target);}}),{threshold:.12});
+document.querySelectorAll('[data-reveal]').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>

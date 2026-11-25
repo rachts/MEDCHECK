@@ -117,7 +117,8 @@ cp .env.example .env
 | `FORCE_HTTPS` | Optional | Redirect plaintext HTTP to HTTPS in-app (default: `false`). Leave `false` when a reverse proxy terminates TLS, or requests redirect in a loop |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Optional | Registered-session lifetime (default: 7 days) |
 | `GUEST_TOKEN_EXPIRE_MINUTES` | Optional | Anonymous-session lifetime (default: 120 minutes) |
-| `MISTRAL_API_KEY` | Optional | Mistral AI API key for unstructured FDA drug label extraction |
+| `GROQ_API_KEY` | Optional | Groq API key for plain-language Medicine Assistant summaries |
+| `GROQ_MODEL` | Optional | Groq model identifier (default: `llama-3.3-70b-versatile`) |
 | `SUPABASE_URL` | Optional | Supabase PostgreSQL project URL |
 | `SUPABASE_KEY` | Optional | Supabase service or anon API key |
 | `REDIS_URL` | Optional | Backing store for rate-limit counters. In-memory when unset, which means limits are per-process and reset on restart |
@@ -126,6 +127,24 @@ cp .env.example .env
 | `VITE_API_URL` | Optional | API base URL for the frontend. **Inlined into the JavaScript bundle at build time, so it must never hold a secret** |
 
 *Note: If no external keys are provided, MEDCHECK runs completely offline using its deterministic clinical knowledge base and local SQLite caching.*
+
+---
+
+## 🚀 Production Deployment Checklist (Render + Vercel)
+
+Follow these steps when deploying MEDCHECK across Render (Backend Web Service) and Vercel (Frontend SPA):
+
+1. **Backend Environment on Render**:
+   - Set `ENV=production` so interactive OpenAPI docs (`/docs`, `/redoc`) are disabled, debug logging is suppressed, and session cookies require HTTPS.
+   - Generate a cryptographically secure JWT secret using `openssl rand -hex 32` and set `JWT_SECRET`. Render will fail to boot in production if this is unset or under 32 characters.
+   - Generate a salt using `openssl rand -hex 16` and set `AUDIT_IP_SALT` to ensure anonymized client IPs can be correlated consistently across restarts without exposing raw IP addresses.
+   - Set `ALLOWED_ORIGINS` to your production frontend domain (e.g. `https://medcheck-official.vercel.app`) along with any Vercel preview URL patterns required.
+2. **Frontend Environment on Vercel**:
+   - Set `VITE_API_URL` to your Render backend service URL (e.g. `https://medcheck-api-fptv.onrender.com`).
+   - Trigger a clean Vercel deployment (environment variables starting with `VITE_` are baked into client bundles at build time).
+3. **Health Check Verification**:
+   - Verify backend readiness: `curl -f https://<your-render-url>/api/health` should return `{"status": "ok"}` with database and clinical engine status.
+   - Check that CORS headers are returned correctly when probed from the frontend origin.
 
 ---
 

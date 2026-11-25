@@ -1,41 +1,71 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { Disclaimer } from '../components/Disclaimer';
 import { useMedicine } from '../context/MedicineContext';
-import { loginUser, registerUser, getStoredUser, logoutUser } from '../lib/api';
-import { ShieldCheck, ArrowRight, User, Lock, Mail, AlertTriangle, LogOut, CheckCircle2, Sparkles } from 'lucide-react';
+import {
+  loginUser,
+  registerUser,
+  getStoredUser,
+  logoutUser,
+  requestPasswordReset,
+  resetPassword,
+} from '../lib/api';
+import {
+  ShieldCrossIcon,
+  ArrowRightIcon,
+  UserIcon,
+  LockIcon,
+  MailIcon,
+  WarningIcon,
+  LogOutIcon,
+  CheckIcon,
+  BookIcon,
+} from './landing-icons';
+import './app-editorial.css';
 
-// Mirrors the backend policy in models.py (UserCreate.validate_password_complexity).
-// Validating here is a UX affordance only -- the server remains the authority --
-// but the two must agree, or the form accepts a password the API then rejects
-// with an opaque 422.
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_BYTES = 72;
 const PASSWORD_RULE_HINT = 'Min 8 chars, with upper, lower & a digit';
 
-/**
- * UTF-8 byte length of a string.
- *
- * bcrypt's 72-unit limit is measured in BYTES, and so is the backend's check
- * (`len(v.encode("utf-8")) > 72`). JavaScript's `String.length` counts UTF-16 code
- * units, which is a different number for anything outside ASCII: a 40-character
- * passphrase of CJK glyphs is 120 bytes, and 30 emoji are 120 bytes at
- * `.length === 60`. The old `password.length > 72` therefore passed those
- * client-side and the server rejected them with a message about a limit the user
- * appeared to be well inside -- while a 72-character ASCII password was accepted
- * by both, so the mismatch never showed up in testing.
- *
- * TextEncoder is available in every browser this app targets.
- *
- * @param {string} value
- * @returns {number}
- */
+const ACCESS_MODES = [
+  { id: 'guest', num: '01', label: 'Guest Access' },
+  { id: 'login', num: '02', label: 'Sign In' },
+  { id: 'register', num: '03', label: 'Create Account' },
+];
+
+const QUICK_SCENARIOS = [
+  {
+    key: 'highRisk',
+    title: 'Anticoagulant + NSAID',
+    medicines: 'Warfarin + Aspirin + Ibuprofen',
+    severity: 'CRITICAL',
+    tagClass: 'ed-tag-crit',
+    hoverTitleClass: 'group-hover:text-[#8b2500]',
+  },
+  {
+    key: 'moderateRisk',
+    title: 'Competitive NSAID Inhibition',
+    medicines: 'Aspirin + Ibuprofen',
+    severity: 'MODERATE',
+    tagClass: 'ed-tag-caut',
+    hoverTitleClass: 'group-hover:text-[#8a5300]',
+  },
+  {
+    key: 'safe',
+    title: 'Verified Safe Regimen',
+    medicines: 'Paracetamol + Amoxicillin',
+    severity: 'SAFE',
+    tagClass: 'ed-tag-safe',
+    hoverTitleClass: 'group-hover:text-[#2d4a22]',
+  },
+];
+
 function utf8ByteLength(value) {
   if (typeof TextEncoder !== 'undefined') {
     return new TextEncoder().encode(value).length;
   }
-  // Defensive only. Matches TextEncoder for the whole BMP plus surrogate pairs.
   return unescape(encodeURIComponent(value)).length;
 }
 
@@ -43,13 +73,9 @@ function describePasswordProblem(password) {
   if (password.length < MIN_PASSWORD_LENGTH) {
     return `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`;
   }
-  // bcrypt silently truncates at 72 BYTES, so the backend rejects anything longer
-  // rather than hash a password whose tail is ignored.
   const byteLength = utf8ByteLength(password);
   if (byteLength > MAX_PASSWORD_BYTES) {
     return password.length <= MAX_PASSWORD_BYTES
-      // Naming the byte count is the only way this message makes sense to someone
-      // looking at a password that is visibly shorter than 72 characters.
       ? `Password must be ${MAX_PASSWORD_BYTES} bytes or fewer. Accented, emoji and non-Latin characters count as 2-4 bytes each, so this one is ${byteLength} bytes.`
       : `Password must be ${MAX_PASSWORD_BYTES} bytes or fewer.`;
   }
@@ -65,18 +91,46 @@ function describePasswordProblem(password) {
   return null;
 }
 
+const INPUT_CLASS =
+  'w-full bg-[#f8f6f0] border border-[#1a1a18] focus:border-[#8b2500] focus:outline focus:outline-2 focus:outline-[#8b2500] focus:outline-offset-2 py-2.5 pl-9 pr-3 text-sm text-[#1a1a18] placeholder-[#57534a] min-h-[44px] font-ibm-serif rounded-none';
+
+const LABEL_CLASS =
+  'font-ibm-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[#2d2b26]';
+
 export function Auth() {
-  const [mode, setMode] = useState('guest'); // 'guest' | 'login' | 'register'
+  const [searchParams, setSearchParams] = useSearchParams();
+  const resetToken = (searchParams.get('reset_token') || '').trim();
+
+  const [mode, setMode] = useState('guest');
   const [userName, setUserName] = useState(() => localStorage.getItem('medcheck_user_name') || '');
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetTokenInvalid, setResetTokenInvalid] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(() => getStoredUser());
 
   const { loadScenario } = useMedicine();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setErrorMsg('');
+    setResetSuccess(false);
+    setResetTokenInvalid(false);
+    setNewPasswordInput('');
+    setConfirmPasswordInput('');
+  }, [resetToken]);
+
+  const clearResetToken = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('reset_token');
+    setSearchParams(next);
+  };
 
   const handleGuestAccess = (e) => {
     e.preventDefault();
@@ -98,10 +152,6 @@ export function Auth() {
       const user = await loginUser(usernameInput.trim(), passwordInput.trim());
       setCurrentUser(user);
       localStorage.setItem('medcheck_user_name', user.username);
-      // Drop the plaintext password from component state as soon as it has been
-      // exchanged for a session. Holding it keeps a live credential in the React
-      // tree (visible in DevTools and in any error/state snapshot) for the rest
-      // of the page's life, long after it is needed.
       setPasswordInput('');
       navigate('/app');
     } catch (err) {
@@ -140,12 +190,65 @@ export function Auth() {
   };
 
   const handleLogout = () => {
-    // logoutUser also asks the backend to delete the httpOnly session cookie; the
-    // local state below is cleared synchronously so the UI never lags the intent.
     logoutUser();
     setCurrentUser(null);
     setPasswordInput('');
     localStorage.removeItem('medcheck_user_name');
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    const trimmedUsername = usernameInput.trim();
+    if (!trimmedUsername) {
+      setErrorMsg('Please enter your username.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await requestPasswordReset(trimmedUsername);
+      setForgotMessage(
+        data.message ||
+          'If an account with that username exists, a password reset link has been created. The link is valid for 30 minutes.',
+      );
+    } catch {
+      setForgotMessage(
+        'If an account with that username exists, a password reset link has been created. The link is valid for 30 minutes.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setResetTokenInvalid(false);
+    const passwordProblem = describePasswordProblem(newPasswordInput);
+    if (passwordProblem) {
+      setErrorMsg(passwordProblem);
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
+      setErrorMsg('The two passwords do not match.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await resetPassword(resetToken, newPasswordInput);
+      setNewPasswordInput('');
+      setConfirmPasswordInput('');
+      setResetSuccess(true);
+    } catch (err) {
+      setNewPasswordInput('');
+      setConfirmPasswordInput('');
+      setResetTokenInvalid(true);
+      setErrorMsg(
+        err.message || 'This reset link is invalid or has expired. Please request a new one.',
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleProfileSelect = (scenarioKey) => {
@@ -154,302 +257,570 @@ export function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
+    <div className="ed-app min-h-screen flex flex-col bg-[#f8f6f0] text-[#1a1a18] rounded-none shadow-none">
       <Navbar />
 
-      <main className="flex-1 pt-24 pb-12 px-4 sm:px-8 flex flex-col items-center justify-center max-w-md mx-auto w-full">
-        <div className="w-full card flex flex-col gap-4">
-          {/* Top Logo */}
-          <div className="text-center">
-            <div className="w-9 h-9 rounded-[4px] bg-[var(--accent)] text-[var(--text-inverse)] flex items-center justify-center font-bold mx-auto mb-2">
-              <ShieldCheck className="w-5 h-5" />
+      <main className="flex-1 pt-28 pb-16 px-4 sm:px-8 flex flex-col items-center justify-center max-w-3xl mx-auto w-full gap-6">
+        <section
+          aria-labelledby="auth-heading"
+          className="ed-sheet w-full max-w-[540px] p-6 sm:p-8 flex flex-col gap-6"
+        >
+          {/* Registry Masthead */}
+          <header className="border-b border-[#b7b09d] pb-5">
+            <div className="flex items-center gap-2.5">
+              <span
+                className="w-7 h-7 border border-[#1a1a18] bg-[#f8f6f0] text-[#1a1a18] flex items-center justify-center shrink-0"
+                aria-hidden="true"
+              >
+                <ShieldCrossIcon size={15} />
+              </span>
+              <span className="font-ibm-mono text-[11px] uppercase tracking-[0.09em] text-[#8b2500] font-medium">
+                MEDCHECK REGISTRY
+              </span>
             </div>
-            <h1 className="font-serif text-[28px] font-bold text-[var(--text-primary)] tracking-tight">
+
+            <h1
+              id="auth-heading"
+              className="font-newsreader text-[30px] sm:text-[34px] font-medium text-[#1a1a18] leading-tight mt-3"
+            >
               MEDCHECK Access
             </h1>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5 font-sans">
-              Clinical pharmacology security & patient profile session management.
+            <p className="text-sm text-[#2d2b26] mt-2 font-ibm-serif leading-relaxed">
+              Clinical pharmacology security and patient profile session management. Sign in or create an account for a named profile session with your medicine lists, notes, and history, or continue directly with guest access without one.
             </p>
-          </div>
+          </header>
 
-          {/* Current Logged In State Banner */}
+          {/* Current Logged In State Docket Entry */}
           {currentUser && !currentUser.is_guest && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-[6px] flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs text-emerald-800">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Signed in as <strong>{currentUser.username}</strong></span>
+            <div className="bg-[#e8eee3] border border-[#2d4a22] border-t-[3px] border-t-[#2d4a22] p-3.5 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 text-sm font-ibm-serif text-[#1a1a18]">
+                <span
+                  className="w-6 h-6 border border-[#2d4a22] bg-[#f8f6f0] text-[#2d4a22] flex items-center justify-center shrink-0"
+                  aria-hidden="true"
+                >
+                  <CheckIcon size={13} />
+                </span>
+                <span>
+                  Signed in as <strong className="font-semibold">{currentUser.username}</strong>
+                </span>
               </div>
               <button
+                type="button"
                 onClick={handleLogout}
-                className="text-xs text-emerald-700 hover:text-emerald-900 font-semibold flex items-center gap-1 cursor-pointer"
+                className="ed-btn-outline text-[11px] py-1.5 px-3 min-h-[36px]"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOutIcon size={13} />
                 <span>Sign Out</span>
               </button>
             </div>
           )}
 
-          {/* Mode Switcher Tabs */}
-          <div className="grid grid-cols-3 gap-1 bg-[var(--bg-elevated)] p-1 rounded-[6px] border border-[var(--border-default)]">
-            <button
-              type="button"
-              onClick={() => { setMode('guest'); setErrorMsg(''); }}
-              className={`py-1.5 text-xs font-semibold rounded-[4px] transition-colors ${
-                mode === 'guest' ? 'bg-[var(--accent)] text-[var(--text-inverse)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Guest Access
-            </button>
-            <button
-              type="button"
-              onClick={() => { setMode('login'); setErrorMsg(''); }}
-              className={`py-1.5 text-xs font-semibold rounded-[4px] transition-colors ${
-                mode === 'login' ? 'bg-[var(--accent)] text-[var(--text-inverse)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => { setMode('register'); setErrorMsg(''); }}
-              className={`py-1.5 text-xs font-semibold rounded-[4px] transition-colors ${
-                mode === 'register' ? 'bg-[var(--accent)] text-[var(--text-inverse)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Register
-            </button>
-          </div>
+          {/* Mode Selector, Error Sheet & Active Form (or Set New Password when reset_token is present) */}
+          {resetToken ? (
+            <div className="flex flex-col gap-4">
+              <div className="font-ibm-mono text-[11px] uppercase tracking-[0.09em] text-[#8b2500] font-medium">
+                RESET PASSWORD
+              </div>
 
-          {errorMsg && (
-            <div className="alert-danger text-xs flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
+              {errorMsg && (
+                <div role="alert" className="ed-notice-crit p-3.5 flex items-start gap-2.5">
+                  <WarningIcon size={16} className="shrink-0 mt-0.5 text-[#8b2500]" />
+                  <p className="font-ibm-serif text-xs sm:text-[13px] text-[#1a1a18] leading-relaxed">
+                    {errorMsg}
+                  </p>
+                </div>
+              )}
+
+              {resetSuccess ? (
+                <div className="bg-[#e8eee3] border border-[#2d4a22] border-t-[3px] border-t-[#2d4a22] p-3.5 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 text-sm font-ibm-serif text-[#1a1a18]">
+                    <span
+                      className="w-6 h-6 border border-[#2d4a22] bg-[#f8f6f0] text-[#2d4a22] flex items-center justify-center shrink-0"
+                      aria-hidden="true"
+                    >
+                      <CheckIcon size={13} />
+                    </span>
+                    <span>
+                      Your password has been updated. Please sign in with your new password.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearResetToken();
+                      setMode('login');
+                      setErrorMsg('');
+                      setPasswordInput('');
+                    }}
+                    className="ed-btn-outline text-[11px] py-1.5 px-3 min-h-[36px]"
+                  >
+                    Go to Sign In
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <form onSubmit={handleResetPassword} className="flex flex-col gap-4" aria-busy={loading}>
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="reset-new-password" className={LABEL_CLASS}>
+                        New Password
+                      </label>
+                      <div className="relative">
+                        <LockIcon
+                          size={15}
+                          className="text-[#57534a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                        />
+                        <input
+                          id="reset-new-password"
+                          name="new-password"
+                          type="password"
+                          autoComplete="new-password"
+                          aria-describedby="reset-password-hint"
+                          required
+                          value={newPasswordInput}
+                          onChange={(e) => setNewPasswordInput(e.target.value)}
+                          placeholder={PASSWORD_RULE_HINT}
+                          className={INPUT_CLASS}
+                        />
+                      </div>
+                      <p
+                        id="reset-password-hint"
+                        className="font-ibm-mono text-[11px] tracking-[0.04em] text-[#57534a]"
+                      >
+                        {PASSWORD_RULE_HINT}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="reset-confirm-password" className={LABEL_CLASS}>
+                        Confirm New Password
+                      </label>
+                      <div className="relative">
+                        <LockIcon
+                          size={15}
+                          className="text-[#57534a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                        />
+                        <input
+                          id="reset-confirm-password"
+                          name="confirm-new-password"
+                          type="password"
+                          autoComplete="new-password"
+                          required
+                          value={confirmPasswordInput}
+                          onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                          placeholder="Re-enter your new password"
+                          className={INPUT_CLASS}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="ed-btn-ink w-full min-h-[46px] disabled:opacity-55 disabled:cursor-not-allowed"
+                    >
+                      {loading ? 'UPDATING' : 'Set New Password'}
+                    </button>
+                    <span className="sr-only" role="status" aria-live="polite">
+                      {loading ? 'UPDATING' : ''}
+                    </span>
+                  </form>
+
+                  {resetTokenInvalid && (
+                    <div className="flex justify-start">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearResetToken();
+                          setForgotMessage('');
+                          setErrorMsg('');
+                          setMode('forgot');
+                        }}
+                        className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#1a1a18] underline underline-offset-4 hover:text-[#8b2500] transition-colors cursor-pointer"
+                      >
+                        Request a new reset link
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-          )}
-
-          {/* 1. Guest Entry Form */}
-          {mode === 'guest' && (
-            <form onSubmit={handleGuestAccess} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                {/* htmlFor/id pairs: a <label> that is neither wrapping nor
-                    associated by id is announced as loose text, so a screen-reader
-                    user reaching this field heard only the placeholder. */}
-                <label htmlFor="guest-name" className="text-xs font-semibold text-[var(--text-secondary)]">
-                  Patient / Provider Name <span className="text-[var(--text-muted)]">(Optional)</span>
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    id="guest-name"
-                    name="name"
-                    type="text"
-                    autoComplete="name"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    placeholder="e.g. Mrs. Sharma or Dr. Patel"
-                    className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] focus:border-[var(--border-hover)] focus:bg-[var(--bg-surface)] rounded-[6px] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[44px] transition-colors"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="btn-primary w-full min-h-[44px]"
+          ) : (
+            <>
+              {/* Mode Selector: Ruled Ledger Index */}
+              <div
+                role="group"
+                aria-label="Access mode"
+                className="grid grid-cols-1 sm:grid-cols-3 border border-[#1a1a18] bg-[#f8f6f0] divide-y sm:divide-y-0 sm:divide-x divide-[#1a1a18]"
               >
-                <span>Continue as Guest</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
-          )}
-
-          {/* 2. Login Form */}
-          {mode === 'login' && (
-            <form onSubmit={handleLogin} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <label htmlFor="login-username" className="text-xs font-semibold text-[var(--text-secondary)]">Username</label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
-                  <input
-                    id="login-username"
-                    name="username"
-                    type="text"
-                    autoComplete="username"
-                    required
-                    value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value)}
-                    placeholder="Enter your username"
-                    className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] focus:border-[var(--border-hover)] focus:bg-[var(--bg-surface)] rounded-[6px] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[44px] transition-colors"
-                  />
-                </div>
+                {ACCESS_MODES.map((item) => {
+                  const active = mode === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setMode(item.id);
+                        setErrorMsg('');
+                        setForgotMessage('');
+                      }}
+                      aria-pressed={active}
+                      className={`px-3 py-2.5 text-left transition-colors cursor-pointer flex items-center justify-between gap-2 min-h-[44px] ${
+                        active
+                          ? 'bg-[#1a1a18] text-[#f8f6f0]'
+                          : 'bg-[#f8f6f0] text-[#2d2b26] hover:bg-[#ece7d5] hover:text-[#1a1a18]'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`font-ibm-mono text-[10px] tracking-[0.06em] shrink-0 ${
+                            active ? 'text-[#d5cfc0]' : 'text-[#57534a]'
+                          }`}
+                        >
+                          {item.num}
+                        </span>
+                        <span className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] font-medium truncate">
+                          {item.label}
+                        </span>
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={`w-2 h-2 border shrink-0 ${
+                          active ? 'border-[#f8f6f0] bg-[#f8f6f0]' : 'border-[#57534a] bg-transparent'
+                        }`}
+                      />
+                    </button>
+                  );
+                })}
               </div>
 
-              <div className="flex flex-col gap-1">
-                <label htmlFor="login-password" className="text-xs font-semibold text-[var(--text-secondary)]">Password</label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
-                  <input
-                    id="login-password"
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] focus:border-[var(--border-hover)] focus:bg-[var(--bg-surface)] rounded-[6px] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[44px] transition-colors"
-                  />
+              {/* Error Notice Sheet */}
+              {errorMsg && (
+                <div role="alert" className="ed-notice-crit p-3.5 flex items-start gap-2.5">
+                  <WarningIcon size={16} className="shrink-0 mt-0.5 text-[#8b2500]" />
+                  <p className="font-ibm-serif text-xs sm:text-[13px] text-[#1a1a18] leading-relaxed">
+                    {errorMsg}
+                  </p>
                 </div>
-              </div>
+              )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full min-h-[44px] disabled:opacity-40"
-              >
-                {loading ? 'Authenticating...' : 'Sign In to Clinical Account'}
-              </button>
-            </form>
-          )}
+              {/* 1. Guest Entry Form */}
+              {mode === 'guest' && (
+                <form onSubmit={handleGuestAccess} className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="guest-name" className={LABEL_CLASS}>
+                      Patient / Provider Name{' '}
+                      <span className="text-[#57534a] lowercase font-normal">(optional)</span>
+                    </label>
+                    <div className="relative">
+                      <UserIcon
+                        size={15}
+                        className="text-[#57534a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                      />
+                      <input
+                        id="guest-name"
+                        name="name"
+                        type="text"
+                        autoComplete="name"
+                        value={userName}
+                        onChange={(e) => setUserName(e.target.value)}
+                        placeholder="e.g. Mrs. Sharma or Dr. Patel"
+                        className={INPUT_CLASS}
+                      />
+                    </div>
+                  </div>
 
-          {/* 3. Register Form */}
-          {mode === 'register' && (
-            <form onSubmit={handleRegister} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <label htmlFor="register-username" className="text-xs font-semibold text-[var(--text-secondary)]">Username</label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
-                  <input
-                    id="register-username"
-                    name="username"
-                    type="text"
-                    autoComplete="username"
-                    required
-                    value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value)}
-                    placeholder="Choose a username"
-                    className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] focus:border-[var(--border-hover)] focus:bg-[var(--bg-surface)] rounded-[6px] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[44px] transition-colors"
-                  />
+                  <button type="submit" className="ed-btn-ink w-full min-h-[46px]">
+                    <span>Continue as Guest</span>
+                    <ArrowRightIcon size={15} />
+                  </button>
+                </form>
+              )}
+
+              {/* 2. Login Form */}
+              {mode === 'login' && (
+                <form onSubmit={handleLogin} className="flex flex-col gap-4" aria-busy={loading}>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="login-username" className={LABEL_CLASS}>
+                      Username
+                    </label>
+                    <div className="relative">
+                      <UserIcon
+                        size={15}
+                        className="text-[#57534a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                      />
+                      <input
+                        id="login-username"
+                        name="username"
+                        type="text"
+                        autoComplete="username"
+                        required
+                        value={usernameInput}
+                        onChange={(e) => setUsernameInput(e.target.value)}
+                        placeholder="Enter your username"
+                        className={INPUT_CLASS}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="login-password" className={LABEL_CLASS}>
+                      Password
+                    </label>
+                    <div className="relative">
+                      <LockIcon
+                        size={15}
+                        className="text-[#57534a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                      />
+                      <input
+                        id="login-password"
+                        name="password"
+                        type="password"
+                        autoComplete="current-password"
+                        required
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        placeholder="Enter your password"
+                        className={INPUT_CLASS}
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode('forgot');
+                          setErrorMsg('');
+                          setForgotMessage('');
+                          setPasswordInput('');
+                        }}
+                        className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#57534a] hover:text-[#8b2500] hover:underline underline-offset-4 transition-colors cursor-pointer"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="ed-btn-ink w-full min-h-[46px] disabled:opacity-55 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'SIGNING IN' : 'Sign In to Clinical Account'}
+                  </button>
+                  <span className="sr-only" role="status" aria-live="polite">
+                    {loading ? 'SIGNING IN' : ''}
+                  </span>
+                </form>
+              )}
+
+              {/* 3. Register Form */}
+              {mode === 'register' && (
+                <form onSubmit={handleRegister} className="flex flex-col gap-4" aria-busy={loading}>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="register-username" className={LABEL_CLASS}>
+                      Username
+                    </label>
+                    <div className="relative">
+                      <UserIcon
+                        size={15}
+                        className="text-[#57534a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                      />
+                      <input
+                        id="register-username"
+                        name="username"
+                        type="text"
+                        autoComplete="username"
+                        required
+                        value={usernameInput}
+                        onChange={(e) => setUsernameInput(e.target.value)}
+                        placeholder="Choose a username"
+                        className={INPUT_CLASS}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="register-email" className={LABEL_CLASS}>
+                      Email <span className="text-[#57534a] lowercase font-normal">(optional)</span>
+                    </label>
+                    <div className="relative">
+                      <MailIcon
+                        size={15}
+                        className="text-[#57534a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                      />
+                      <input
+                        id="register-email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="doctor@hospital.org"
+                        className={INPUT_CLASS}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="register-password" className={LABEL_CLASS}>
+                      Password
+                    </label>
+                    <div className="relative">
+                      <LockIcon
+                        size={15}
+                        className="text-[#57534a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                      />
+                      <input
+                        id="register-password"
+                        name="new-password"
+                        type="password"
+                        autoComplete="new-password"
+                        aria-describedby="register-password-hint"
+                        required
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        placeholder={PASSWORD_RULE_HINT}
+                        className={INPUT_CLASS}
+                      />
+                    </div>
+                    <p
+                      id="register-password-hint"
+                      className="font-ibm-mono text-[11px] tracking-[0.04em] text-[#57534a]"
+                    >
+                      {PASSWORD_RULE_HINT}
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="ed-btn-ink w-full min-h-[46px] disabled:opacity-55 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'CREATING ACCOUNT' : 'Create Clinical Account'}
+                  </button>
+                  <span className="sr-only" role="status" aria-live="polite">
+                    {loading ? 'CREATING ACCOUNT' : ''}
+                  </span>
+                </form>
+              )}
+
+              {/* 4. Forgot Password Form */}
+              {mode === 'forgot' && (
+                <div className="flex flex-col gap-4">
+                  <div className="font-ibm-mono text-[11px] uppercase tracking-[0.09em] text-[#8b2500] font-medium">
+                    RESET PASSWORD
+                  </div>
+
+                  {forgotMessage && (
+                    <div
+                      role="status"
+                      className="bg-[#f8f6f0] border border-[#1a1a18] p-3.5 font-ibm-serif text-xs sm:text-[13px] text-[#1a1a18] leading-relaxed"
+                    >
+                      {forgotMessage}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleForgotPassword} className="flex flex-col gap-4" aria-busy={loading}>
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="forgot-username" className={LABEL_CLASS}>
+                        Username
+                      </label>
+                      <div className="relative">
+                        <UserIcon
+                          size={15}
+                          className="text-[#57534a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                        />
+                        <input
+                          id="forgot-username"
+                          name="username"
+                          type="text"
+                          autoComplete="username"
+                          required
+                          value={usernameInput}
+                          onChange={(e) => setUsernameInput(e.target.value)}
+                          placeholder="Enter your username"
+                          className={INPUT_CLASS}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="ed-btn-ink w-full min-h-[46px] disabled:opacity-55 disabled:cursor-not-allowed"
+                    >
+                      {loading ? 'CREATING LINK' : 'Create Reset Link'}
+                    </button>
+                    <span className="sr-only" role="status" aria-live="polite">
+                      {loading ? 'CREATING LINK' : ''}
+                    </span>
+                  </form>
+
+                  <div className="flex justify-start">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('login');
+                        setErrorMsg('');
+                        setForgotMessage('');
+                      }}
+                      className="font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#1a1a18] underline underline-offset-4 hover:text-[#8b2500] transition-colors cursor-pointer"
+                    >
+                      Back to Sign In
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label htmlFor="register-email" className="text-xs font-semibold text-[var(--text-secondary)]">
-                  Email <span className="text-[var(--text-muted)]">(Optional)</span>
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    id="register-email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="doctor@hospital.org"
-                    className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] focus:border-[var(--border-hover)] focus:bg-[var(--bg-surface)] rounded-[6px] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[44px] transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label htmlFor="register-password" className="text-xs font-semibold text-[var(--text-secondary)]">Password</label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
-                  <input
-                    id="register-password"
-                    name="new-password"
-                    type="password"
-                    autoComplete="new-password"
-                    aria-describedby="register-password-hint"
-                    required
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder={PASSWORD_RULE_HINT}
-                    className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] focus:border-[var(--border-hover)] focus:bg-[var(--bg-surface)] rounded-[6px] py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none min-h-[44px] transition-colors"
-                  />
-                </div>
-                {/* The rule was previously only in the placeholder, which vanishes
-                    the moment the user starts typing -- exactly when they need it.
-                    Referenced by aria-describedby on the input above. */}
-                <p id="register-password-hint" className="text-xs text-[var(--text-muted)]">
-                  {PASSWORD_RULE_HINT}
-                </p>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full min-h-[44px] disabled:opacity-40"
-              >
-                {loading ? 'Creating Account...' : 'Create Clinical Account'}
-              </button>
-            </form>
+              )}
+            </>
           )}
 
           {/* Quick Scenario Launchers */}
-          <div className="flex flex-col gap-2 pt-3 border-t border-[var(--border-default)]">
-            <div className="badge badge-info">
-              <Sparkles className="w-3 h-3" />
+          <div className="flex flex-col gap-3 pt-5 border-t border-[#b7b09d]">
+            <div className="inline-flex items-center gap-2 font-ibm-mono text-[11px] uppercase tracking-[0.08em] text-[#57534a] font-medium">
+              <BookIcon size={13} className="text-[#8b2500]" />
               <span>Preloaded Scenarios</span>
             </div>
 
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                type="button"
-                onClick={() => handleProfileSelect('highRisk')}
-                className="text-left p-3 rounded-[6px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] hover:border-[rgba(220,38,38,0.4)] transition-colors flex items-center justify-between group cursor-pointer min-h-[48px]"
-              >
-                <div>
-                  <div className="font-serif text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--severity-high)]">
-                    Anticoagulant + NSAID
+            <div className="border border-[#b7b09d] bg-[#f8f6f0] divide-y divide-[#d5cfc0]">
+              {QUICK_SCENARIOS.map((scenario) => (
+                <button
+                  key={scenario.key}
+                  type="button"
+                  onClick={() => handleProfileSelect(scenario.key)}
+                  className="w-full text-left px-3.5 py-3 bg-[#f8f6f0] hover:bg-[#ece7d5] transition-colors flex items-center justify-between gap-3 group cursor-pointer min-h-[52px]"
+                >
+                  <div className="min-w-0">
+                    <div
+                      className={`font-newsreader text-[16px] font-semibold text-[#1a1a18] ${scenario.hoverTitleClass} leading-snug`}
+                    >
+                      {scenario.title}
+                    </div>
+                    <div className="text-xs text-[#57534a] font-ibm-serif mt-0.5">
+                      {scenario.medicines}
+                    </div>
                   </div>
-                  <div className="text-xs text-[var(--text-muted)] font-sans">
-                    Warfarin + Aspirin + Ibuprofen
-                  </div>
-                </div>
-                <div className="badge badge-high">
-                  CRITICAL
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleProfileSelect('moderateRisk')}
-                className="text-left p-3 rounded-[6px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] hover:border-[rgba(217,119,6,0.4)] transition-colors flex items-center justify-between group cursor-pointer min-h-[48px]"
-              >
-                <div>
-                  <div className="font-serif text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--severity-moderate)]">
-                    Competitive NSAID Inhibition
-                  </div>
-                  <div className="text-xs text-[var(--text-muted)] font-sans">
-                    Aspirin + Ibuprofen
-                  </div>
-                </div>
-                <div className="badge badge-moderate">
-                  MODERATE
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleProfileSelect('safe')}
-                className="text-left p-3 rounded-[6px] bg-[var(--bg-elevated)] hover:bg-[#E2E8F0] border border-[var(--border-default)] hover:border-[rgba(5,150,105,0.4)] transition-colors flex items-center justify-between group cursor-pointer min-h-[48px]"
-              >
-                <div>
-                  <div className="font-serif text-[16px] font-bold text-[var(--text-primary)] group-hover:text-[var(--severity-low)]">
-                    Verified Safe Regimen
-                  </div>
-                  <div className="text-xs text-[var(--text-muted)] font-sans">
-                    Paracetamol + Amoxicillin
-                  </div>
-                </div>
-                <div className="badge badge-low">
-                  SAFE
-                </div>
-              </button>
+                  <span className={`ed-tag shrink-0 ${scenario.tagClass}`}>
+                    {scenario.severity}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
-        </div>
+        </section>
+
+        {/* Guest Footnote */}
+        <p className="max-w-[540px] w-full text-center font-ibm-mono text-[11px] uppercase tracking-[0.07em] text-[#57534a] leading-relaxed">
+          Guest sessions require no sign-up:{' '}
+          <Link
+            to="/app"
+            className="text-[#1a1a18] underline underline-offset-4 hover:text-[#8b2500] transition-colors"
+          >
+            continue without an account
+          </Link>
+          .
+        </p>
+
+        {/* Medical Disclaimer */}
+        <Disclaimer />
       </main>
 
       <Footer />

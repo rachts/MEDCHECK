@@ -1,47 +1,27 @@
 import React from 'react';
-import { X, Pill } from 'lucide-react';
+import { CloseIcon, PillIcon } from '../pages/landing-icons';
 import { useMedicine } from '../context/MedicineContext';
 
 /**
  * One row in the medicine basket.
  *
- * Props are documented with JSDoc rather than `prop-types` deliberately:
- * prop-types is a runtime dependency that only reports violations in the console
- * after a bad render has already happened, whereas these annotations resolve
- * against the real `types/api.ts` interfaces and surface in the editor before the
- * call site is even saved. `tsconfig.json` keeps `checkJs: false` while the
- * component tree is still .jsx, so these are documentation plus IDE
- * IntelliSense, not a build gate.
- *
  * @param {object} props
  * @param {import('../types/api').BasketMedicine} props.medicine
- *   Basket entry to render. `medicine.name` carries the user's display casing, so
- *   every comparison below lowercases it before matching against API payloads.
  * @param {(id: string) => void} props.onRemove
- *   Removes the entry by id. Must be referentially stable (a `useCallback` from
- *   MedicineContext) or the `React.memo` wrapper at the bottom of this file is
- *   defeated.
  */
 function MedicineChipBase({ medicine, onRemove }) {
   const { selectedMedicineName, selectMedicine, results } = useMedicine();
   const isSelected = selectedMedicineName?.toLowerCase() === medicine.name.toLowerCase();
 
-  // Badge text and classes for the six `DrugType` values. `Supp` was previously
-  // the catch-all for anything that was not OTC or Rx, which grouped a
-  // prescription-strength substance like alcohol (classed `'substance'` by the
-  // backend) under the same violet tag as a multivitamin. Distinct labels here
-  // cost nothing and keep a substance from reading as a dietary supplement.
   const drugBadge = {
-    otc: { label: 'OTC', cls: 'tag-success', },
-    prescription: { label: 'Rx', cls: 'text-[#0284C7] bg-[#0284C7]/10 border-[#0284C7]/20', },
-    supplement: { label: 'Supp', cls: 'text-[#7C3AED] bg-[#7C3AED]/10 border-[#7C3AED]/20', },
-    substance: { label: 'Sub', cls: 'text-[#BE185D] bg-[#BE185D]/10 border-[#BE185D]/20', },
-    lifestyle_factor: { label: 'Life', cls: 'text-[#B45309] bg-[#B45309]/10 border-[#B45309]/20', },
-    unknown: { label: '—', cls: 'text-[#64748B] bg-[#64748B]/10 border-[#64748B]/20', },
-  }[medicine.drugType] || { label: '—', cls: 'text-[#64748B] bg-[#64748B]/10 border-[#64748B]/20' };
+    otc: { label: 'OTC', cls: 'ed-tag-safe' },
+    prescription: { label: 'Rx', cls: 'ed-tag-ink' },
+    supplement: { label: 'Supp', cls: 'ed-tag-olive' },
+    substance: { label: 'Sub', cls: 'ed-tag-crit' },
+    lifestyle_factor: { label: 'Life', cls: 'ed-tag-caut' },
+    unknown: { label: '--', cls: '' },
+  }[medicine.drugType] || { label: '--', cls: '' };
 
-  // Determine individual medicine risk for left border
-  let leftBorderColor = 'var(--severity-low)'; // #059669
   const medProfile = results?.profiles?.[medicine.name.toLowerCase()];
   const giTier = medProfile?.gi_profile?.risk_tier;
 
@@ -52,32 +32,38 @@ function MedicineChipBase({ medicine, onRemove }) {
     (i) => (i.drug_a.toLowerCase() === medicine.name.toLowerCase() || i.drug_b.toLowerCase() === medicine.name.toLowerCase()) && i.severity === 'moderate'
   );
 
-  if (hasCritical || giTier === 'high') {
-    leftBorderColor = 'var(--severity-high)'; // #DC2626
-  } else if (hasModerate || giTier === 'moderate') {
-    leftBorderColor = 'var(--severity-moderate)'; // #D97706
+  // Risk markers use top 3px border + full border, never left stripes
+  let topBorderColor = '#1a1a18';
+  let riskWord = null;
+  let riskTextColor = 'text-[#57534a]';
+
+  if (results) {
+    if (hasCritical || giTier === 'high') {
+      topBorderColor = '#8b2500';
+      riskWord = 'CRITICAL';
+      riskTextColor = 'text-[#8b2500]';
+    } else if (hasModerate || giTier === 'moderate') {
+      topBorderColor = '#8a5300';
+      riskWord = 'CAUTION';
+      riskTextColor = 'text-[#8a5300]';
+    } else {
+      topBorderColor = '#2d4a22';
+      riskWord = 'SAFE';
+      riskTextColor = 'text-[#2d4a22]';
+    }
   }
 
   return (
     <div
       onClick={() => selectMedicine(medicine.name)}
-      // The left border carries the per-medicine severity, so it is set here rather
-      // than in `.chip`: the colour depends on this render's interaction/GI data,
-      // and an inline style is also the only form that survives the
-      // `border-[var(--accent)]` utility applied below when the chip is selected.
-      style={{ borderLeftColor: leftBorderColor, borderLeftWidth: '3px' }}
-      className={`chip ${
-        isSelected ? 'border-[var(--accent)] bg-[#E2E8F0]' : ''
+      style={{ borderTopColor: topBorderColor, borderTopWidth: '3px' }}
+      className={`flex items-center justify-between px-3.5 py-3 border transition-colors cursor-pointer min-h-[52px] ${
+        isSelected
+          ? 'border-[#1a1a18] bg-[#ece7d5]'
+          : 'border-[#b7b09d] bg-[#f8f6f0] hover:bg-[#f0ede1]'
       }`}
       title="Click to view contextual intelligence profile"
     >
-      {/* The whole chip stays mouse-clickable (above), but the keyboard and
-          screen-reader affordance is this real <button> rather than a
-          `role="button"` on the wrapper. A wrapper with that role would swallow the
-          remove button below it -- ARIA treats a button's children as
-          presentational, so the one control that destroys data would have stopped
-          being announced. stopPropagation keeps the wrapper's handler from firing a
-          second, duplicate profile fetch when the button itself is activated. */}
       <button
         type="button"
         onClick={(e) => {
@@ -88,47 +74,53 @@ function MedicineChipBase({ medicine, onRemove }) {
         aria-label={`View clinical profile for ${medicine.name}`}
         className="flex items-center gap-2.5 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer"
       >
-        <div className={`w-6 h-6 rounded-[4px] flex items-center justify-center shrink-0 ${
-          isSelected ? 'bg-[var(--accent)] text-[var(--text-inverse)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'
+        <div className={`w-6 h-6 border flex items-center justify-center shrink-0 ${
+          isSelected
+            ? 'bg-[#1a1a18] text-[#f8f6f0] border-[#1a1a18]'
+            : 'bg-[#f0ede1] text-[#1a1a18] border-[#b7b09d]'
         }`}>
-          <Pill className="w-3.5 h-3.5" aria-hidden="true" />
+          <PillIcon size={13} />
         </div>
 
         <div className="flex flex-col min-w-0">
-          {/* Medicine Name in Serif font for medical authority */}
-          <span className="font-serif text-[17px] font-bold text-[var(--text-primary)] leading-snug truncate">
+          <span className="font-newsreader text-[17px] font-semibold text-[#1a1a18] leading-snug truncate">
             {medicine.name}
           </span>
-          <span className="text-xs text-[var(--text-muted)] capitalize truncate font-sans">
+          <span className="text-xs text-[#57534a] capitalize truncate font-ibm-serif">
             {medProfile?.generic_name || medicine.name.toLowerCase()}
+            {riskWord && (
+              <span className={`ml-1.5 font-ibm-mono text-[10px] uppercase tracking-[0.06em] font-semibold ${riskTextColor}`}>
+                · {riskWord}
+              </span>
+            )}
           </span>
           {medProfile?.is_fdc && (
-            <span 
-              className="text-[11px] text-amber-700 font-medium font-sans leading-tight mt-0.5"
-              title={medProfile?.fdc_warning || "Combination product — analysis covers primary ingredient only."}
+            <span
+              className="text-[11px] text-[#8a5300] font-medium font-ibm-serif leading-tight mt-0.5"
+              title={medProfile?.fdc_warning || 'Combination product; analysis covers primary ingredient only.'}
             >
-              Combination product — covers primary ingredient only
+              Combination product; covers primary ingredient only
             </span>
           )}
         </div>
       </button>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0">
         {medProfile?.is_fdc && (
-          <span 
-            className="tag text-amber-700 bg-amber-50 border-amber-200 font-sans cursor-help"
-            title={medProfile?.fdc_warning || "Combination product — analysis covers primary ingredient only."}
+          <span
+            className="ed-tag ed-tag-caut cursor-help"
+            title={medProfile?.fdc_warning || 'Combination product; analysis covers primary ingredient only.'}
           >
             FDC
           </span>
         )}
 
-        {/* Category Tag in Inter */}
-        <span className={`tag font-sans ${drugBadge.cls}`}>
+        {/* Category Tag */}
+        <span className={`ed-tag ${drugBadge.cls}`}>
           {drugBadge.label}
         </span>
 
-        {/* Remove Button with 44px hit target padding */}
+        {/* Remove Button */}
         <button
           type="button"
           onClick={(e) => {
@@ -136,17 +128,14 @@ function MedicineChipBase({ medicine, onRemove }) {
             onRemove(medicine.id);
           }}
           aria-label={`Remove ${medicine.name} from the basket`}
-          className="w-7 h-7 rounded-[4px] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[#E2E8F0] transition-colors cursor-pointer"
+          className="w-7 h-7 flex items-center justify-center text-[#57534a] hover:text-[#8b2500] hover:bg-[#f0ede1] border border-transparent hover:border-[#b7b09d] transition-colors cursor-pointer"
         >
-          <X className="w-3.5 h-3.5" aria-hidden="true" />
+          <CloseIcon size={13} />
         </button>
       </div>
     </div>
   );
 }
 
-// Memoised: MedicineBasket owns the search input's local state, so every keystroke
-// re-renders the basket and, previously, every chip in it. Both props are stable --
-// `medicine` is an entry from the medicines array and `onRemove` is a useCallback --
-// so the chips now sit out those renders.
 export const MedicineChip = React.memo(MedicineChipBase);
+export default MedicineChip;

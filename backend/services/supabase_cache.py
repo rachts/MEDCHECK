@@ -239,7 +239,9 @@ def _sync_init_sqlite():
 _sync_init_sqlite()
 
 def get_canonical_pair(drug_a: str, drug_b: str) -> str:
-    a, b = drug_a.lower().strip(), drug_b.lower().strip()
+    from services.clinical_rules import resolve_canonical_name
+    a = resolve_canonical_name(drug_a).lower().strip()
+    b = resolve_canonical_name(drug_b).lower().strip()
     return f"{a}::{b}" if a < b else f"{b}::{a}"
 
 def _sync_get_interaction(canonical: str) -> Optional[tuple]:
@@ -530,7 +532,9 @@ async def get_cached_interaction(drug_a: str, drug_b: str) -> Optional[Interacti
 
     if supabase:
         try:
-            res = supabase.table("interaction_pairs").select("*").eq("canonical_pair", canonical).execute()
+            res = await anyio.to_thread.run_sync(
+                lambda: supabase.table("interaction_pairs").select("*").eq("canonical_pair", canonical).execute()
+            )
             if res.data and len(res.data) > 0:
                 item = res.data[0]
                 if _is_supabase_row_expired(item, INTERACTION_TTL_DAYS):
@@ -616,12 +620,13 @@ async def save_interaction_to_cache(
                 "confidence": confidence or "established",
                 "last_reviewed": last_reviewed
             }
-            _supabase_upsert_with_ttl(
+            await anyio.to_thread.run_sync(
+                _supabase_upsert_with_ttl,
                 supabase,
                 "interaction_pairs",
                 payload,
-                on_conflict="canonical_pair",
-                ttl_days=INTERACTION_TTL_DAYS
+                "canonical_pair",
+                INTERACTION_TTL_DAYS
             )
         except Exception as e:
             logger.warning(f"Failed to cache interaction in Supabase: {e}")
@@ -644,12 +649,15 @@ async def save_interaction_to_cache(
     )
 
 async def get_cached_drug_details(generic_name: str) -> Optional[Dict[str, Any]]:
-    name = generic_name.lower().strip()
+    from services.clinical_rules import resolve_canonical_name
+    name = resolve_canonical_name(generic_name).lower().strip()
     supabase = get_supabase_client()
 
     if supabase:
         try:
-            res = supabase.table("drug_details").select("*").eq("generic_name", name).execute()
+            res = await anyio.to_thread.run_sync(
+                lambda: supabase.table("drug_details").select("*").eq("generic_name", name).execute()
+            )
             if res.data and len(res.data) > 0:
                 item = res.data[0]
                 if _is_supabase_row_expired(item, DRUG_DETAIL_TTL_DAYS):
@@ -695,9 +703,11 @@ async def save_drug_details_to_cache(
     raw_text: Optional[str] = None,
     **kwargs
 ) -> None:
+    from services.clinical_rules import resolve_canonical_name
     if isinstance(generic_name_or_dict, dict):
         d = generic_name_or_dict
-        name = (d.get("generic_name") or d.get("name") or "").lower().strip()
+        raw_n = d.get("generic_name") or d.get("name") or ""
+        name = resolve_canonical_name(raw_n).lower().strip()
         brand_names = d.get("brand_names", [])
         side_effects = d.get("side_effects", [])
         food_warnings = d.get("food_warnings", [])
@@ -706,7 +716,8 @@ async def save_drug_details_to_cache(
         raw_text = d.get("raw_text") or d.get("raw_text_summary")
         classification_source: Dict[str, Any] = d
     else:
-        name = (generic_name_or_dict or kwargs.get("generic_name") or "").lower().strip()
+        raw_n = generic_name_or_dict or kwargs.get("generic_name") or ""
+        name = resolve_canonical_name(raw_n).lower().strip()
         brand_names = brand_names or kwargs.get("brand_names") or []
         side_effects = side_effects or kwargs.get("side_effects") or []
         food_warnings = food_warnings or kwargs.get("food_warnings") or []
@@ -723,7 +734,8 @@ async def save_drug_details_to_cache(
     supabase = get_supabase_client()
     if supabase:
         try:
-            _supabase_upsert_with_ttl(
+            await anyio.to_thread.run_sync(
+                _supabase_upsert_with_ttl,
                 supabase,
                 "drug_details",
                 {
@@ -735,13 +747,11 @@ async def save_drug_details_to_cache(
                     "severity": severity,
                     "raw_text": raw_text
                 },
-                on_conflict="generic_name",
-                ttl_days=DRUG_DETAIL_TTL_DAYS,
+                "generic_name",
+                DRUG_DETAIL_TTL_DAYS,
                 # Optional: a Supabase project whose drug_details table predates
                 # this column keeps working, minus remote classification caching.
-                optional_columns=(
-                    {"classification": classification_json} if classification_json else None
-                )
+                {"classification": classification_json} if classification_json else None
             )
         except Exception as e:
             logger.warning(f"Failed to cache drug details in Supabase: {e}")

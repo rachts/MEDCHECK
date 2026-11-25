@@ -2,6 +2,34 @@
 
 All clinical rule modifications, pharmacology profile updates, and evidence metadata annotations are documented in this file.
 
+## [2026.08.26-1] - 2026-08-26
+
+### Added
+- **Therapeutic Duplication Engine**: Pairwise ingredient intersection analysis emitting HIGH-severity duplication alerts for multi-brand overlapping active ingredients (e.g., Dolo 650 + Crocin) and FDC overlaps (Combiflam + Crocin), while eliminating fabricated FDA-label self-interactions.
+- **FDC Ingredient-by-Ingredient Matrix Evaluation**: Full ingredient combinatorial expansion across fixed-dose combinations; requires every constituent ingredient to be verified before granting full analysis coverage.
+- **Single-Medicine Clinical Dossier Deep-Link**: Added `/medicine/:name` dedicated route providing full pharmacology, GI risk tier, frequency-grouped adverse reactions, food & alcohol guidelines, and FDC ingredient breakdowns.
+- **Levothyroxine + PPI Absorption Spacing Conflict**: Added dynamic clinical conflict rule and schedule advice enforcing ≥4 hours separation between Levothyroxine and proton pump inhibitors.
+- **Chronological Grapefruit & Dairy Timeline Windows**: Integrated 10:00 AM CYP3A4 grapefruit caution window for statins/CCBs and 3:30 PM cation dairy restriction window for fluoroquinolones/tetracyclines.
+- **FDA Boxed-Warning Severity Escalation**: Widened `DrugLabelResult` and pipeline DTOs to ingest `boxed_warnings`, escalating interactions involving boxed warnings to `Severity.HIGH` with `FDA Boxed Warning Section` evidence provenance.
+
+### Fixed
+- **NONE-Severity Rule Leakage & Verdict Inversion**: Neutralized `Severity.NONE` rules in fresh-analysis pipeline, ensuring negative interaction checks are cached properly and never inverted into false-positive interaction warnings.
+- **Canonical Drug Caching**: Canonicalized drug and pair names across SQLite and Supabase caching layers so querying brand names hits resolved generic entries.
+- **Curated Food & Drug Rule Corrections**:
+  - Corrected Lisinopril food interaction to `avoid_potassium` (high-potassium foods and salt substitutes).
+  - Corrected Warfarin food interaction to `avoid_cranberry` (CYP2C9 inhibition potentiating bleeding risk).
+  - Escalated Pantoprazole administration rule to `empty_stomach` with `critical` severity.
+  - Reordered Gemer FDC ingredients to `["metformin", "glimepiride"]`.
+  - Removed erroneous mappings for Moov (topical ointment) and NAC (acetylcysteine).
+  - Added Diclofenac cardiovascular thrombotic and renal impairment lifestyle precautions.
+- **OpenFDA Indication Fallback Validation**: Verified that queried drug names actually appear in generic, brand, or active substance metadata before accepting `indications_and_usage` fallback records.
+- **Timeline Canonicalization**: Metformin and Indian brand aliases (e.g. Glycomet, Gemer) now correctly trigger evening meal dosing cadence.
+- **Personal Notes Controlled-Input Persistence Bug**: Keyed notes consistently across viewing and saving states to prevent textarea resets on multi-word names.
+- **Print Brief Dashboard Occlusion**: Extracted print brief into shared `ReportContent` portal and updated print stylesheet to render the report cleanly.
+- **Fabricated GI Zero-Scores**: Empty basket states now display neutral unanalyzed indicators rather than invented gentle scores.
+
+---
+
 ## [2026.08.25-1] - 2026-08-25
 
 Audit remediation pass. Only the entries below changed what the application tells

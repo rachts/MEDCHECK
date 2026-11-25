@@ -5,7 +5,6 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
   "background_color": "#F1F5F9",
   "theme_color": "#0F172A",
   "categories": ["health", "medical", "utilities"],

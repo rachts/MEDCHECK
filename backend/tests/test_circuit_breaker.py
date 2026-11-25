@@ -5,11 +5,11 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from services.mistral_client import MistralCircuitBreaker
+from services.groq_client import GroqCircuitBreaker
 
 def test_circuit_breaker_transitions():
     """Verify circuit breaker opens after failure threshold and recovers after timeout."""
-    cb = MistralCircuitBreaker(failure_threshold=3, reset_timeout=0.2)
+    cb = GroqCircuitBreaker(failure_threshold=3, reset_timeout=0.2)
     assert cb.state == "CLOSED"
     assert cb.allow_request() is True
 

@@ -306,3 +306,21 @@ def test_rate_limit_key_distinct_for_different_users():
     key_g2 = rate_limit_key(Request(scope_guest_2))
     assert key_g1 == key_g2
     assert "10.0.0.50" in key_g1
+
+def test_forged_jwt_falls_back_to_ip_rate_limit_key():
+    """Verify that a forged or invalidly-signed JWT falls back to client IP rather than trusting claimed uid."""
+    import jwt
+    from fastapi import Request
+    from main import rate_limit_key
+
+    forged_token = jwt.encode({"sub": "victim_user", "uid": "victim_uid"}, "attacker_fake_secret_key", algorithm="HS256")
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/check",
+        "headers": [(b"authorization", f"Bearer {forged_token}".encode())],
+        "client": ("198.51.100.99", 4321)
+    }
+    key = rate_limit_key(Request(scope))
+    assert "victim_uid" not in key
+    assert key == "ip_198.51.100.99"
