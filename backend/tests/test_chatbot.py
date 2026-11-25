@@ -412,7 +412,7 @@ async def test_groq_client_no_key_smoke_and_request_shape(monkeypatch):
     assert await groq_client.call_groq_api("hello") is None
 
     monkeypatch.setattr(settings, "GROQ_API_KEY", "test-groq-key")
-    monkeypatch.setattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
+    monkeypatch.setattr(settings, "GROQ_MODEL", "openai/gpt-oss-120b")
     groq_client.circuit_breaker.record_success()
 
     mock_resp = MagicMock()
@@ -432,6 +432,6 @@ async def test_groq_client_no_key_smoke_and_request_shape(monkeypatch):
     assert result == "Grounded summary"
     call_args = mock_post.call_args
     assert call_args.args[0] == "https://api.groq.com/openai/v1/chat/completions"
-    assert call_args.kwargs["json"]["model"] == "llama-3.3-70b-versatile"
+    assert call_args.kwargs["json"]["model"] == "openai/gpt-oss-120b"
     assert call_args.kwargs["json"]["temperature"] == 0.1
     assert call_args.kwargs["json"]["max_tokens"] == 800

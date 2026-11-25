@@ -118,7 +118,7 @@ cp .env.example .env
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Optional | Registered-session lifetime (default: 7 days) |
 | `GUEST_TOKEN_EXPIRE_MINUTES` | Optional | Anonymous-session lifetime (default: 120 minutes) |
 | `GROQ_API_KEY` | Optional | Groq API key for plain-language Medicine Assistant summaries |
-| `GROQ_MODEL` | Optional | Groq model identifier (default: `llama-3.3-70b-versatile`) |
+| `GROQ_MODEL` | Optional | Groq model identifier (default: `openai/gpt-oss-120b`) |
 | `SUPABASE_URL` | Optional | Supabase PostgreSQL project URL |
 | `SUPABASE_KEY` | Optional | Supabase service or anon API key |
 | `REDIS_URL` | Optional | Backing store for rate-limit counters. In-memory when unset, which means limits are per-process and reset on restart |

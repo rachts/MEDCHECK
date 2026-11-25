@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     
     # External APIs & Database
     GROQ_API_KEY: Optional[str] = None
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
     SUPABASE_URL: Optional[str] = None
     SUPABASE_KEY: Optional[str] = None
     SQLITE_DB_PATH: str = os.getenv(
