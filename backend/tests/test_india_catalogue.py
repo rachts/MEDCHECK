@@ -1,5 +1,7 @@
+import gzip
 import json
 import os
+import shutil
 import sqlite3
 import sys
 import uuid
@@ -33,9 +35,7 @@ def make_auth_headers(prefix: str = "cat_test") -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-@pytest.fixture()
-def fixture_catalogue_db(tmp_path, monkeypatch):
-    db_path = tmp_path / "india_medicines.sqlite"
+def _create_fixture_catalogue_db(db_path) -> None:
     conn = sqlite3.connect(str(db_path))
     conn.executescript(
         """
@@ -209,6 +209,11 @@ def fixture_catalogue_db(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
+
+@pytest.fixture()
+def fixture_catalogue_db(tmp_path, monkeypatch):
+    db_path = tmp_path / "india_medicines.sqlite"
+    _create_fixture_catalogue_db(db_path)
     monkeypatch.setattr(india_catalogue, "_DATA_PATH", str(db_path))
     return db_path
 
@@ -434,3 +439,45 @@ def test_regression_chat_dolo_650_returns_clinical_profile(fixture_catalogue_db)
     assert data["profile"]["generic_name"] == "paracetamol"
     assert data["catalogue_match"] is False
     assert data["catalogue"] is None
+
+
+def test_catalogue_bootstraps_from_gz_only(tmp_path, monkeypatch):
+    db_path = tmp_path / "india_medicines.sqlite"
+    gz_path = tmp_path / "india_medicines.sqlite.gz"
+    seed_path = tmp_path / "seed.sqlite"
+
+    _create_fixture_catalogue_db(seed_path)
+    with open(seed_path, "rb") as src, gzip.open(gz_path, "wb") as dst:
+        shutil.copyfileobj(src, dst)
+    seed_path.unlink()
+
+    assert not db_path.exists()
+    assert gz_path.is_file()
+
+    monkeypatch.setattr(india_catalogue, "_DATA_PATH", str(db_path))
+
+    results = search_catalogue("telma", limit=10)
+    assert [p.name for p in results] == ["telma 40 tablet", "telma 80 tablet", "cartelma tablet"]
+    assert db_path.is_file()
+    assert {p.name for p in tmp_path.iterdir()} == {
+        "india_medicines.sqlite",
+        "india_medicines.sqlite.gz",
+    }
+
+
+def test_catalogue_corrupt_gz_returns_empty_without_raising(tmp_path, monkeypatch):
+    db_path = tmp_path / "india_medicines.sqlite"
+    gz_path = tmp_path / "india_medicines.sqlite.gz"
+    gz_path.write_bytes(bytes(range(256)))
+
+    assert not db_path.exists()
+    monkeypatch.setattr(india_catalogue, "_DATA_PATH", str(db_path))
+
+    with patch.object(india_catalogue.gzip, "open", wraps=india_catalogue.gzip.open) as spy_gzip_open:
+        assert search_catalogue("telma") == []
+        assert match_product_for_chat("Telma 40") is None
+        assert catalogue_stats() == {"product_count": 0, "meta": {}}
+        assert spy_gzip_open.call_count == 1
+
+    assert not db_path.exists()
+    assert {p.name for p in tmp_path.iterdir()} == {"india_medicines.sqlite.gz"}

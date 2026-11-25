@@ -1,10 +1,14 @@
+import gzip
 import json
 import logging
 import os
 import re
+import shutil
 import sqlite3
+import tempfile
+import threading
 from contextlib import closing
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from models import CatalogueProduct
 
@@ -12,6 +16,9 @@ logger = logging.getLogger("india_catalogue")
 
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DATA_PATH = os.path.join(_BACKEND_DIR, "data", "india_medicines.sqlite")
+
+_bootstrap_lock = threading.Lock()
+_bootstrapped_paths: Set[str] = set()
 
 CHAT_FORM_WORDS = frozenset({
     "tablet",
@@ -110,7 +117,70 @@ def _row_to_product(row: sqlite3.Row) -> CatalogueProduct:
     )
 
 
+def _ensure_database(db_path: Optional[str] = None) -> None:
+    """
+    Lazily unpacks `<db_path>.gz` to `<db_path>` at most once per process for a
+    resolved DB path when the plain `.sqlite` file is absent. Never raises.
+    """
+    raw_path = _resolve_db_path(db_path)
+    if not raw_path:
+        return
+    path = os.fspath(raw_path)
+    cache_key = os.path.abspath(path)
+
+    with _bootstrap_lock:
+        if cache_key in _bootstrapped_paths:
+            return
+        _bootstrapped_paths.add(cache_key)
+
+        try:
+            if os.path.isfile(path):
+                return
+
+            gz_path = f"{path}.gz"
+            if not os.path.isfile(gz_path):
+                logger.warning(
+                    "Compressed Indian medicines catalogue missing at '%s'; continuing without catalogue.",
+                    gz_path,
+                )
+                return
+
+            target_dir = os.path.dirname(os.path.abspath(path))
+            tmp_path: Optional[str] = None
+            try:
+                fd, tmp_path = tempfile.mkstemp(
+                    prefix=".india_medicines_",
+                    suffix=".sqlite.tmp",
+                    dir=target_dir,
+                )
+                with os.fdopen(fd, "wb") as dst:
+                    with gzip.open(gz_path, "rb") as src:
+                        shutil.copyfileobj(src, dst)
+                    if dst.tell() == 0:
+                        raise EOFError("Decompressed catalogue is empty.")
+                os.replace(tmp_path, path)
+                tmp_path = None
+                logger.info(
+                    "Unpacked Indian medicines catalogue from '%s' to '%s'.",
+                    gz_path,
+                    path,
+                )
+            finally:
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+        except Exception as exc:
+            logger.warning(
+                "Failed to unpack Indian medicines catalogue from '%s.gz': %s",
+                path,
+                exc,
+            )
+
+
 def _open_connection(path: str) -> Optional[sqlite3.Connection]:
+    _ensure_database(path)
     if not path or not os.path.isfile(path):
         logger.warning("Indian medicines catalogue database missing at '%s'.", path)
         return None
